@@ -14,7 +14,8 @@
     "test:sync": "node scripts/smoke-sync.mjs",
     "server:dev": "cd server && npx wrangler dev --local --port 8799",
     "server:test": "cd server && ./test.sh",
-    "server:deploy": "cd server && npx wrangler deploy"
+    "server:deploy": "cd server && npx wrangler deploy",
+    "server:check": "node scripts/server-check.mjs"
   },
   "dependencies": {
     "@capacitor-community/contacts": "^8.0.0",

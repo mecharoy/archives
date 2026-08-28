@@ -327,6 +327,12 @@ through (four men for thirty days at ₹600 must come to ₹72,000), asserting t
 no English word ever reaches a stored row, and that a refused reset deletes
 nothing.
 
+`npm run server:check` is the same idea without jq or bash, so it runs on
+Windows: it makes its own household, writes a bill and a part-payment against
+it, and asserts the server nets them the way the phone does — the netting rule
+lives in two places, `src/lib/calc.ts` and `server/src/summary.js`, and this is
+the test that notices when they drift. Start `npm run server:dev` first.
+
 `npm run server:test` runs 36 checks against a local D1: auth, household
 isolation, the retry that must not duplicate a day, reversals netting to zero,
 and every total the dashboard shows.

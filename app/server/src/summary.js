@@ -17,30 +17,66 @@ async function all(db, sql, ...args) {
   return res.results || []
 }
 
+/* The one head that moves cash without being a cost — settling an old bill.
+   Kept identical to the app's SETTLE_HEAD; if one side ever changes it, the
+   dashboard starts double-counting and the tests here say so. */
+const SETTLE_HEAD = 'বাকি মেটানো'
+
 const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
+
+/** Payments land on the oldest bill for that party first, exactly as in the
+    app's calc.ts, so both sides answer the same question the same way. */
+function net(rows, settlements, dir) {
+  const pot = new Map()
+  for (const s of settlements) {
+    if (s.dir !== dir) continue
+    pot.set(s.party_id, n(pot.get(s.party_id)) + n(s.amount))
+  }
+  const today = new Date().toISOString().slice(0, 10)
+  const week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  let total = 0, overdue = 0, inWeek = 0
+  for (const r of rows) {
+    let amount = n(r.amount)
+    const left = n(pot.get(r.party_id))
+    if (left > 0) {
+      const used = Math.min(left, amount)
+      amount -= used
+      pot.set(r.party_id, left - used)
+    }
+    if (amount <= 0.5) continue
+    total += amount
+    if (r.due_date && r.due_date < today) overdue += amount
+    else if (r.due_date && r.due_date <= week) inWeek += amount
+  }
+  return { total, overdue, week: inWeek }
+}
 const round = (v) => Math.round(n(v) * 100) / 100
 
 export async function buildSummary(db, hid) {
-  const [projects, stages, progress, lastCount, dues, monthly, activity, stock] = await Promise.all([
+  const [projects, stages, progress, lastCount, openRows, settlements, monthly, activity, stock] = await Promise.all([
     all(db, 'SELECT id, name_bn, ptype, budget, area_sqft, start_date, plan_days, status FROM projects WHERE household_id = ?1 ORDER BY status, name_bn', hid),
     all(db, 'SELECT project_type, seq, name_bn, weight FROM stages WHERE household_id = ?1 ORDER BY project_type, seq', hid),
     all(db, 'SELECT id, project_id, stage_seq, state, reverses FROM progress WHERE household_id = ?1', hid),
     one(db, `SELECT cash_counted, cash_computed, date FROM day
              WHERE household_id = ?1 AND cash_counted IS NOT NULL
              ORDER BY date DESC, created_at DESC LIMIT 1`, hid),
-    one(db, `SELECT
-               COALESCE(SUM(amount), 0) AS total,
-               COALESCE(SUM(CASE WHEN due_date <> '' AND due_date < date('now','localtime') THEN amount ELSE 0 END), 0) AS overdue,
-               COALESCE(SUM(CASE WHEN due_date >= date('now','localtime')
-                                  AND due_date <= date('now','localtime','+7 day') THEN amount ELSE 0 END), 0) AS week
-             FROM stock WHERE household_id = ?1 AND dir = 'in' AND paid = 0`, hid),
+    // Open bills, and the payments that close them. The netting is done in
+    // JavaScript with exactly the rule the phone uses — oldest bill first —
+    // so the dashboard and his screen can never disagree about what he owes.
+    all(db, `SELECT party_id, amount, COALESCE(NULLIF(due_date,''), date) AS due_date, dir
+             FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale')
+             ORDER BY due_date`, hid),
+    all(db, `SELECT party_id, dir, COALESCE(SUM(amount),0) AS amount
+             FROM money WHERE household_id = ?1 AND personal = 0 AND head_bn = ?2
+             GROUP BY party_id, dir`, hid, SETTLE_HEAD),
     one(db, `SELECT
                (SELECT COALESCE(SUM(amount),0) FROM attendance
                  WHERE household_id = ?1 AND date >= ${MONTH_START}) AS wages,
                (SELECT COALESCE(SUM(amount),0) FROM stock
                  WHERE household_id = ?1 AND date >= ${MONTH_START} AND dir IN ('in','transfer')) AS material,
                (SELECT COALESCE(SUM(amount),0) FROM money
-                 WHERE household_id = ?1 AND date >= ${MONTH_START} AND dir = 'paid' AND personal = 0) AS other,
+                 WHERE household_id = ?1 AND date >= ${MONTH_START} AND dir = 'paid' AND personal = 0
+                   AND head_bn <> '${SETTLE_HEAD}') AS other,
                (SELECT COALESCE(SUM(amount),0) FROM money
                  WHERE household_id = ?1 AND date >= ${MONTH_START} AND dir = 'received' AND personal = 0) AS received,
                (SELECT COALESCE(SUM(amount),0) FROM money
@@ -103,6 +139,9 @@ export async function buildSummary(db, hid) {
   const counted = lastCount.cash_counted == null ? null : n(lastCount.cash_counted)
   const computed = lastCount.cash_computed == null ? null : n(lastCount.cash_computed)
 
+  const dues = net(openRows.filter((r) => r.dir === 'in' || r.dir === 'transfer'), settlements, 'paid')
+  const owed = net(openRows.filter((r) => r.dir === 'sale'), settlements, 'received')
+
   return {
     generated_at: new Date().toISOString(),
     business: {
@@ -113,6 +152,9 @@ export async function buildSummary(db, hid) {
       dues_total: round(dues.total),
       dues_overdue: round(dues.overdue),
       dues_this_week: round(dues.week),
+      receivable_total: round(owed.total),
+      receivable_overdue: round(owed.overdue),
+      receivable_this_week: round(owed.week),
       shop_stock_value: round(stock.value),
       spend_this_month: round(n(monthly.wages) + n(monthly.material) + n(monthly.other)),
       wages_this_month: round(monthly.wages),
