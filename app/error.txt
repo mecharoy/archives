@@ -39,3 +39,17 @@ Location: app/scripts/smoke.mjs — estimator floors step.
 Action: choosing "2 floors" in the new estimator.
 Cause: MoneyPad renders its own .chips container, so the index pointed at the wrong group.
 Fix: scope to '.field .chips .chip' rather than counting .chips containers.
+
+2026-08-29
+Problem: the admin dashboard loaded but did nothing — the token box appeared and the button was dead.
+Location: app/server/src/dashboard.js
+Action: pasting the admin token to open the ledger.
+Cause: the whole page is one JS template literal, so a `\n` written inside it becomes a REAL newline in the emitted inline script — `].join('\n')` and `PROMPT + '\n'` each ended a string mid-line and killed the entire script. An escaped apostrophe (`supplier\'s`) collapsed the same way.
+Fix: write `\n` in the source so the browser receives `\n`, avoid apostrophes inside the inline script, and add `npm run dashboard:check` (now part of `npm test`) which builds the page, extracts the script and runs `node --check` on it.
+
+2026-08-29
+Problem: contacts import asked for permission but produced no names.
+Location: app/src/lib/contacts.ts
+Action: adding a supplier from the phone book.
+Cause: could not be reproduced without the device; reading the whole book is the fragile path and the failure was swallowed by a generic message.
+Fix: use the plugin's native `pickContact()` first (the system's own picker — one tap, nothing else read), fall back to the full-list reader, and show the real error text so the next report names the actual cause.

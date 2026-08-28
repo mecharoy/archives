@@ -327,7 +327,8 @@ export function dashboardHtml() {
     '  - entries_last_3_days is 0        -> he has stopped entering; say so first',
     '  - cash_variance beyond +/- 2000   -> entries are being missed',
     '  - any project with cpi below 1    -> losing on the work done so far',
-    '  - dues_overdue above 0            -> already past a supplier\'s date',
+    '  - dues_overdue above 0            -> already past the date a supplier gave',
+    '  - receivable_overdue above 0      -> a customer is late paying him',
     '  - a burn item ahead of pct_done   -> waste, theft, or a wrong estimate',
     '',
     'Schema (statuses are only ok, warn, crit, info):',
@@ -345,12 +346,11 @@ export function dashboardHtml() {
     '}',
     '',
     'SUMMARY:',
-  ].join('\n');
+  ].join('\\n');
 
   $('copysum').onclick = function () {
     if (!summary) return;
-    navigator.clipboard.writeText(PROMPT + '
-' + JSON.stringify(summary, null, 2)).then(function () {
+    navigator.clipboard.writeText(PROMPT + '\\n' + JSON.stringify(summary, null, 2)).then(function () {
       $('copysum').textContent = 'Copied';
       setTimeout(function () { $('copysum').textContent = 'Copy summary for the model'; }, 1800);
     });

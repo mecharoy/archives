@@ -734,4 +734,8 @@ export const EN: Record<string, string> = {
   'বসান': 'Use it',
   'তুলে নিন': 'remove',
   'যোগ হবে — {0} ({1})': 'Will be added as {0} ({1})',
+  'ফোনের তালিকা খোলা গেল না। নামটা নিজে লিখে নিন।': 'The phone book would not open. Type the name instead.',
+  'ফোনে কোনো নাম পাওয়া গেল না': 'No names found on this phone',
+  'ওই নামের সঙ্গে কোনো নম্বর পাওয়া গেল না': 'That contact has no phone number',
+  'কারণ জানা গেল না': 'no reason given',
 }

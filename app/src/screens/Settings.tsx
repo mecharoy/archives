@@ -15,7 +15,7 @@ import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
 import { restoreFromServer } from '../lib/restore'
 import { seedHouse, HOUSE } from '../lib/seed'
 import { chipMissRate } from '../lib/suggest'
-import { readContacts, type PhoneContact } from '../lib/contacts'
+import { readContacts, pickOneContact, type PhoneContact } from '../lib/contacts'
 import { plan, reschedule, type RemindWhen } from '../lib/remind'
 import { factoryReset } from '../lib/reset'
 import { cashState } from '../lib/calc'
@@ -332,14 +332,34 @@ function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
 export function ContactPicker({ onClose, onPicked }: { onClose: () => void; onPicked: (c: PhoneContact) => void }) {
   const [state, setState] = useState<{ loading: boolean; error: string; rows: PhoneContact[] }>({ loading: true, error: '', rows: [] })
   const [q, setQ] = useState('')
-  useEffect(() => { void readContacts().then((r) => setState({ loading: false, error: r.error, rows: r.contacts })) }, [])
+
+  /* Try the system picker first — it is one tap and reads nothing else. Only
+     if that is unavailable do we read the book into a searchable list. */
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      const one = await pickOneContact()
+      if (!alive) return
+      if (one.ok && one.contact) { onPicked(one.contact); return }
+      const all = await readContacts()
+      if (!alive) return
+      setState({ loading: false, error: all.ok ? all.error : (all.error || one.error), rows: all.contacts })
+    })()
+    return () => { alive = false }
+  }, []) // eslint-disable-line
+
   const needle = q.trim().toLowerCase()
   const rows = state.rows.filter((c) => !needle || c.name.toLowerCase().includes(needle) || c.phone.includes(needle)).slice(0, 60)
   return (
     <Sheet title="ফোনের তালিকা থেকে" onClose={onClose}>
       {state.loading && <p className="hint">{t('তালিকা আনা হচ্ছে…')}</p>}
-      {state.error && <p className="hint">{t(state.error)}</p>}
-      {!state.loading && !state.error && (
+      {!state.loading && state.rows.length === 0 && (
+        <>
+          <p className="hint">{t('ফোনের তালিকা খোলা গেল না। নামটা নিজে লিখে নিন।')}</p>
+          {state.error && <p className="small muted" style={{ marginTop: '.4rem' }}>{state.error}</p>}
+        </>
+      )}
+      {state.rows.length > 0 && (
         <>
           <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="নাম খুঁজুন" autoFocus />
           <div className="rowlist" style={{ marginTop: '.7rem' }}>
