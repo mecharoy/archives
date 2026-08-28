@@ -6,11 +6,12 @@ import {
   projects as allProjects, nameOf, type State,
 } from '../lib/store'
 import { uid } from '../lib/db'
-import { money, toBn, num, isoDate, dateBn } from '../lib/bn'
+import { money, toBn, num, isoDate, dateBn, agoBn } from '../lib/bn'
 import type { Project, Worker, Item, Party, Stage, Coeff } from '../lib/model'
 import { flush, testEndpoint } from '../lib/sync'
 import { fetchBrief } from '../lib/brief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
+import { restoreFromServer } from '../lib/restore'
 import { seedHouse, HOUSE } from '../lib/seed'
 import { chipMissRate } from '../lib/suggest'
 import { cashState } from '../lib/calc'
@@ -52,7 +53,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
         <div className="rowlist">
           <Pick title="হাতের টাকা" sub={money(cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed)}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('cash')} />
-          <Pick title="Google Sheet ও রাতের হিসাব" sub={s.settings.endpoint ? 'জোড়া লাগানো আছে' : 'এখনও জোড়া লাগানো হয়নি'}
+          <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? 'জোড়া লাগানো আছে' : 'শুধু ফোনে রাখা হচ্ছে'}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('sync')} />
           <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={<Icon name="fwd" size={18} />} onClick={() => setPage('backup')} />
           <Pick title="নিজের খরচের পাসকোড" sub={s.settings.pin_hash ? 'দেওয়া আছে' : 'দেওয়া নেই'} right={<Icon name="lock" size={18} />} onClick={() => setPin(true)} />
@@ -92,28 +93,30 @@ export function Settings({ onBack }: { onBack: () => void }) {
 function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [endpoint, setEndpoint] = useState(s.settings.endpoint)
   const [token, setToken] = useState(s.settings.token)
-  const [briefUrl, setBriefUrl] = useState(s.settings.briefUrl)
-  const [briefToken, setBriefToken] = useState(s.settings.briefToken)
   const [busy, setBusy] = useState('')
+  const [confirmRestore, setConfirmRestore] = useState(false)
   const toast = useToast()
 
   const save = async () => {
-    await saveSettings({ endpoint: endpoint.trim(), token: token.trim(), briefUrl: briefUrl.trim(), briefToken: briefToken.trim() })
+    await saveSettings({ endpoint: endpoint.trim(), token: token.trim() })
     toast.show('সেভ হয়েছে')
   }
 
   return (
     <>
-      <TopBar title="Sheet ও রাতের হিসাব" onBack={onBack} />
+      <TopBar title="অনলাইন খাতা" onBack={onBack} />
       <div className="scroll">
         <p className="hint" style={{ marginTop: '1rem' }}>
-          অ্যাপ প্রথমে ফোনে লেখে, তারপর নেট পেলে Google Sheet-এ পাঠায়। ঠিকানা না দিলেও অ্যাপ পুরোপুরি চলে — শুধু খাতাটা ফোনেই থাকে।
+          হিসাব প্রথমে ফোনে লেখা হয়, তারপর নেট পেলে নিজে থেকেই অনলাইনে চলে যায়। ঠিকানা না দিলেও অ্যাপ পুরোপুরি চলে —
+          তখন খাতাটা শুধু এই ফোনেই থাকে।
         </p>
-        <Field label="Sheet-এ লেখার ঠিকানা (Apps Script web app URL)">
-          <input className="input" value={endpoint} onChange={(e) => setEndpoint(e.target.value)} placeholder="https://script.google.com/…/exec" inputMode="url" autoCapitalize="off" />
+        <Field label="সার্ভারের ঠিকানা">
+          <input className="input" value={endpoint} onChange={(e) => setEndpoint(e.target.value)}
+            placeholder="https://site-khata.___.workers.dev" inputMode="url" autoCapitalize="off" spellCheck={false} />
         </Field>
         <Field label="গোপন টোকেন">
-          <input className="input" value={token} onChange={(e) => setToken(e.target.value)} autoCapitalize="off" />
+          <input className="input" value={token} onChange={(e) => setToken(e.target.value)}
+            autoCapitalize="off" spellCheck={false} />
         </Field>
         <div className="actionbar" style={{ borderTop: 0, padding: '.2rem 0 1rem' }}>
           <button className="btn ghost" disabled={!!busy} onClick={async () => {
@@ -122,24 +125,6 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
             setBusy('')
             toast.show(err || 'যোগাযোগ ঠিক আছে')
           }}>{busy === 'test' ? 'দেখছি…' : 'পরীক্ষা করুন'}</button>
-          <button className="btn primary" onClick={save}>সেভ করুন</button>
-        </div>
-
-        <div className="divider" />
-        <Field label="রাতের হিসাবের ফাইল (brief.json)">
-          <input className="input" value={briefUrl} onChange={(e) => setBriefUrl(e.target.value)} placeholder="https://…/brief.json" inputMode="url" autoCapitalize="off" />
-        </Field>
-        <Field label="ফাইলের টোকেন (থাকলে)">
-          <input className="input" value={briefToken} onChange={(e) => setBriefToken(e.target.value)} autoCapitalize="off" />
-        </Field>
-        <div className="actionbar" style={{ borderTop: 0, padding: '.2rem 0 1rem' }}>
-          <button className="btn ghost" disabled={!!busy} onClick={async () => {
-            await saveSettings({ briefUrl: briefUrl.trim(), briefToken: briefToken.trim() })
-            setBusy('brief')
-            const err = await fetchBrief(false)
-            setBusy('')
-            toast.show(err || 'রাতের হিসাব এসে গেছে')
-          }}>{busy === 'brief' ? 'আনছি…' : 'এখন আনুন'}</button>
           <button className="btn primary" onClick={save}>সেভ করুন</button>
         </div>
 
@@ -155,10 +140,52 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
             এখনই পাঠান
           </button>
         </div>
-        <p className="small muted" style={{ marginTop: '.8rem' }}>
-          Google-এর চাবি কখনও ফোনে রাখা হয় না — অ্যাপ শুধু আপনার নিজের Apps Script ঠিকানায় লাইনগুলো পাঠায়, চাবি থাকে Google-এর ভিতরেই।
+
+        <div className="card">
+          <div className="spread">
+            <span>রাতের হিসাব</span>
+            <span className="small muted">{s.brief ? agoBn(s.brief.generated_at) : 'এখনও আসেনি'}</span>
+          </div>
+          <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || !s.settings.endpoint}
+            onClick={async () => {
+              setBusy('brief')
+              const err = await fetchBrief(false)
+              setBusy('')
+              toast.show(err || 'রাতের হিসাব এসে গেছে')
+            }}>{busy === 'brief' ? 'আনছি…' : 'এখন আনুন'}</button>
+        </div>
+
+        <p className="sectionlabel">নতুন ফোনে</p>
+        <div className="card">
+          <p className="small muted">
+            ফোন হারালে বা বদলালে — নতুন ফোনে এই একই ঠিকানা আর টোকেন বসিয়ে নিচের বোতামটা টিপুন। যা যা অনলাইনে গিয়েছিল,
+            সব ফিরে আসবে। এই ফোনে যা আছে তা মুছবে না।
+          </p>
+          <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || !s.settings.endpoint}
+            onClick={() => setConfirmRestore(true)}>
+            {busy === 'restore' ? 'নামছে…' : 'অনলাইন থেকে ফিরিয়ে আনুন'}
+          </button>
+        </div>
+
+        <p className="small muted" style={{ marginTop: '1rem' }}>
+          এই টোকেন দিয়ে শুধু এই খাতায় লেখা আর পড়া যায় — আর কারও হিসাব নয়, আর মুছে ফেলাও যায় না।
         </p>
       </div>
+      {confirmRestore && (
+        <Sheet title="অনলাইন থেকে ফিরিয়ে আনবেন?" onClose={() => setConfirmRestore(false)}>
+          <p className="hint">যা যা অনলাইনে আছে সব এই ফোনে যোগ হবে। এই ফোনের কোনো লেখা মুছবে না।</p>
+          <div className="actionbar" style={{ borderTop: 0, padding: '.6rem 0 0' }}>
+            <button className="btn ghost" onClick={() => setConfirmRestore(false)}>থাক</button>
+            <button className="btn primary" onClick={async () => {
+              setConfirmRestore(false)
+              setBusy('restore')
+              const r = await restoreFromServer()
+              setBusy('')
+              toast.show(r.error || `${toBn(r.entries)} লাইন ফিরে এসেছে`)
+            }}>ফিরিয়ে আনুন</button>
+          </div>
+        </Sheet>
+      )}
       {toast.msg && <Toast text={toast.msg} />}
     </>
   )

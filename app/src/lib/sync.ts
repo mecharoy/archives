@@ -5,7 +5,7 @@
    cannot duplicate the entry — the endpoint drops an id it has already seen. */
 
 import { dbDel, dbPut } from './db'
-import { getState, setState, type OutboxRow } from './store'
+import { getState, setState, apiUrl, type OutboxRow } from './store'
 
 const BATCH = 40
 const BASE_DELAY = 4000
@@ -47,7 +47,7 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
   let error = ''
   try {
     const batch = s.outbox.slice(0, BATCH)
-    const res = await postRows(s.settings.endpoint, s.settings.token, batch)
+    const res = await postRows(apiUrl('/rows'), s.settings.token, batch)
     if (res.ok) {
       const done = new Set(res.accepted)
       const keep: OutboxRow[] = []
@@ -89,7 +89,9 @@ async function postRows(endpoint: string, token: string, rows: OutboxRow[]): Pro
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
-      // Apps Script web apps reject a preflight, so keep this a simple request.
+      // Sent as a simple request so the browser never fires a preflight — on a
+      // patchy connection the extra round trip is the one that times out. The
+      // token travels in the body for the same reason.
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ token, rows: rows.map((r) => ({ id: r.id, tab: r.tab, mode: r.mode, values: r.values })) }),
       signal: ctrl.signal,
@@ -116,7 +118,7 @@ function describe(e: unknown): string {
 /** Round-trip check for the settings screen. */
 export async function testEndpoint(endpoint: string, token: string): Promise<string> {
   try {
-    const res = await fetch(endpoint, {
+    const res = await fetch(endpoint.replace(/\/+$/, '') + '/rows', {
       method: 'POST',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ token, rows: [], ping: true }),
@@ -124,8 +126,8 @@ export async function testEndpoint(endpoint: string, token: string): Promise<str
     })
     const text = await res.text()
     if (!res.ok) return `সার্ভার ${res.status}`
-    const data = JSON.parse(text) as { ok?: boolean; error?: string; sheet?: string }
-    if (!data.ok) return data.error || 'টোকেন মিলল না'
+    const data = JSON.parse(text) as { ok?: boolean; error?: string; household?: string }
+    if (!data.ok) return data.error === 'token' ? 'টোকেন মিলল না' : (data.error || 'জোড়া লাগল না')
     return ''
   } catch (e) {
     return describe(e)

@@ -17,7 +17,9 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
   const s = useStore((x) => x)
   const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => { if (s.settings.briefUrl) void fetchBrief() }, []) // eslint-disable-line
+  // The brief now lives on the same server as the rows, so an endpoint alone
+  // is enough — briefUrl is only an override for hosting it somewhere else.
+  useEffect(() => { if (s.settings.briefUrl || s.settings.endpoint) void fetchBrief() }, []) // eslint-disable-line
 
   const stale = briefIsStale(s.brief)
   const brief: Brief = useMemo(() => (s.brief && !stale ? s.brief : localBrief()), [s.brief, stale, s.entries, s.masters])

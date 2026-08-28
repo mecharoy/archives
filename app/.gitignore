@@ -11,3 +11,5 @@ scripts/shot-*.png
 scripts/fail-*.png
 scripts/dbg.mjs
 .DS_Store
+server/.wrangler/
+server/.dev.vars

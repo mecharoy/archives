@@ -7,6 +7,9 @@ never shows a number it invented.
 The build plan this implements is in the artifact; what follows is what was
 actually built, how to set it up, and what it does not do.
 
+It records to a Cloudflare Worker with a D1 database behind it — no Google
+account, no spreadsheet, and nothing for your father to register for.
+
 ---
 
 ## The APK
@@ -32,50 +35,58 @@ ever goes to Play, generate a fresh key and keep it out of git.
 
 ## How it hangs together
 
-    phone app  ──appends rows──▶  Google Sheet  ──reads ~40 cells──▶  nightly run
-        ▲                          (formulas do                          │
-        └──── fetches brief.json ◀── every total)  ◀── you post the file ─┘
+    phone app  ──appends rows──▶  Worker + D1  ◀── you, in a browser
+        ▲                        (totals are SQL)          │
+        └──── fetches brief.json ──────┘   publishes tonight's brief
 
 The app collects, suggests and displays. It never calculates anything it
-sends. Totals are Sheet formulas; judgement comes from the nightly file. A bug
-in the app can lose an entry; it cannot produce a wrong number.
+sends. Totals are computed once on the server from the stored rows; judgement
+comes from the nightly brief. A bug in the app can lose an entry; it cannot
+produce a wrong number.
 
-**It works with none of that connected.** With no endpoint and no brief URL it
-is a complete offline ledger — the dashboard falls back to the phone's own
-sums, labelled `ফোনের নিজের হিসাব` so nobody mistakes them for the Sheet's.
+Your father signs in to nothing. The APK carries a device token baked in at
+build time that can append to his household and read it back — and that is all
+it can do. Publishing the brief, exporting, and reading across households need
+an admin token that is never inside the app.
 
----
+**It works with none of that connected.** With no endpoint configured it is a
+complete offline ledger — the dashboard falls back to the phone's own sums,
+labelled `ফোনের নিজের হিসাব` so nobody mistakes them for the server's.
 
-## Setting up the Sheet (15 minutes, once)
+## Setting up the server (about ten minutes, once)
 
-1. Make a new Google Sheet. **Extensions → Apps Script**, delete the stub, and
-   paste all of `sheet/Code.gs`.
-2. Run `setUp()`. Accept the permission prompt. It builds all fourteen tabs,
-   writes the formulas, and logs a token — copy it.
-3. **Deploy → New deployment → Web app**, *Execute as: me*, *Who has access:
-   Anyone*. Copy the `/exec` URL.
-4. In the app: **সেটিংস → Google Sheet ও রাতের হিসাব**. Paste the URL and the
-   token, tap **পরীক্ষা করুন**, save.
-5. Optional: run `installNightlyTrigger()` for the nightly CSV backup into
-   Drive.
-6. Share the Sheet with him **as a viewer**, not an editor. The README tab says
-   `শুধু দেখার জন্য` in the first row for the same reason.
+Full walkthrough in [`server/README.md`](server/README.md). In short:
 
-"Anyone" on the deployment means anyone with the URL can *reach* the script;
-the token is what actually authorises a write, and the URL itself is
-unguessable. Google credentials never touch the phone — the app only knows
-your script's address.
+```bash
+cd server
+npx wrangler login
+npx wrangler d1 create site-khata      # paste the id into wrangler.jsonc
+npx wrangler d1 execute site-khata --remote --file schema.sql
+npx wrangler secret put ADMIN_TOKEN
+npx wrangler deploy
+```
 
----
+Create his household, then build his APK with the values baked in so he types
+nothing at all:
+
+```bash
+VITE_SYNC_ENDPOINT=https://site-khata.<you>.workers.dev \
+VITE_SYNC_TOKEN=<device token> \
+npm run apk
+```
+
+Free tier covers this many times over: 100k Worker requests/day and 5M D1 row
+reads, 100k writes, 5 GB. A busy day here is about fifty writes.
 
 ## The nightly brief
 
-Read only `Totals` and `Brief_Input`. Both are already computed and tiny.
+Open your dashboard, press **Copy summary for the model**, and paste it with
+this prompt. The summary is already computed and about forty numbers long.
 
 ```
-Read the tabs "Totals" and "Brief_Input" from the Site Khata sheet.
-Use those numbers exactly as given. Do not add, average or re-derive
-anything — if a figure is not in those two tabs, leave it out.
+Here is the Site Khata summary. Use these numbers exactly as given.
+Do not add, average or re-derive anything — if a figure is not in the
+summary, leave it out.
 
 Write brief.json in the schema below. Bengali for anything my father
 reads; keep it short, plain, and specific. No greetings, no summary
@@ -89,8 +100,10 @@ Flag, in this order of priority:
   - a burn item ahead of pct_done   -> waste, theft, or a wrong estimate
 Say which of those three you think the material gap is, and why.
 
-Then post the file to https://[his-site]/[private-path]/brief.json
 ```
+
+Paste the result into the dashboard's box and press **Publish to his phone**.
+It is on his dashboard at the next refresh.
 
 The app renders exactly these keys and ignores everything else, so adding a
 field never breaks it:
@@ -115,11 +128,9 @@ a colour **and** a word. Every field is length-clamped and type-checked on
 arrival; a malformed one is dropped, not rendered. Over 36 hours old and the
 dashboard says `পুরোনো হিসাব` and falls back to its own arithmetic.
 
-**Two things about the URL.** It is his cash position, his dues and his
-margins, so: a long unguessable path at minimum, `X-Robots-Tag: noindex`, and
-a bearer token (the app sends `Authorization: Bearer …` if you set one under
-সেটিংস). And serve it from the same origin as anything else you host, or you
-lose an evening to CORS.
+The brief is served from the same origin as the rows, behind the same token,
+with `X-Robots-Tag: noindex`. There is no public path holding his cash
+position, and no CORS to fight.
 
 ---
 
@@ -163,8 +174,9 @@ square foot, then overhead and margin. No model anywhere near it. Items he has
 never bought are named and excluded rather than guessed at.
 
 **পুরোনো হিসাব** — every day, and corrections. Nothing is ever edited or
-deleted: a correction writes the mirror-image row, so the Sheet stays
-append-only and the history of what he believed at the time survives.
+deleted: a correction writes the mirror-image row, so the ledger stays
+append-only and the history of what he believed at the time survives. The
+Worker has no delete route at all.
 
 **Cash** is rebuilt from the last physical count, never from an opening balance
 typed once in March, so a bad count fixes itself the next time he counts.
@@ -181,8 +193,8 @@ typed once in March, so a bad count fixes itself the next time he counts.
 | Half-finished entry lost | The draft is persisted on every keystroke and resumed whatever date it carries |
 | Stale brief passed off as today's | 36-hour staleness check, an explicit badge, and a local fallback |
 | A malformed nightly file breaks the screen | Whitelisted, clamped and type-checked before anything renders |
-| He edits the Sheet | Share view-only; the README tab's first row says so; every correction goes through the app |
-| Phone lost | সেটিংস → ব্যাকআপ writes the whole ledger to Documents as CSV or JSON; `nightlyBackup()` mirrors every tab into Drive |
+| Someone extracts the device token from the APK | It reads and appends to one household only — it cannot publish a brief, export, reach another household, or delete anything |
+| Phone lost | Everything already sent is on the server: install the APK on the new phone and tap **অনলাইন থেকে ফিরিয়ে আনুন**. Plus সেটিংস → ব্যাকআপ writes the whole ledger to Documents as CSV or JSON, and `GET /export.csv` does the same from your side |
 | Bengali vs ASCII digits | Amounts use a custom keypad, and every text field accepts either |
 | IST date rolling over wrongly | Local `YYYY-MM-DD` everywhere, never `toISOString()` |
 
@@ -196,8 +208,10 @@ typed once in March, so a bad count fixes itself the next time he counts.
 - **No PDF.** The estimator produces a formatted quotation you can share or
   copy into WhatsApp. Android's WebView has no print pipeline worth shipping,
   and a bad PDF is worse than a good message.
-- **The nightly run is still a person.** Until it is on a schedule, a missed
-  night is a real defect — four in a row and he stops opening the app.
+- **The nightly run is still a person.** You copy the summary, ask the model
+  for the brief, and paste it back. Until it is on a schedule (a Worker cron
+  calling the API is the obvious next step) a missed night is a real defect —
+  four in a row and he stops opening the app.
 - **Photos stay on the phone.** They are captured, shrunk to ~1400px JPEG and
   stored locally against the row. Pushing them to Drive is the obvious next
   step and the row already carries the `photo_id` for it.
@@ -207,16 +221,25 @@ typed once in March, so a bad count fixes itself the next time he counts.
 ## Layout
 
     src/lib/       bn (numerals, money, dates) · db · model · calc · suggest
-                   draft · sync · brief · backup · photo · pin · seed · store
+                   draft · sync · brief · restore · backup · photo · pin · seed · store
     src/screens/   Home · DayWizard · Shop · Personal · Estimator · History
                    Settings · Onboarding
     src/ui/        kit (icons, keypad, sheets) · charts
-    sheet/Code.gs  workbook builder, write endpoint, nightly Drive backup
-    scripts/       make-icons · smoke (23-step end-to-end run in Chromium)
+    server/        the Worker: routes, summary SQL, dashboard, schema, test.sh
+    scripts/       make-icons · gen-schema · smoke · smoke-sync
 
-`node scripts/smoke.mjs` drives a real browser through onboarding, a full day's
-entry, same-as-yesterday, the shop, the estimator, a correction, the personal
-book and a backup, and checks the arithmetic on the way through.
+`npm test` drives a real browser through onboarding, a full day's entry,
+same-as-yesterday, the shop, the estimator, a correction, the personal book and
+a backup — 23 flows, checking the arithmetic on the way through.
+
+`npm run server:test` runs 35 checks against a local D1: auth, household
+isolation, the retry that must not duplicate a day, reversals netting to zero,
+and every total the dashboard shows.
+
+`npm run test:sync` is the one that matters most — it runs the real app against
+the real Worker, confirms the server computed the same day the phone did, then
+wipes the phone and restores it from the server the way a replacement handset
+would. Start `npm run server:dev` first for both of those.
 
 ---
 

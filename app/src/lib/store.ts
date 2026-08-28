@@ -24,8 +24,15 @@ export interface Settings {
   text_scale: number
 }
 
+/* Baked in at build time so the phone syncs the moment it is installed —
+   he never types a URL or a token. Left empty, the app is simply offline-only.
+     VITE_SYNC_ENDPOINT=https://site-khata.you.workers.dev \
+     VITE_SYNC_TOKEN=<device token> npm run apk                              */
+const BUILT_IN_ENDPOINT = (import.meta.env.VITE_SYNC_ENDPOINT as string | undefined)?.trim() || ''
+const BUILT_IN_TOKEN = (import.meta.env.VITE_SYNC_TOKEN as string | undefined)?.trim() || ''
+
 export const DEFAULT_SETTINGS: Settings = {
-  endpoint: '', token: '', briefUrl: '', briefToken: '',
+  endpoint: BUILT_IN_ENDPOINT, token: BUILT_IN_TOKEN, briefUrl: '', briefToken: '',
   opening_cash: 0, opening_date: isoDate(), pin_hash: '',
   auto_sync: true, onboarded: false, chips_taken: 0, chips_expanded: 0,
   theme: 'system', text_scale: 1,
@@ -70,6 +77,13 @@ const listeners = new Set<() => void>()
 function emit() { listeners.forEach((l) => l()) }
 export function setState(patch: Partial<State>) { state = { ...state, ...patch }; emit() }
 export function getState(): State { return state }
+
+/** The server's base URL plus a path. One definition, so a stray slash can
+    only ever be wrong in one place. */
+export function apiUrl(path: string, base?: string): string {
+  const root = (base ?? state.settings.endpoint).trim().replace(/\/+$/, '')
+  return root ? root + path : ''
+}
 
 export function useStore<T>(sel: (s: State) => T): T {
   return useSyncExternalStore(

@@ -5,7 +5,7 @@
    as today's. */
 
 import { kvSet } from './db'
-import { getState, setState, type Brief, type Status, activeProjects, stages, coeffs, allItems, nameOf } from './store'
+import { getState, setState, apiUrl, type Brief, type Status, activeProjects, stages, coeffs, allItems, nameOf } from './store'
 import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries } from './calc'
 import { hoursSince, isoDate, daysBetween, addDays, money, toBn } from './bn'
 import type { Entry, StockEntry } from './model'
@@ -72,15 +72,18 @@ export function briefIsStale(b: Brief | null): boolean {
 
 export async function fetchBrief(silent = true): Promise<string> {
   const s = getState()
-  const url = s.settings.briefUrl.trim()
-  if (!url) return silent ? '' : 'সেটিংসে ব্রিফের ঠিকানা দেওয়া নেই'
+  // Served beside the data it describes; an explicit URL is only an override.
+  const url = s.settings.briefUrl.trim() || apiUrl('/brief.json')
+  if (!url) return silent ? '' : 'সেটিংসে ঠিকানা দেওয়া নেই'
   try {
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), 20_000)
     const headers: Record<string, string> = {}
-    if (s.settings.briefToken) headers['Authorization'] = 'Bearer ' + s.settings.briefToken
+    const auth = s.settings.briefToken || s.settings.token
+    if (auth) headers['Authorization'] = 'Bearer ' + auth
     const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { headers, signal: ctrl.signal, cache: 'no-store' })
     clearTimeout(t)
+    if (res.status === 404) return silent ? '' : 'রাতের হিসাব এখনও তৈরি হয়নি'
     if (!res.ok) return `ব্রিফ পাওয়া গেল না (${res.status})`
     const parsed = parseBrief(await res.json())
     if (!parsed) return 'ব্রিফের ফাইলটা ঠিক নেই'
