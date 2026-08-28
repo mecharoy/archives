@@ -71,7 +71,7 @@ export function Shop({ onBack }: { onBack: () => void }) {
                   <span className="k">{tf('{0} দরে', money(l.rate))}</span>
                 </span>
                 <span className="v num" style={{ color: l.qty < 0 ? 'var(--crit)' : undefined }}>
-                  {num(l.qty, l.qty % 1 ? 2 : 0)} {items(s).find((i) => i.id === l.item_id)?.unit_bn}
+                  {num(l.qty, l.qty % 1 ? 2 : 0)} {t(items(s).find((i) => i.id === l.item_id)?.unit_bn || '')}
                 </span>
               </div>
             ))}
@@ -258,7 +258,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
               <>
                 <h2 className="question">{flow === 'sale' ? t('কাকে বিক্রি?') : t('কার কাছ থেকে?')}</h2>
                 <div className="chips">
-                  {topParties.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(p.id)}>{p.name_bn}</Chip>)}
+                  {topParties.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(party === p.id ? '' : p.id)}>{p.name_bn}</Chip>)}
                   <Chip onClick={() => setNewParty(true)}>{t("+ নতুন")}</Chip>
                   {flow === 'sale' && <Chip on={party === ''} onClick={() => setParty('')}>{t("খুচরো খদ্দের")}</Chip>}
                 </div>

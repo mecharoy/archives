@@ -730,4 +730,8 @@ export const EN: Record<string, string> = {
     'The upright line is progress — {0}%. Anything to the right of it is running ahead of the work.',
   'Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।':
     'Site Khata · {0} · entries are written on the phone first, then reach the ledger.',
+  '+ নিজে লিখুন': '+ Write your own',
+  'বসান': 'Use it',
+  'তুলে নিন': 'remove',
+  'যোগ হবে — {0} ({1})': 'Will be added as {0} ({1})',
 }

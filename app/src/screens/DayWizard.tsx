@@ -394,7 +394,7 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
                 <div key={m.key} className="review-row">
                   <span>
                     <span className="t">{nameOf(s, m.item_id)}</span>
-                    <span className="k">{num(m.qty, m.qty % 1 ? 2 : 0)} {itemOf(m.item_id)?.unit_bn} × {money(m.rate)}{m.paid ? '' : t(' · বাকি')}</span>
+                    <span className="k">{num(m.qty, m.qty % 1 ? 2 : 0)} {t(itemOf(m.item_id)?.unit_bn || '')} × {money(m.rate)}{m.paid ? '' : t(' · বাকি')}</span>
                   </span>
                   <span className="v num">{money(m.qty * m.rate)}</span>
                   <button className="iconbtn" onClick={() => patch({ mats: draft.mats.filter((x) => x.key !== m.key) })} aria-label="বাদ দিন">
@@ -512,7 +512,7 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
 
         <p className="sectionlabel">{t("কার কাছ থেকে")}</p>
         <div className="chips">
-          {top.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(p.id)}>{p.name_bn}</Chip>)}
+          {top.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(party === p.id ? '' : p.id)}>{p.name_bn}</Chip>)}
           {rest.length > 0 && <Chip onClick={() => setAllParties(true)}>{t("আরও…")}</Chip>}
           {suppliers.length === 0 && <Chip onClick={() => setNewParty(true)}>{t("+ দোকান যোগ করুন")}</Chip>}
         </div>
@@ -585,7 +585,7 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
             <div className="card" style={{ marginBottom: '.9rem' }}>
               {draft.exps.map((e) => (
                 <div key={e.key} className="review-row">
-                  <span><span className="t">{e.head_bn}</span><span className="k">{e.mode}</span></span>
+                  <span><span className="t">{t(e.head_bn)}</span><span className="k">{t(e.mode)}</span></span>
                   <span className="v num">{money(e.amount)}</span>
                   <button className="iconbtn" onClick={() => patch({ exps: draft.exps.filter((x) => x.key !== e.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
                 </div>
@@ -793,7 +793,7 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
             <Icon name="fwd" size={16} />
           </button>
           <button className="review-row" onClick={() => onJump('expense')}>
-            <span><span className="t">{t("অন্য খরচ")}</span><span className="k">{draft.exps.length ? draft.exps.map((e) => e.head_bn).join(', ') : t('কিছু নেই')}</span></span>
+            <span><span className="t">{t("অন্য খরচ")}</span><span className="k">{draft.exps.length ? draft.exps.map((e) => t(e.head_bn)).join(', ') : t('কিছু নেই')}</span></span>
             <span className="v num">{money(expTotal(draft))}</span>
             <Icon name="fwd" size={16} />
           </button>
@@ -841,47 +841,84 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
    if he presses যোগ করুন, and the list below is only ever a shortcut to it. */
 export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (i: Item) => void }) {
   const s = useStore((x) => x)
-  const [name, setName] = useState('')
+  const [base, setBase] = useState('')
+  const [variant, setVariant] = useState('')
+  const [writing, setWriting] = useState<string | null>(null)   // which group's own-words box is open
+  const [own, setOwn] = useState('')
   const [unit, setUnit] = useState('')
   const [cat, setCat] = useState<string | null>(null)
   const units = ['বস্তা', 'কেজি', 'পিস', 'ঘনফুট', 'ট্রাক', 'লিটার', 'ফুট', 'মিটার', 'বর্গফুট', 'প্যাকেট']
   const have = useMemo(() => new Set(items(s).map((i) => i.name_bn)), [s.masters])
-  const found = useMemo(() => searchCatalog(name, cat, have).slice(0, 60), [name, cat, have])
+  const found = useMemo(() => searchCatalog(base, cat, have).slice(0, 60), [base, cat, have])
+
+  /* Name and size are kept apart while he is choosing and joined only on the
+     way out. Inferring the size back out of the finished name is what made a
+     chosen size impossible to un-choose: ১/২" ends with ২", so two chips lit
+     at once and the wrong one came off. */
+  const fullName = [base.trim(), variant.trim()].filter(Boolean).join(' ')
 
   const create = async (name_bn: string, unit_bn: string) => {
     const it: Item = { id: uid(), kind: 'item', name_bn, unit_bn, last_rate: null, active: true, updated_at: new Date().toISOString() }
     await saveMaster(it)
     onCreated(it)
   }
+
+  const takeOwn = () => {
+    const v = own.trim()
+    if (v) setVariant(v)
+    setOwn('')
+    setWriting(null)
+  }
+
   return (
     <Sheet title="নতুন মাল" onClose={onClose}>
-      <Field label="মালের নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমন — সিমেন্ট" autoFocus /></Field>
-      {name.trim() && (
+      <Field label="মালের নাম"><input className="input" value={base} onChange={(e) => setBase(e.target.value)} placeholder="যেমন — সিমেন্ট" autoFocus /></Field>
+
+      {base.trim() && (
         <Field label="মাপ বা ধরন (থাকলে)">
           {VARIANTS.map((g) => (
             <div key={g.group_bn} style={{ marginBottom: '.4rem' }}>
               <p className="small muted" style={{ margin: '.2rem 0' }}>{t(g.group_bn)}</p>
               <div className="chips">
                 {g.values.map((v) => (
-                  <Chip key={v} on={name.trim().endsWith(v)}
-                    onClick={() => setName(name.trim().endsWith(v) ? name.trim().slice(0, -v.length).trim() : name.trim() + ' ' + v)}>
-                    {v}
-                  </Chip>
+                  <Chip key={v} on={variant === v} onClick={() => setVariant(variant === v ? '' : v)}>{v}</Chip>
                 ))}
+                <Chip on={writing === g.group_bn} onClick={() => { setWriting(writing === g.group_bn ? null : g.group_bn); setOwn('') }}>
+                  {t('+ নিজে লিখুন')}
+                </Chip>
               </div>
+              {writing === g.group_bn && (
+                <div style={{ display: 'flex', gap: '.5rem', marginTop: '.5rem' }}>
+                  <input className="input" style={{ flex: 1 }} value={own} autoFocus
+                    placeholder={g.group_bn === 'ইঞ্চি' ? '৫"' : g.group_bn === 'মিলিমিটার' ? '৩২ মিমি' : 'যেমন — গ্রেড ৫৩'}
+                    onChange={(e) => setOwn(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === 'Enter') takeOwn() }} />
+                  <button className="btn quiet small" disabled={!own.trim()} onClick={takeOwn}>{t('বসান')}</button>
+                </div>
+              )}
             </div>
           ))}
+          {variant && (
+            <div className="chips" style={{ marginTop: '.3rem' }}>
+              <Chip on onClick={() => setVariant('')}>{variant} · {t('তুলে নিন')}</Chip>
+            </div>
+          )}
           <p className="small muted">{t('মাপ নামের সঙ্গেই থাকে, তাই ১" আর ২" পাইপের মজুত আলাদা করে গোনা হয়।')}</p>
         </Field>
       )}
+
       <Field label="কীসের হিসাবে">
-        <div className="chips">{units.map((u) => <Chip key={u} on={unit === u} onClick={() => setUnit(u)}>{u}</Chip>)}</div>
+        <div className="chips">
+          {units.map((u) => <Chip key={u} on={unit === u} onClick={() => setUnit(unit === u ? '' : u)}>{u}</Chip>)}
+        </div>
       </Field>
-      <button className="btn primary" disabled={!name.trim()} onClick={() => create(name.trim(), unit || 'পিস')} style={{ marginTop: '.6rem', width: '100%' }}>{t("যোগ করুন")}</button>
+
+      {fullName && <p className="small muted" style={{ marginTop: '-.4rem' }}>{tf('যোগ হবে — {0} ({1})', fullName, t(unit || 'পিস'))}</p>}
+      <button className="btn primary" disabled={!base.trim()} onClick={() => create(fullName, unit || 'পিস')} style={{ marginTop: '.6rem', width: '100%' }}>{t("যোগ করুন")}</button>
 
       <div className="divider" />
-      <p className="sectionlabel" style={{ marginTop: 0 }}>{name.trim() ? t('চেনা তালিকায় যা মিলল') : t('চেনা তালিকা থেকে বেছে নিন')}</p>
-      {!name.trim() && (
+      <p className="sectionlabel" style={{ marginTop: 0 }}>{base.trim() ? t('চেনা তালিকায় যা মিলল') : t('চেনা তালিকা থেকে বেছে নিন')}</p>
+      {!base.trim() && (
         <div className="chips">
           {CATS.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(cat === c ? null : c)}>{c}</Chip>)}
         </div>
@@ -893,10 +930,10 @@ export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCr
           ))}
         </div>
       )}
-      {name.trim() && found.length === 0 && (
+      {base.trim() && found.length === 0 && (
         <p className="small muted">{t("চেনা তালিকায় এই নামে কিছু নেই — উপরের ‘যোগ করুন’ টিপলেই নিজের নামে যোগ হয়ে যাবে।")}</p>
       )}
-      {!name.trim() && !cat && (
+      {!base.trim() && !cat && (
         <p className="small muted">{t("পাইপ, ফিটিংস, ভালভ, বাথরুম, বিদ্যুৎ — মাপ ইঞ্চিতে। নাম টিপে বসালেই খোঁজাও যায়।")}</p>
       )}
     </Sheet>
