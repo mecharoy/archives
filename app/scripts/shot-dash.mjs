@@ -48,7 +48,7 @@ rows.push({ id: id(), tab: 'Money', mode: 'append', values: ['rc1', 'bc', d(30),
 
 for (let i = 0; i < rows.length; i += 60) await post(rows.slice(i, i + 60))
 
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const browser = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {})
 const page = await browser.newPage({ viewport: { width: 1180, height: 1500 }, deviceScaleFactor: 1.6 })
 await page.goto(W + '/')
 await page.locator('#tok').fill(A)

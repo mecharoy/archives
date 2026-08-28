@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { toBn, num } from '../lib/bn'
 import type { Brief, Status } from '../lib/store'
+import { t, tf } from '../lib/i18n'
 
 /* Two charts, both drawn as plain SVG against CSS variables so they follow
    the theme and print legibly. Nothing animates; he is reading, not watching. */
@@ -29,7 +30,7 @@ export function SCurve({ data }: { data: NonNullable<NonNullable<Brief['series']
   return (
     <div>
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img"
-        aria-label={`পরিকল্পনার তুলনায় খরচ — এখন ${data.actual[last]} ${data.unit}`}>
+        aria-label={tf('পরিকল্পনার তুলনায় খরচ — এখন {0} {1}', data.actual[last], data.unit)}>
         {ticks.map((t, k) => (
           <g key={k}>
             <line className="grid" x1={L} x2={W - R} y1={y(t)} y2={y(t)} />
@@ -51,12 +52,12 @@ export function SCurve({ data }: { data: NonNullable<NonNullable<Brief['series']
           onMouseMove={pick} onMouseLeave={() => setHover(null)} onTouchMove={pick} onTouchEnd={() => setHover(null)} />
       </svg>
       <div className="spread small muted" style={{ marginTop: '.3rem' }}>
-        <span>— — পরিকল্পনা</span>
-        <span style={{ color: 'var(--accent)' }}>—— আসল খরচ</span>
+        <span>{t("— — পরিকল্পনা")}</span>
+        <span style={{ color: 'var(--accent)' }}>{t("—— আসল খরচ")}</span>
         <span className="num">
           {hover != null
-            ? `${toBn(days[hover])} দিন · ${toBn(num(data.actual[hover] ?? 0, 1))} / ${toBn(num(data.plan[hover] ?? 0, 1))} লাখ`
-            : `${toBn(num(data.actual[last] ?? 0, 1))} লাখ খরচ`}
+            ? tf('{0} দিন · {1} / {2} লাখ', toBn(days[hover]), toBn(num(data.actual[hover] ?? 0, 1)), toBn(num(data.plan[hover] ?? 0, 1)))
+            : tf('{0} লাখ খরচ', toBn(num(data.actual[last] ?? 0, 1)))}
         </span>
       </div>
     </div>

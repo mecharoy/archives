@@ -142,14 +142,16 @@ export function dashboardHtml() {
     <div class="card">
       <p class="sub" id="briefstate">—</p>
       <p class="sub" style="margin-top:.6rem">
-        Give the model the summary below, ask it for <code>brief.json</code> in the agreed shape, paste the result here and publish.
-        The app fetches it from this same server, so there is nothing else to host.
+        The button copies the summary <em>and</em> the instructions together — paste that into the model, paste its
+        <code>brief.json</code> back here, and publish. Each line comes back in both Bengali and English, so his phone
+        reads the same brief in whichever language it is set to. The app fetches it from this same server, so there is
+        nothing else to host.
       </p>
       <div class="row" style="margin:.8rem 0">
         <button class="ghost" id="copysum">Copy summary for the model</button>
         <a id="csv" class="pill" href="#">Download everything as CSV</a>
       </div>
-      <textarea id="briefbox" placeholder='{ "generated_at": "...", "headline_bn": "...", "cards": [] }'></textarea>
+      <textarea id="briefbox" placeholder='{ "generated_at": "...", "headline_bn": "...", "headline_en": "...", "cards": [] }'></textarea>
       <div class="row" style="margin-top:.7rem">
         <button id="publish">Publish to his phone</button>
         <span class="msg" id="pubmsg"></span>
@@ -306,9 +308,49 @@ export function dashboardHtml() {
   $('hh').onchange = function () { current = this.value; load(); };
   $('signout').onclick = function () { localStorage.removeItem(KEY); location.reload(); };
 
+
+  /* The whole nightly instruction travels with the summary, so the routine is
+     one copy, one paste, one paste back — and so the both-languages rule can
+     never be forgotten on a tired evening. */
+  var PROMPT = [
+    'Here is the Site Khata summary. Use these numbers exactly as given.',
+    'Do not add, average or re-derive anything — if a figure is not in the',
+    'summary, leave it out.',
+    '',
+    'Write brief.json in the schema below. Every line of text goes in TWICE:',
+    '  *_bn  Bengali, for his phone — short, plain, specific',
+    '  *_en  the same sentence in plain English, for the English screen',
+    'Never write one without the other. No greetings, no closing summary.',
+    'Lead with whatever needs attention today.',
+    '',
+    'Flag, in this order of priority:',
+    '  - entries_last_3_days is 0        -> he has stopped entering; say so first',
+    '  - cash_variance beyond +/- 2000   -> entries are being missed',
+    '  - any project with cpi below 1    -> losing on the work done so far',
+    '  - dues_overdue above 0            -> already past a supplier\'s date',
+    '  - a burn item ahead of pct_done   -> waste, theft, or a wrong estimate',
+    '',
+    'Schema (statuses are only ok, warn, crit, info):',
+    '{',
+    '  "generated_at": "ISO timestamp with +05:30",',
+    '  "headline_bn": "…", "headline_en": "…",',
+    '  "cards":    [{ "label_bn": "…", "label_en": "…", "value": "₹48,200", "sub_bn": "…", "sub_en": "…", "status": "ok" }],',
+    '  "projects": [{ "name_bn": "…", "name_en": "…", "pct_done": 58, "pct_spent": 71, "status": "warn", "note_bn": "…", "note_en": "…" }],',
+    '  "alerts":   [{ "severity": "crit", "text_bn": "…", "text_en": "…" }],',
+    '  "series": {',
+    '    "scurve": { "days": [0,15,30], "plan": [0,1.7,4.5], "actual": [0,2.1,5.4], "unit": "lakh" },',
+    '    "burn":   [{ "item_bn": "রড", "item_en": "Steel", "pct": 92, "status": "crit" }]',
+    '  },',
+    '  "todo_bn": ["…"], "todo_en": ["…"]',
+    '}',
+    '',
+    'SUMMARY:',
+  ].join('\n');
+
   $('copysum').onclick = function () {
     if (!summary) return;
-    navigator.clipboard.writeText(JSON.stringify(summary, null, 2)).then(function () {
+    navigator.clipboard.writeText(PROMPT + '
+' + JSON.stringify(summary, null, 2)).then(function () {
       $('copysum').textContent = 'Copied';
       setTimeout(function () { $('copysum').textContent = 'Copy summary for the model'; }, 1800);
     });

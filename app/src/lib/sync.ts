@@ -6,6 +6,7 @@
 
 import { dbDel, dbPut } from './db'
 import { getState, setState, apiUrl, type OutboxRow } from './store'
+import { t, tf } from './i18n'
 
 const BATCH = 40
 const BASE_DELAY = 4000
@@ -38,7 +39,7 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
   const s = getState()
   if (running) return { sent: 0, error: '' }
   if (!s.outbox.length) { setState({ sync_error: '' }); return { sent: 0, error: '' } }
-  if (!s.settings.endpoint) return { sent: 0, error: 'সেটিংসে ঠিকানা দেওয়া নেই' }
+  if (!s.settings.endpoint) return { sent: 0, error: t('সেটিংসে ঠিকানা দেওয়া নেই') }
   if (!s.online && !force) return { sent: 0, error: '' }
 
   running = true
@@ -85,7 +86,7 @@ interface PostResult { ok: boolean; accepted: string[]; rejected: { id: string; 
 
 async function postRows(endpoint: string, token: string, rows: OutboxRow[]): Promise<PostResult> {
   const ctrl = new AbortController()
-  const t = setTimeout(() => ctrl.abort(), 25_000)
+  const timer = setTimeout(() => ctrl.abort(), 25_000)
   try {
     const res = await fetch(endpoint, {
       method: 'POST',
@@ -98,20 +99,20 @@ async function postRows(endpoint: string, token: string, rows: OutboxRow[]): Pro
       redirect: 'follow',
     })
     const text = await res.text()
-    if (!res.ok) return { ok: false, accepted: [], rejected: [], error: `সার্ভার ${res.status}` }
+    if (!res.ok) return { ok: false, accepted: [], rejected: [], error: tf('সার্ভার {0}', res.status) }
     let data: { ok?: boolean; accepted?: string[]; rejected?: { id: string; error: string }[]; error?: string }
-    try { data = JSON.parse(text) } catch { return { ok: false, accepted: [], rejected: [], error: 'উত্তর বোঝা গেল না' } }
-    if (!data.ok) return { ok: false, accepted: [], rejected: [], error: data.error || 'সার্ভার মানল না' }
+    try { data = JSON.parse(text) } catch { return { ok: false, accepted: [], rejected: [], error: t('উত্তর বোঝা গেল না') } }
+    if (!data.ok) return { ok: false, accepted: [], rejected: [], error: data.error || t('সার্ভার মানল না') }
     return { ok: true, accepted: data.accepted || [], rejected: data.rejected || [], error: '' }
   } finally {
-    clearTimeout(t)
+    clearTimeout(timer)
   }
 }
 
 function describe(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)
-  if (/abort/i.test(msg)) return 'সময় শেষ, আবার চেষ্টা হবে'
-  if (/fetch|network/i.test(msg)) return 'নেট পাওয়া যাচ্ছে না'
+  if (/abort/i.test(msg)) return t('সময় শেষ, আবার চেষ্টা হবে')
+  if (/fetch|network/i.test(msg)) return t('নেট পাওয়া যাচ্ছে না')
   return msg.slice(0, 80)
 }
 
@@ -125,9 +126,9 @@ export async function testEndpoint(endpoint: string, token: string): Promise<str
       redirect: 'follow',
     })
     const text = await res.text()
-    if (!res.ok) return `সার্ভার ${res.status}`
+    if (!res.ok) return tf('সার্ভার {0}', res.status)
     const data = JSON.parse(text) as { ok?: boolean; error?: string; household?: string }
-    if (!data.ok) return data.error === 'token' ? 'টোকেন মিলল না' : (data.error || 'জোড়া লাগল না')
+    if (!data.ok) return data.error === 'token' ? t('টোকেন মিলল না') : (data.error || t('জোড়া লাগল না'))
     return ''
   } catch (e) {
     return describe(e)

@@ -6,6 +6,7 @@
 
 import type { Entry, AttendanceEntry, StockEntry, MoneyEntry, ProgressEntry, DayEntry, Project, Stage, Coeff, Item, ID } from './model'
 import { isoDate, addDays } from './bn'
+import { t } from './i18n'
 
 export const DRAWING_HEAD = 'ব্যবসা থেকে নেওয়া'
 
@@ -61,11 +62,11 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
   const profit = at_finish != null && budget > 0 ? budget - at_finish : null
 
   let status: ProjectTotals['status'] = 'ok'
-  let flag_bn = 'ঠিক আছে'
+  let flag_bn = t('ঠিক আছে')
   const gap = pct_spent - pct_done
-  if (budget > 0 && gap > 15) { status = 'crit'; flag_bn = 'খরচ কাজের অনেক আগে' }
-  else if (budget > 0 && gap > 6) { status = 'warn'; flag_bn = 'খরচ কাজের থেকে এগিয়ে' }
-  else if (budget > 0 && gap < -10) { flag_bn = 'খরচ কম, কাজ এগিয়ে' }
+  if (budget > 0 && gap > 15) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
+  else if (budget > 0 && gap > 6) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
+  else if (budget > 0 && gap < -10) { flag_bn = t('খরচ কম, কাজ এগিয়ে') }
 
   return { project_id: p.id, labour, material, other, cost, received, pct_done, pct_spent, earned, cpi, at_finish, profit, status, flag_bn }
 }

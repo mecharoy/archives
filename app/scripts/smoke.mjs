@@ -3,7 +3,7 @@ import { createServer } from 'vite'
 
 const server = await createServer({ server: { port: 5199 } })
 await server.listen()
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const browser = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {})
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
 const errors = []
 page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message))
@@ -31,17 +31,33 @@ await page.waitForTimeout(700)
 
 await step('onboarding opens', async () => { await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 5000 }) })
 await step('onboarding: start', async () => { await tap('শুরু করি') })
+await step('onboarding: language', async () => {
+  await page.getByText('কোন ভাষায় দেখতে চান?').waitFor({ timeout: 4000 })
+  await page.locator('.pick').first().click()
+  await tap('এগিয়ে যান')
+})
+await step('onboarding: about him', async () => {
+  await page.getByText('আপনার নাম?').waitFor({ timeout: 4000 })
+  await page.locator('input.input').first().fill('বিমল')
+  await tap('এগিয়ে যান')
+})
 await step('onboarding: project', async () => {
+  await page.getByText('এখন কোন কাজটা চলছে?').waitFor({ timeout: 4000 })
   await page.locator('input.input').first().fill('রামপুর বাড়ি')
   await page.locator('input.input').nth(1).fill('2800000')
   await tap('এগিয়ে যান')
 })
 await step('onboarding: workers', async () => {
+  await page.getByText('কারা কাজ করে?').waitFor({ timeout: 4000 })
   await page.locator('input.input').nth(0).fill('রতন')
   await page.locator('input.input').nth(1).fill('600')
   await tap('+ আরও একজন')
   await page.locator('input.input').nth(2).fill('সুকুমার')
   await page.locator('input.input').nth(3).fill('550')
+  await tap('এগিয়ে যান')
+})
+await step('onboarding: cash in hand', async () => {
+  await page.getByText('এই মুহূর্তে হাতে কত টাকা আছে?').waitFor({ timeout: 4000 })
   await tap('হয়ে গেল')
   await page.getByText('আজকের হিসাব').first().waitFor({ timeout: 5000 })
 })
@@ -143,6 +159,7 @@ const home = async () => { await page.goto('http://localhost:5199/'); await page
 
 await step('shop flow: goods in', async () => {
   await home()
+  await page.locator('.tabs .tab', { hasText: 'মজুত' }).click()
   await page.locator('.tile', { hasText: 'দোকানের মজুত' }).click()
   await tap('মাল এসেছে')
   await page.getByText('সিমেন্ট', { exact: true }).first().click()
@@ -171,6 +188,7 @@ await step('estimator runs end to end', async () => {
 })
 await step('history lists days and can reverse', async () => {
   await home()
+  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
   await page.locator('.tile', { hasText: 'পুরোনো হিসাব' }).click()
   await page.locator('.pick').first().click()
   await page.locator('.sheet .iconbtn').first().click()
@@ -179,6 +197,7 @@ await step('history lists days and can reverse', async () => {
 })
 await step('personal book with pin', async () => {
   await home()
+  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
   await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
   await page.getByText('খরচ লিখুন').waitFor({ timeout: 3000 })
   await tap('খরচ লিখুন')
@@ -186,6 +205,41 @@ await step('personal book with pin', async () => {
   for (const d of ['৫', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('সেভ করুন')
   await page.waitForTimeout(500)
+})
+await step('english switch flips the whole screen', async () => {
+  await home()
+  await page.locator('.topbar .iconbtn').nth(1).click()
+  await tap('ভাষা')
+  await page.getByText('কোন ভাষায়|Language|ভাষা').first().waitFor({ timeout: 3000 }).catch(() => {})
+  await page.locator('.pick').nth(1).click()
+  await page.waitForTimeout(300)
+  await page.locator('.topbar .iconbtn').first().click()   // back to settings
+  await page.waitForTimeout(200)
+  await page.locator('.topbar .iconbtn').first().click()   // back home
+  await page.waitForTimeout(400)
+  const body = await page.locator('.app').innerText()
+  if (!body.includes("Today's entry")) throw new Error('home did not switch to English: ' + body.slice(0, 120))
+  if (!/1,150|1,250|₹/.test(body)) throw new Error('numbers did not switch to ASCII')
+})
+await step('english is only skin deep — the ledger stays Bengali', async () => {
+  const heads = await page.evaluate(() => new Promise((res) => {
+    const r = indexedDB.open('sitekhata')
+    r.onsuccess = () => {
+      const all = r.result.transaction('entries', 'readonly').objectStore('entries').getAll()
+      all.onsuccess = () => res(all.result.map((e) => e.head_bn || e.mode || '').join(' '))
+    }
+  }))
+  if (/[a-zA-Z]{3,}/.test(heads)) throw new Error('English words reached the stored rows: ' + heads.slice(0, 120))
+})
+await step('back to Bengali', async () => {
+  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.getByText('Language').first().click()
+  await page.locator('.pick').first().click()
+  await page.waitForTimeout(300)
+  await page.locator('.topbar .iconbtn').first().click()
+  await page.waitForTimeout(200)
+  await page.locator('.topbar .iconbtn').first().click()
+  await page.getByText('আজকের হিসাব').first().waitFor({ timeout: 4000 })
 })
 await step('backup writes a file', async () => {
   await home()

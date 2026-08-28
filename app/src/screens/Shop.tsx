@@ -9,6 +9,7 @@ import { shopStock, duesSplit } from '../lib/calc'
 import { rankItems, rankParties, lastPurchase, qtyChips } from '../lib/suggest'
 import { scheduleSync } from '../lib/sync'
 import { capture } from '../lib/photo'
+import { t, tf } from '../lib/i18n'
 
 type Flow = null | 'in' | 'sale' | 'count' | 'transfer'
 
@@ -24,43 +25,43 @@ export function Shop({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <TopBar title="দোকানের মজুত" sub={`${toBn(levels.length)} রকম মাল · ${money(value)}`} onBack={onBack} />
+      <TopBar title="দোকানের মজুত" sub={tf('{0} রকম মাল · {1}', toBn(levels.length), money(value))} onBack={onBack} />
       <div className="scroll">
         <div className="tilegrid" style={{ marginTop: '1rem' }}>
           <button className="tile" onClick={() => setFlow('in')}>
-            <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>মাল এসেছে</span><span className="s">দোকানে ঢুকল</span></span>
+            <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("মাল এসেছে")}</span><span className="s">{t("দোকানে ঢুকল")}</span></span>
           </button>
           <button className="tile" onClick={() => setFlow('sale')}>
-            <Icon name="shop" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>বিক্রি হয়েছে</span><span className="s">খদ্দেরকে</span></span>
+            <Icon name="shop" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("বিক্রি হয়েছে")}</span><span className="s">{t("খদ্দেরকে")}</span></span>
           </button>
           <button className="tile" onClick={() => setFlow('transfer')}>
-            <Icon name="fwd" size={22} /><span><span className="t" style={{ display: 'block' }}>কাজে পাঠানো</span><span className="s">দামে নয়, খরচে</span></span>
+            <Icon name="fwd" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("কাজে পাঠানো")}</span><span className="s">{t("দামে নয়, খরচে")}</span></span>
           </button>
           <button className="tile" onClick={() => setFlow('count')}>
-            <Icon name="check" size={22} /><span><span className="t" style={{ display: 'block' }}>মাল গোনা</span><span className="s">যা আছে মিলিয়ে নিন</span></span>
+            <Icon name="check" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("মাল গোনা")}</span><span className="s">{t("যা আছে মিলিয়ে নিন")}</span></span>
           </button>
         </div>
 
         {dues.total > 0 && (
           <>
-            <p className="sectionlabel">দোকানে বাকি</p>
+            <p className="sectionlabel">{t("দোকানে বাকি")}</p>
             <div className="card">
               {dues.all.slice(0, 8).map((d) => (
                 <div className="review-row" key={d.entry_id}>
                   <span>
-                    <span className="t">{d.party_id ? nameOf(s, d.party_id) : 'নাম লেখা নেই'}</span>
-                    <span className="k">{nameOf(s, d.item_id)} · {d.due_date < isoDate() ? 'সময় পেরিয়েছে' : dateBn(d.due_date, false) + ' তারিখে'}</span>
+                    <span className="t">{d.party_id ? nameOf(s, d.party_id) : t('নাম লেখা নেই')}</span>
+                    <span className="k">{nameOf(s, d.item_id)} · {d.due_date < isoDate() ? t('সময় পেরিয়েছে') : dateBn(d.due_date, false) + ' তারিখে'}</span>
                   </span>
                   <span className="v num" style={{ color: d.due_date < isoDate() ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
                 </div>
               ))}
-              <div className="total"><span className="k">মোট বাকি</span><span className="v num">{money(dues.total)}</span></div>
+              <div className="total"><span className="k">{t("মোট বাকি")}</span><span className="v num">{money(dues.total)}</span></div>
             </div>
           </>
         )}
 
-        <p className="sectionlabel">এখন যা আছে</p>
-        {levels.length === 0 && <Empty>এখনও কোনো মাল ঢোকেনি।<br />‘মাল এসেছে’ থেকে শুরু করুন।</Empty>}
+        <p className="sectionlabel">{t("এখন যা আছে")}</p>
+        {levels.length === 0 && <Empty>{t("এখনও কোনো মাল ঢোকেনি।")}<br />{t("‘মাল এসেছে’ থেকে শুরু করুন।")}</Empty>}
         {levels.length > 0 && (
           <div className="card">
             {levels.map((l) => (
@@ -74,7 +75,7 @@ export function Shop({ onBack }: { onBack: () => void }) {
                 </span>
               </div>
             ))}
-            <div className="total"><span className="k">মজুতের দাম</span><span className="v num">{money(value)}</span></div>
+            <div className="total"><span className="k">{t("মজুতের দাম")}</span><span className="v num">{money(value)}</span></div>
           </div>
         )}
       </div>
@@ -146,7 +147,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
     await saveEntries([e])
     if (flow === 'in' && r > 0) await saveMaster({ ...item, last_rate: r })
     scheduleSync(300)
-    onDone(`${item.name_bn} — ${TITLES[flow]}`)
+    onDone(`${t(item.name_bn)} — ${t(TITLES[flow])}`)
   }
 
   const unit = item?.unit_bn || ''
@@ -157,11 +158,11 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
       {step === 'item' && (
         <>
           <div className="scroll">
-            <h2 className="question">কোন মাল?</h2>
+            <h2 className="question">{t("কোন মাল?")}</h2>
             <div className="chips">
               {top.map((it) => <Chip key={it.id} onClick={() => { noteChip(true); start(it) }}>{it.name_bn}</Chip>)}
-              {all.length > top.length && <Chip onClick={() => { noteChip(false); setShowAll(true) }}>আরও…</Chip>}
-              {all.length === 0 && <Chip onClick={() => setNewItem(true)}>+ নতুন মাল</Chip>}
+              {all.length > top.length && <Chip onClick={() => { noteChip(false); setShowAll(true) }}>{t("আরও…")}</Chip>}
+              {all.length === 0 && <Chip onClick={() => setNewItem(true)}>{t("+ নতুন মাল")}</Chip>}
             </div>
           </div>
           {showAll && (
@@ -180,19 +181,19 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
         <>
           <div className="scroll">
             <h2 className="question">
-              {flow === 'count' ? `${item.name_bn} গুনে কত ${unit}?` : `কত ${unit}?`}
+              {flow === 'count' ? tf('{0} গুনে কত {1}?', item.name_bn, unit) : tf('কত {0}?', unit)}
             </h2>
             {flow !== 'in' && <p className="hint">দোকানে আছে {num(held, held % 1 ? 2 : 0)} {unit}</p>}
             <MoneyPad value={qty} onChange={setQty} prefix="" allowDecimal chips={qtyChips(s.entries, item.id)} onChipTaken={() => noteChip(true)} />
             {flow !== 'in' && flow !== 'count' && Number(qty) > held && (
               <div className="alert warn" style={{ marginTop: '.8rem' }}>
-                <span className="dot" /><span>দোকানে এত নেই। মজুত মাইনাসে চলে যাবে — আগে ‘মাল গোনা’ করে নিন।</span>
+                <span className="dot" /><span>{t("দোকানে এত নেই। মজুত মাইনাসে চলে যাবে — আগে ‘মাল গোনা’ করে নিন।")}</span>
               </div>
             )}
           </div>
           <div className="actionbar">
             <button className="btn primary" disabled={!Number(qty)}
-              onClick={() => setStep(flow === 'count' ? 'who' : 'rate')}>এগিয়ে যান</button>
+              onClick={() => setStep(flow === 'count' ? 'who' : 'rate')}>{t("এগিয়ে যান")}</button>
           </div>
         </>
       )}
@@ -200,13 +201,13 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
       {step === 'rate' && item && (
         <>
           <div className="scroll">
-            <h2 className="question">{flow === 'sale' ? 'কত দরে বিক্রি?' : flow === 'transfer' ? 'কোন দামে ধরব?' : 'কত দর?'}</h2>
+            <h2 className="question">{flow === 'sale' ? t('কত দরে বিক্রি?') : flow === 'transfer' ? t('কোন দামে ধরব?') : t('কত দর?')}</h2>
             <p className="hint">
               {flow === 'transfer'
-                ? 'কাজে পাঠানো মাল কেনা দামেই ধরা হয় — তাতে দোকানের লাভ আর কাজের খরচ, দুটোই ঠিক থাকে।'
+                ? t('কাজে পাঠানো মাল কেনা দামেই ধরা হয় — তাতে দোকানের লাভ আর কাজের খরচ, দুটোই ঠিক থাকে।')
                 : lastPurchase(s.entries, item.id)
-                  ? `গতবার ${money(lastPurchase(s.entries, item.id)!.rate)} প্রতি ${unit}`
-                  : 'প্রথমবার'}
+                  ? tf('গতবার {0} প্রতি {1}', money(lastPurchase(s.entries, item.id)!.rate), unit)
+                  : t('প্রথমবার')}
             </p>
             <MoneyPad value={rate} onChange={setRate} allowDecimal />
             <div className="card" style={{ marginTop: '.9rem' }}>
@@ -215,7 +216,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
             </div>
           </div>
           <div className="actionbar">
-            <button className="btn primary" disabled={!Number(rate)} onClick={() => setStep('who')}>এগিয়ে যান</button>
+            <button className="btn primary" disabled={!Number(rate)} onClick={() => setStep('who')}>{t("এগিয়ে যান")}</button>
           </div>
         </>
       )}
@@ -225,7 +226,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
           <div className="scroll">
             {flow === 'transfer' ? (
               <>
-                <h2 className="question">কোন কাজে?</h2>
+                <h2 className="question">{t("কোন কাজে?")}</h2>
                 <div className="rowlist">
                   {activeProjects(s).map((p) => (
                     <Pick key={p.id} on={project === p.id} title={p.name_bn} onClick={() => setProject(p.id)} />
@@ -234,38 +235,38 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
               </>
             ) : flow === 'count' ? (
               <>
-                <h2 className="question">মিলিয়ে নিন</h2>
+                <h2 className="question">{t("মিলিয়ে নিন")}</h2>
                 <div className="card">
-                  <div className="review-row"><span className="t">খাতায় ছিল</span><span className="v num">{num(held, 2)} {unit}</span></div>
-                  <div className="review-row"><span className="t">গুনে পাওয়া গেল</span><span className="v num">{num(Number(qty), 2)} {unit}</span></div>
+                  <div className="review-row"><span className="t">{t("খাতায় ছিল")}</span><span className="v num">{num(held, 2)} {unit}</span></div>
+                  <div className="review-row"><span className="t">{t("গুনে পাওয়া গেল")}</span><span className="v num">{num(Number(qty), 2)} {unit}</span></div>
                   <div className="total">
-                    <span className="k">ফারাক</span>
+                    <span className="k">{t("ফারাক")}</span>
                     <span className="v num" style={{ color: Math.abs(Number(qty) - held) > 0.01 ? 'var(--warn)' : undefined }}>
                       {num(Number(qty) - held, 2)} {unit}
                     </span>
                   </div>
                 </div>
-                <p className="hint" style={{ marginTop: '.9rem' }}>সেভ করলে আজ থেকে এই সংখ্যাটাই ধরা হবে।</p>
+                <p className="hint" style={{ marginTop: '.9rem' }}>{t("সেভ করলে আজ থেকে এই সংখ্যাটাই ধরা হবে।")}</p>
               </>
             ) : (
               <>
-                <h2 className="question">{flow === 'sale' ? 'কাকে বিক্রি?' : 'কার কাছ থেকে?'}</h2>
+                <h2 className="question">{flow === 'sale' ? t('কাকে বিক্রি?') : t('কার কাছ থেকে?')}</h2>
                 <div className="chips">
                   {topParties.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(p.id)}>{p.name_bn}</Chip>)}
-                  <Chip onClick={() => setNewParty(true)}>+ নতুন</Chip>
-                  {flow === 'sale' && <Chip on={party === ''} onClick={() => setParty('')}>খুচরো খদ্দের</Chip>}
+                  <Chip onClick={() => setNewParty(true)}>{t("+ নতুন")}</Chip>
+                  {flow === 'sale' && <Chip on={party === ''} onClick={() => setParty('')}>{t("খুচরো খদ্দের")}</Chip>}
                 </div>
                 {flow === 'in' && (
                   <>
-                    <p className="sectionlabel">টাকা দিয়েছেন?</p>
+                    <p className="sectionlabel">{t("টাকা দিয়েছেন?")}</p>
                     <div className="yesno">
-                      <button className={paid === true ? 'on' : ''} onClick={() => setPaid(true)}>হ্যাঁ</button>
-                      <button className={paid === false ? 'on' : ''} onClick={() => setPaid(false)}>না, বাকি</button>
+                      <button className={paid === true ? 'on' : ''} onClick={() => setPaid(true)}>{t("হ্যাঁ")}</button>
+                      <button className={paid === false ? 'on' : ''} onClick={() => setPaid(false)}>{t("না, বাকি")}</button>
                     </div>
                     <button className="btn quiet small" style={{ marginTop: '1rem' }}
                       onClick={async () => { const id = await capture(); if (id) setPhoto(id) }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-                        <Icon name="camera" size={18} />{photo ? 'বিলের ছবি নেওয়া হয়েছে' : 'বিলের ছবি'}
+                        <Icon name="camera" size={18} />{photo ? t('বিলের ছবি নেওয়া হয়েছে') : t('বিলের ছবি')}
                       </span>
                     </button>
                   </>
@@ -276,7 +277,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
           <div className="actionbar">
             <button className="btn primary"
               disabled={(flow === 'in' && paid === null) || (flow === 'transfer' && !project)}
-              onClick={commit}>সেভ করুন</button>
+              onClick={commit}>{t("সেভ করুন")}</button>
           </div>
           {newParty && <NewPartySheet kind={kind} onClose={() => setNewParty(false)} onCreated={(p) => { setParty(p.id); setNewParty(false) }} />}
         </>

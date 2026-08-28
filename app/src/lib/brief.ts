@@ -9,6 +9,7 @@ import { getState, setState, apiUrl, type Brief, type Status, activeProjects, st
 import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries } from './calc'
 import { hoursSince, isoDate, daysBetween, addDays, money, toBn } from './bn'
 import type { Entry, StockEntry } from './model'
+import { t, tf } from './i18n'
 
 export const STALE_HOURS = 36
 
@@ -33,32 +34,38 @@ export function parseBrief(raw: unknown): Brief | null {
   return {
     generated_at,
     headline_bn: str(o.headline_bn),
+    headline_en: str(o.headline_en),
     cards: arr(o.cards).slice(0, 6).map((c) => {
       const x = c as Record<string, unknown>
-      return { label_bn: str(x.label_bn, 40), value: str(x.value, 24), sub_bn: str(x.sub_bn, 60), status: st(x.status) }
+      return {
+        label_bn: str(x.label_bn, 40), label_en: str(x.label_en, 40),
+        value: str(x.value, 24),
+        sub_bn: str(x.sub_bn, 60), sub_en: str(x.sub_en, 60), status: st(x.status),
+      }
     }).filter((c) => c.label_bn),
     projects: arr(o.projects).slice(0, 12).map((p) => {
       const x = p as Record<string, unknown>
       return {
-        name_bn: str(x.name_bn, 60),
+        name_bn: str(x.name_bn, 60), name_en: str(x.name_en, 60),
         pct_done: Math.max(0, Math.min(100, numOr(x.pct_done, 0))),
         pct_spent: Math.max(0, Math.min(999, numOr(x.pct_spent, 0))),
-        status: st(x.status), note_bn: str(x.note_bn, 200),
+        status: st(x.status), note_bn: str(x.note_bn, 200), note_en: str(x.note_en, 200),
       }
     }).filter((p) => p.name_bn),
     alerts: arr(o.alerts).slice(0, 10).map((a) => {
       const x = a as Record<string, unknown>
-      return { severity: st(x.severity), text_bn: str(x.text_bn) }
+      return { severity: st(x.severity), text_bn: str(x.text_bn), text_en: str(x.text_en) }
     }).filter((a) => a.text_bn),
     series: {
       scurve: days.length > 1 && plan.length === days.length && actual.length <= days.length
         ? { days, plan, actual, unit: str(sc.unit, 12) || 'lakh' } : undefined,
       burn: arr(series.burn).slice(0, 12).map((b) => {
         const x = b as Record<string, unknown>
-        return { item_bn: str(x.item_bn, 40), pct: Math.max(0, Math.min(400, numOr(x.pct, 0))), status: st(x.status) }
+        return { item_bn: str(x.item_bn, 40), item_en: str(x.item_en, 40), pct: Math.max(0, Math.min(400, numOr(x.pct, 0))), status: st(x.status) }
       }).filter((b) => b.item_bn),
     },
     todo_bn: arr(o.todo_bn).slice(0, 10).map((t) => str(t)).filter(Boolean),
+    todo_en: arr(o.todo_en).slice(0, 10).map((t) => str(t)).filter(Boolean),
   }
 }
 
@@ -74,19 +81,19 @@ export async function fetchBrief(silent = true): Promise<string> {
   const s = getState()
   // Served beside the data it describes; an explicit URL is only an override.
   const url = s.settings.briefUrl.trim() || apiUrl('/brief.json')
-  if (!url) return silent ? '' : 'সেটিংসে ঠিকানা দেওয়া নেই'
+  if (!url) return silent ? '' : t('সেটিংসে ঠিকানা দেওয়া নেই')
   try {
     const ctrl = new AbortController()
-    const t = setTimeout(() => ctrl.abort(), 20_000)
+    const timer = setTimeout(() => ctrl.abort(), 20_000)
     const headers: Record<string, string> = {}
     const auth = s.settings.briefToken || s.settings.token
     if (auth) headers['Authorization'] = 'Bearer ' + auth
     const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { headers, signal: ctrl.signal, cache: 'no-store' })
-    clearTimeout(t)
-    if (res.status === 404) return silent ? '' : 'রাতের হিসাব এখনও তৈরি হয়নি'
-    if (!res.ok) return `ব্রিফ পাওয়া গেল না (${res.status})`
+    clearTimeout(timer)
+    if (res.status === 404) return silent ? '' : t('রাতের হিসাব এখনও তৈরি হয়নি')
+    if (!res.ok) return tf('ব্রিফ পাওয়া গেল না ({0})', res.status)
     const parsed = parseBrief(await res.json())
-    if (!parsed) return 'ব্রিফের ফাইলটা ঠিক নেই'
+    if (!parsed) return t('ব্রিফের ফাইলটা ঠিক নেই')
     const at = new Date().toISOString()
     await kvSet('brief', parsed)
     await kvSet('brief_fetched_at', at)
@@ -94,7 +101,7 @@ export async function fetchBrief(silent = true): Promise<string> {
     return ''
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e)
-    return /abort/i.test(m) ? 'সময় শেষ' : 'ব্রিফ আনা গেল না'
+    return /abort/i.test(m) ? t('সময় শেষ') : t('ব্রিফ আনা গেল না')
   }
 }
 
@@ -117,11 +124,11 @@ export function localBrief(): Brief {
   const counted = es.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
   const cards: NonNullable<Brief['cards']> = [
     counted
-      ? { label_bn: 'হাতে টাকা', value: money(cash.computed), sub_bn: `${toBn(daysBetween(cash.anchor_date, isoDate()))} দিন আগে গোনা`, status: cash.computed < 0 ? 'crit' : 'ok' }
-      : { label_bn: 'হাতে টাকা', value: '—', sub_bn: 'একবার গুনে বসিয়ে দিন', status: 'info' },
-    { label_bn: 'বাকি দেনা', value: money(dues.total), sub_bn: dues.overdue > 0 ? `${money(dues.overdue)} সময় পেরিয়েছে` : 'সময়ের মধ্যে', status: dues.overdue > 0 ? 'crit' : dues.thisWeek > 0 ? 'warn' : 'ok' },
-    { label_bn: 'দোকানের মজুত', value: money(stockValue), sub_bn: `${toBn(stock.length)} রকম মাল`, status: 'info' },
-    { label_bn: 'এ মাসের খরচ', value: money(monthSpend(es)), sub_bn: 'চলতি মাস', status: 'info' },
+      ? { label_bn: t('হাতে টাকা'), value: money(cash.computed), sub_bn: tf('{0} দিন আগে গোনা', toBn(daysBetween(cash.anchor_date, isoDate()))), status: cash.computed < 0 ? 'crit' : 'ok' }
+      : { label_bn: t('হাতে টাকা'), value: '—', sub_bn: t('একবার গুনে বসিয়ে দিন'), status: 'info' },
+    { label_bn: t('বাকি দেনা'), value: money(dues.total), sub_bn: dues.overdue > 0 ? tf('{0} সময় পেরিয়েছে', money(dues.overdue)) : t('সময়ের মধ্যে'), status: dues.overdue > 0 ? 'crit' : dues.thisWeek > 0 ? 'warn' : 'ok' },
+    { label_bn: t('দোকানের মজুত'), value: money(stockValue), sub_bn: tf('{0} রকম মাল', toBn(stock.length)), status: 'info' },
+    { label_bn: t('এ মাসের খরচ'), value: money(monthSpend(es)), sub_bn: t('চলতি মাস'), status: 'info' },
   ]
 
   const projs = active.map((p) => {
@@ -130,12 +137,12 @@ export function localBrief(): Brief {
   })
 
   const alerts: NonNullable<Brief['alerts']> = []
-  if (entered3 === 0) alerts.push({ severity: 'crit', text_bn: 'তিন দিন কোনো হিসাব লেখা হয়নি।' })
-  if (dues.overdue > 0) alerts.push({ severity: 'crit', text_bn: `${money(dues.overdue)} দেনার সময় পেরিয়ে গেছে।` })
-  else if (dues.thisWeek > 0) alerts.push({ severity: 'warn', text_bn: `এ সপ্তাহে ${money(dues.thisWeek)} দিতে হবে।` })
+  if (entered3 === 0) alerts.push({ severity: 'crit', text_bn: t('তিন দিন কোনো হিসাব লেখা হয়নি।') })
+  if (dues.overdue > 0) alerts.push({ severity: 'crit', text_bn: tf('{0} দেনার সময় পেরিয়ে গেছে।', money(dues.overdue)) })
+  else if (dues.thisWeek > 0) alerts.push({ severity: 'warn', text_bn: tf('এ সপ্তাহে {0} দিতে হবে।', money(dues.thisWeek)) })
   for (const p of active) {
     const t = projectTotals(p, es, st)
-    if (t.cpi != null && t.cpi < 1 && t.cost > 0) alerts.push({ severity: 'warn', text_bn: `${p.name_bn}: কাজের তুলনায় খরচ বেশি হচ্ছে।` })
+    if (t.cpi != null && t.cpi < 1 && t.cost > 0) alerts.push({ severity: 'warn', text_bn: tf('{0}: কাজের তুলনায় খরচ বেশি হচ্ছে।', p.name_bn) })
   }
 
   const main = active[0]
@@ -143,19 +150,19 @@ export function localBrief(): Brief {
     ? projectBurn(main, es, cf, projectTotals(main, es, st).pct_done)
         .filter((b) => b.est > 0)
         .slice(0, 6)
-        .map((b) => ({ item_bn: nameOf(s, b.item_id), pct: b.pct, status: b.status as Status }))
+        .map((b) => ({ item_bn: t(nameOf(s, b.item_id)), pct: b.pct, status: b.status as Status }))
     : []
 
   return {
     generated_at: new Date().toISOString(),
-    headline_bn: alerts[0]?.text_bn || (active.length ? 'সব ঠিক চলছে।' : 'একটা কাজ যোগ করে শুরু করুন।'),
+    headline_bn: alerts[0]?.text_bn || (active.length ? t('সব ঠিক চলছে।') : t('একটা কাজ যোগ করে শুরু করুন।')),
     cards, projects: projs, alerts,
     series: { scurve: main ? sCurve(main.id) : undefined, burn: burnRows },
-    todo_bn: dues.all.slice(0, 4).map((d) => `${nameOf(s, d.party_id) || 'দোকান'} — ${money(d.amount)}, ${d.due_date}`),
+    todo_bn: dues.all.slice(0, 4).map((d) => `${nameOf(s, d.party_id) || t('দোকান')} — ${money(d.amount)}, ${d.due_date}`),
   }
 }
 
-function monthSpend(es: Entry[]): number {
+export function monthSpend(es: Entry[]): number {
   const from = isoDate().slice(0, 8) + '01'
   let total = 0
   for (const e of es) {

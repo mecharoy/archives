@@ -1,8 +1,9 @@
 # Site Khata
 
-A Bengali site-and-shop ledger for one contractor's phone. It asks one question
-per screen, gets shorter the more he uses it, keeps working with no signal, and
-never shows a number it invented.
+A Bengali site-and-shop ledger for one contractor's phone, with an English
+switch for anyone else who picks it up. It asks one question per screen, gets
+shorter the more he uses it, keeps working with no signal, and never shows a
+number it invented.
 
 The build plan this implements is in the artifact; what follows is what was
 actually built, how to set it up, and what it does not do.
@@ -80,8 +81,16 @@ reads, 100k writes, 5 GB. A busy day here is about fifty writes.
 
 ## The nightly brief
 
-Open your dashboard, press **Copy summary for the model**, and paste it with
-this prompt. The summary is already computed and about forty numbers long.
+Open your dashboard and press **Copy summary for the model**. That copies the
+instructions *and* the computed summary together — paste the lot into the
+model, paste its `brief.json` back into the box, and press **Publish to his
+phone**.
+
+Every line comes back in both languages: `headline_bn` and `headline_en`,
+`text_bn` and `text_en`, and so on. The phone shows whichever its language
+setting asks for, and falls back to Bengali when a brief has no English in it —
+so a brief written before this existed still renders. The prompt the button
+copies is kept in `server/src/dashboard.js`; it reads:
 
 ```
 Here is the Site Khata summary. Use these numbers exactly as given.
@@ -111,15 +120,15 @@ field never breaks it:
 ```json
 {
   "generated_at": "2026-08-28T23:40:00+05:30",
-  "headline_bn": "…",
-  "cards":    [{ "label_bn": "…", "value": "₹48,200", "sub_bn": "…", "status": "ok" }],
-  "projects": [{ "name_bn": "…", "pct_done": 58, "pct_spent": 71, "status": "warn", "note_bn": "…" }],
-  "alerts":   [{ "severity": "crit", "text_bn": "…" }],
+  "headline_bn": "…", "headline_en": "…",
+  "cards":    [{ "label_bn": "…", "label_en": "…", "value": "₹48,200", "sub_bn": "…", "sub_en": "…", "status": "ok" }],
+  "projects": [{ "name_bn": "…", "name_en": "…", "pct_done": 58, "pct_spent": 71, "status": "warn", "note_bn": "…", "note_en": "…" }],
+  "alerts":   [{ "severity": "crit", "text_bn": "…", "text_en": "…" }],
   "series": {
     "scurve": { "days": [0,15,30], "plan": [0,1.7,4.5], "actual": [0,2.1,5.4], "unit": "lakh" },
-    "burn":   [{ "item_bn": "রড", "pct": 92, "status": "crit" }]
+    "burn":   [{ "item_bn": "রড", "item_en": "Steel", "pct": 92, "status": "crit" }]
   },
-  "todo_bn": ["…"]
+  "todo_bn": ["…"], "todo_en": ["…"]
 }
 ```
 
@@ -135,6 +144,29 @@ position, and no CORS to fight.
 ---
 
 ## What is in the app
+
+**The home screen** is three books on one shelf — **কাজ** (the sites), **মজুত**
+(the shop) and **হিসাব** (the money) — with today's entry sitting above all
+three, because that is the one thing he does every evening and it must never be
+behind a tab. Tonight's headline and the alerts sit above the tabs too;
+everything inside a tab is his own arithmetic, so a night without a brief costs
+him nothing.
+
+**First run** opens by saying what the app is for and what it will never do,
+then asks his name, which language he wants, and whether he runs sites, a shop,
+or both — that last answer decides which book he lands in. Only then does it
+ask for anything to fill in, and every one of those is skippable. A man with no
+contract this month still finishes setup; an invented job name would quietly
+poison every per-job total afterwards.
+
+**ভাষা / Language** — সেটিংস → ভাষা flips every word on every screen, and the
+numerals with it (১,২৫০ becomes 1,250). The ledger does not move: expense
+heads, units and item names are written to disk in Bengali whichever language
+the phone is in, and are turned into English only on their way to the screen.
+Switch to English, enter a week, switch back, and the rows are identical byte
+for byte — there is a test that asserts exactly that. A string with no English
+of its own falls back to Bengali rather than to a blank, so adding a screen can
+never break the English build. English lives in one file, `src/lib/en.ts`.
 
 **আজকের হিসাব** — the eight-screen wizard. Big type, one decision a screen, a
 `৩ / ৭` counter so he can see the end, a back arrow that never loses what he
@@ -164,6 +196,14 @@ versus opening the full list. Over a third and the ranking is wrong.
 transfer to a site at cost, and a physical count that becomes the new anchor.
 Items are shared with the sites, so a fitting has one identity whether it is
 sold over the counter or carried to a job.
+
+Adding an item offers a **common goods list** (`src/lib/catalog.ts`) — pipes,
+fittings, valves and taps, bathroom, electrical, building material, hardware,
+paint, about 170 rows with sizes in inches — searchable in either language and
+grouped by category, with his own name and unit always winning if he types one.
+It is a lookup, never a suggestion: nothing in it exists in his ledger until he
+taps it, and the evening's chips still come only from what he has actually
+bought.
 
 **নিজের খরচ** — its own four-digit passcode. Money taken from the business
 enters as a drawing, so household spending never lands in a project's cost.
@@ -220,7 +260,8 @@ typed once in March, so a bad count fixes itself the next time he counts.
 
 ## Layout
 
-    src/lib/       bn (numerals, money, dates) · db · model · calc · suggest
+    src/lib/       bn (numerals, money, dates) · i18n + en (the English words)
+                   catalog (common goods) · db · model · calc · suggest
                    draft · sync · brief · restore · backup · photo · pin · seed · store
     src/screens/   Home · DayWizard · Shop · Personal · Estimator · History
                    Settings · Onboarding
@@ -229,8 +270,9 @@ typed once in March, so a bad count fixes itself the next time he counts.
     scripts/       make-icons · gen-schema · smoke · smoke-sync
 
 `npm test` drives a real browser through onboarding, a full day's entry,
-same-as-yesterday, the shop, the estimator, a correction, the personal book and
-a backup — 23 flows, checking the arithmetic on the way through.
+same-as-yesterday, the shop, the estimator, a correction, the personal book,
+the English switch and a backup — 28 flows, checking the arithmetic on the way
+through, and asserting that no English word ever reaches a stored row.
 
 `npm run server:test` runs 36 checks against a local D1: auth, household
 isolation, the retry that must not duplicate a day, reversals netting to zero,
@@ -247,8 +289,10 @@ would. Start `npm run server:dev` first for both of those.
 
 1. What he builds most often. The Stages and Coefficients tabs are seeded with
    an ordinary small RCC house — eight stages weighted to 100, and thumb rules
-   for cement, steel, brick, sand and chips. Give me his real ones and they go
-   in properly.
+   for cement, steel, brick, sand and chips. These are placeholders until he
+   has a contract; his real ones replace them in `src/lib/seed.ts`.
 2. Roughly how many distinct items the shop carries. Under about fifty, the
    stock flows can get simpler than they are.
-3. The domain, and whether the brief can be served from a path on it.
+3. The nightly run is still a person. A Worker cron calling the model API is
+   the obvious next step, and the prompt it would send already exists in
+   `server/src/dashboard.js`.

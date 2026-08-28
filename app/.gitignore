@@ -13,3 +13,5 @@ scripts/dbg.mjs
 .DS_Store
 server/.wrangler/
 server/.dev.vars
+trash/
+tsconfig.tsbuildinfo

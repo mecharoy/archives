@@ -8,6 +8,7 @@ import { rankHeads, amountChips } from '../lib/suggest'
 import { DRAWING_HEAD, liveEntries } from '../lib/calc'
 import { hashPin, checkPin } from '../lib/pin'
 import { scheduleSync } from '../lib/sync'
+import { t, tf } from '../lib/i18n'
 
 export function Personal({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -41,8 +42,8 @@ export function Personal({ onBack }: { onBack: () => void }) {
         <TopBar title="নিজের খরচ" onBack={onBack} />
         <div className="scroll">
           <div style={{ textAlign: 'center', padding: '2.5rem 0 1rem', color: 'var(--muted)' }}><Icon name="lock" size={36} stroke={1.5} /></div>
-          <h2 className="question" style={{ textAlign: 'center' }}>পাসকোড দিন</h2>
-          <p className="hint" style={{ textAlign: 'center' }}>{wrong ? 'মিলল না, আবার দিন।' : 'এই খাতা শুধু আপনার।'}</p>
+          <h2 className="question" style={{ textAlign: 'center' }}>{t("পাসকোড দিন")}</h2>
+          <p className="hint" style={{ textAlign: 'center' }}>{wrong ? t('মিলল না, আবার দিন।') : t('এই খাতা শুধু আপনার।')}</p>
           <div style={{ display: 'flex', gap: '.6rem', justifyContent: 'center', margin: '1rem 0 1.4rem' }}>
             {[0, 1, 2, 3].map((k) => (
               <span key={k} style={{
@@ -61,25 +62,25 @@ export function Personal({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <TopBar title="নিজের খরচ" sub={`চলতি মাসে ${money(spent)}`} onBack={onBack}
+      <TopBar title="নিজের খরচ" sub={tf('চলতি মাসে {0}', money(spent))} onBack={onBack}
         right={<button className="iconbtn" onClick={() => setSetting(true)} aria-label="পাসকোড"><Icon name="lock" /></button>} />
       <div className="scroll">
         <div className="statgrid" style={{ marginTop: '1rem' }}>
-          <div className="stat info"><span className="k">এ মাসে খরচ</span><span className="v num">{money(spent)}</span></div>
-          <div className="stat warn"><span className="k">ব্যবসা থেকে নেওয়া</span><span className="v num">{money(drawn)}</span></div>
+          <div className="stat info"><span className="k">{t("এ মাসে খরচ")}</span><span className="v num">{money(spent)}</span></div>
+          <div className="stat warn"><span className="k">{t("ব্যবসা থেকে নেওয়া")}</span><span className="v num">{money(drawn)}</span></div>
         </div>
 
         <div className="tilegrid" style={{ marginTop: '.9rem' }}>
           <button className="tile" onClick={() => setAdding('expense')}>
-            <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>খরচ লিখুন</span><span className="s">বাজার, ওষুধ, বিল</span></span>
+            <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("খরচ লিখুন")}</span><span className="s">{t("বাজার, ওষুধ, বিল")}</span></span>
           </button>
           <button className="tile" onClick={() => setAdding('drawing')}>
-            <Icon name="wallet" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>ব্যবসা থেকে নিলাম</span><span className="s">ঘরের জন্য টাকা</span></span>
+            <Icon name="wallet" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("ব্যবসা থেকে নিলাম")}</span><span className="s">{t("ঘরের জন্য টাকা")}</span></span>
           </button>
         </div>
 
-        <p className="sectionlabel">এ মাসের হিসাব</p>
-        {rows.length === 0 && <Empty>এ মাসে এখনও কিছু লেখা হয়নি।</Empty>}
+        <p className="sectionlabel">{t("এ মাসের হিসাব")}</p>
+        {rows.length === 0 && <Empty>{t("এ মাসে এখনও কিছু লেখা হয়নি।")}</Empty>}
         {rows.length > 0 && (
           <div className="card">
             {rows.map((r) => (
@@ -91,7 +92,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
           </div>
         )}
         <p className="small muted" style={{ marginTop: '1rem' }}>
-          ব্যবসা থেকে নেওয়া টাকা ব্যবসার খরচ নয় — তাই কাজের হিসাবে এটা ধরা হয় না, শুধু হাতের টাকা কমে।
+          {t("ব্যবসা থেকে নেওয়া টাকা ব্যবসার খরচ নয় — তাই কাজের হিসাবে এটা ধরা হয় না, শুধু হাতের টাকা কমে।")}
         </p>
       </div>
       {setting && <PinSheet onClose={() => setSetting(false)} onSaved={() => { setSetting(false); toast.show('পাসকোড সেভ হয়েছে') }} />}
@@ -118,7 +119,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
     }
     await saveEntries([e])
     scheduleSync(300)
-    onDone(kind === 'drawing' ? 'লেখা হল' : `${head} — ${money(e.amount)}`)
+    onDone(kind === 'drawing' ? t('লেখা হল') : `${head} — ${money(e.amount)}`)
   }
 
   if (!head) {
@@ -126,7 +127,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
       <>
         <TopBar title="নিজের খরচ" onBack={() => onDone()} />
         <div className="scroll">
-          <h2 className="question">কীসের খরচ?</h2>
+          <h2 className="question">{t("কীসের খরচ?")}</h2>
           <div className="chips">
             {ordered.slice(0, 6).map((h) => <Chip key={h} onClick={() => { noteChip(true); setHead(h) }}>{h}</Chip>)}
           </div>
@@ -139,14 +140,14 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
     <>
       <TopBar title={head} onBack={() => (kind === 'drawing' ? onDone() : setHead(''))} />
       <div className="scroll">
-        <h2 className="question">কত টাকা?</h2>
-        {kind === 'drawing' && <p className="hint">ব্যবসার হাতের টাকা থেকে এই টাকাটা কমে যাবে।</p>}
+        <h2 className="question">{t("কত টাকা?")}</h2>
+        {kind === 'drawing' && <p className="hint">{t("ব্যবসার হাতের টাকা থেকে এই টাকাটা কমে যাবে।")}</p>}
         <MoneyPad value={amount} onChange={setAmount} chips={chips} onChipTaken={() => noteChip(true)} />
-        <p className="sectionlabel">কীভাবে</p>
+        <p className="sectionlabel">{t("কীভাবে")}</p>
         <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{m}</Chip>)}</div>
       </div>
       <div className="actionbar">
-        <button className="btn primary" disabled={!Number(amount)} onClick={save}>সেভ করুন</button>
+        <button className="btn primary" disabled={!Number(amount)} onClick={save}>{t("সেভ করুন")}</button>
       </div>
     </>
   )
@@ -161,8 +162,8 @@ export function PinSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="grip" />
-        <h2>{stage === 'first' ? 'নতুন পাসকোড' : 'আরেকবার দিন'}</h2>
-        <p className="hint">চার সংখ্যার একটা কোড। ভুলে গেলে সেটিংস থেকে বদলাতে হবে।</p>
+        <h2>{stage === 'first' ? t('নতুন পাসকোড') : t('আরেকবার দিন')}</h2>
+        <p className="hint">{t("চার সংখ্যার একটা কোড। ভুলে গেলে সেটিংস থেকে বদলাতে হবে।")}</p>
         <div style={{ display: 'flex', gap: '.6rem', justifyContent: 'center', margin: '.6rem 0 1rem' }}>
           {[0, 1, 2, 3].map((k) => (
             <span key={k} style={{ width: '1rem', height: '1rem', borderRadius: '50%', background: (stage === 'first' ? pin : again).length > k ? 'var(--accent)' : 'var(--line)' }} />
@@ -172,10 +173,10 @@ export function PinSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (
           onChange={(v) => (stage === 'first' ? setPin(v.slice(0, 4)) : setAgain(v.slice(0, 4)))} />
         {stage === 'again' && (
           <button className="btn primary" style={{ marginTop: '.8rem' }} disabled={again !== pin} onClick={save}>
-            {again.length === 4 && again !== pin ? 'মিলছে না' : 'সেভ করুন'}
+            {again.length === 4 && again !== pin ? t('মিলছে না') : t('সেভ করুন')}
           </button>
         )}
-        {stage === 'first' && <button className="btn ghost" style={{ marginTop: '.8rem', width: '100%' }} onClick={onClose}>থাক</button>}
+        {stage === 'first' && <button className="btn ghost" style={{ marginTop: '.8rem', width: '100%' }} onClick={onClose}>{t("থাক")}</button>}
       </div>
     </div>
   )

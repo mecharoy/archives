@@ -391,3 +391,19 @@ textarea.input { min-height: 5rem; resize: none; }
 @media (prefers-reduced-motion: reduce) {
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
+
+/* ---------- home sections ----------
+   Three books on one shelf. Big enough to hit without looking, and the one
+   he is in is filled rather than underlined, so it reads at arm's length. */
+
+.tabs {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: .35rem;
+  background: var(--sunk); border-radius: 12px; padding: .28rem;
+  margin: 1.4rem 0 .2rem; position: sticky; top: 0; z-index: 5;
+}
+.tabs .tab {
+  min-height: 2.9rem; border: 0; background: none; border-radius: 9px;
+  font-size: 1.02rem; font-weight: 600; color: var(--muted);
+}
+.tabs .tab.on { background: var(--surface); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.tabs .tab:active { opacity: .7; }

@@ -7,6 +7,7 @@ import { dbAll, dbPut, dbPutMany, kvGet, kvSet, uid } from './db'
 import type { AnyMaster, Entry, Project, Worker, Item, Party, Stage, Coeff, ID } from './model'
 import { rowForEntry, rowForMaster } from './model'
 import { isoDate } from './bn'
+import { setLang, type Lang } from './i18n'
 
 export interface Settings {
   endpoint: string
@@ -22,6 +23,10 @@ export interface Settings {
   chips_expanded: number
   theme: 'system' | 'light' | 'dark'
   text_scale: number
+  lang: Lang
+  owner_bn: string
+  runs_shop: boolean
+  runs_sites: boolean
 }
 
 /* Baked in at build time so the phone syncs the moment it is installed —
@@ -36,21 +41,27 @@ export const DEFAULT_SETTINGS: Settings = {
   opening_cash: 0, opening_date: isoDate(), pin_hash: '',
   auto_sync: true, onboarded: false, chips_taken: 0, chips_expanded: 0,
   theme: 'system', text_scale: 1,
+  lang: 'bn', owner_bn: '', runs_shop: true, runs_sites: true,
 }
 
 export interface OutboxRow { id: ID; tab: string; mode: 'append' | 'upsert'; values: (string | number | boolean)[]; tries: number; last_error: string; created_at: string }
 
+/* Every line the model writes comes in both languages: _bn is what his phone
+   shows, _en is the same sentence for an English screen. English is optional
+   everywhere — a brief written before this existed still renders, in Bengali. */
 export interface Brief {
   generated_at: string
   headline_bn?: string
-  cards?: { label_bn: string; value: string; sub_bn?: string; status?: Status }[]
-  projects?: { name_bn: string; pct_done: number; pct_spent: number; status?: Status; note_bn?: string }[]
-  alerts?: { severity: Status; text_bn: string }[]
+  headline_en?: string
+  cards?: { label_bn: string; label_en?: string; value: string; sub_bn?: string; sub_en?: string; status?: Status }[]
+  projects?: { name_bn: string; name_en?: string; pct_done: number; pct_spent: number; status?: Status; note_bn?: string; note_en?: string }[]
+  alerts?: { severity: Status; text_bn: string; text_en?: string }[]
   series?: {
     scurve?: { days: number[]; plan: number[]; actual: number[]; unit?: string }
-    burn?: { item_bn: string; pct: number; status?: Status }[]
+    burn?: { item_bn: string; item_en?: string; pct: number; status?: Status }[]
   }
   todo_bn?: string[]
+  todo_en?: string[]
 }
 export type Status = 'ok' | 'warn' | 'crit' | 'info'
 
@@ -112,6 +123,8 @@ export async function boot() {
     settings: { ...DEFAULT_SETTINGS, ...settings },
     brief, brief_fetched_at,
   })
+  // The language has to be live before the first render, not after it.
+  setLang(state.settings.lang)
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => setState({ online: true }))
     window.addEventListener('offline', () => setState({ online: false }))
@@ -155,6 +168,7 @@ export async function saveEntries(entries: Entry[]) {
 export async function saveSettings(patch: Partial<Settings>) {
   const next = { ...state.settings, ...patch }
   await kvSet('settings', next)
+  if (patch.lang) setLang(patch.lang)
   setState({ settings: next })
 }
 

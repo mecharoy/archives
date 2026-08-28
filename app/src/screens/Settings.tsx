@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, useToast, Toast, Empty } from '../ui/kit'
 import { PinSheet } from './Personal'
+import { NewItemSheet } from './DayWizard'
 import {
   useStore, saveMaster, saveSettings, activeProjects, allWorkers, allItems, parties, stages, coeffs,
   projects as allProjects, nameOf, type State,
@@ -15,8 +16,9 @@ import { restoreFromServer } from '../lib/restore'
 import { seedHouse, HOUSE } from '../lib/seed'
 import { chipMissRate } from '../lib/suggest'
 import { cashState } from '../lib/calc'
+import { t, tf } from '../lib/i18n'
 
-type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display'
+type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang'
 
 export function Settings({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -33,6 +35,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
   if (page === 'cash') return <CashPage s={s} onBack={() => setPage(null)} />
   if (page === 'backup') return <BackupPage onBack={() => setPage(null)} />
   if (page === 'display') return <DisplayPage s={s} onBack={() => setPage(null)} />
+  if (page === 'lang') return <LangPage s={s} onBack={() => setPage(null)} />
 
   const miss = chipMissRate({ taken: s.settings.chips_taken, expanded: s.settings.chips_expanded })
 
@@ -40,41 +43,43 @@ export function Settings({ onBack }: { onBack: () => void }) {
     <>
       <TopBar title="সেটিংস" onBack={onBack} />
       <div className="scroll">
-        <p className="sectionlabel">হিসাবের জিনিসপত্র</p>
+        <p className="sectionlabel">{t("হিসাবের জিনিসপত্র")}</p>
         <div className="rowlist">
-          <Pick title="কাজ" sub={`${toBn(activeProjects(s).length)}টা চলছে`} right={<Icon name="fwd" size={18} />} onClick={() => setPage('projects')} />
-          <Pick title="লোকজন" sub={`${toBn(allWorkers(s).filter((w) => w.active).length)} জন`} right={<Icon name="fwd" size={18} />} onClick={() => setPage('workers')} />
-          <Pick title="মাল" sub={`${toBn(allItems(s).length)} রকম`} right={<Icon name="fwd" size={18} />} onClick={() => setPage('items')} />
-          <Pick title="দোকান ও খদ্দের" sub={`${toBn(parties(s).length)} জন`} right={<Icon name="fwd" size={18} />} onClick={() => setPage('parties')} />
-          <Pick title="কাজের ধাপ ও থাম্ব রুল" sub={`${toBn(stages(s).length)}টা ধাপ`} right={<Icon name="fwd" size={18} />} onClick={() => setPage('stages')} />
+          <Pick title="কাজ" sub={tf('{0}টা চলছে', toBn(activeProjects(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('projects')} />
+          <Pick title="লোকজন" sub={tf('{0} জন', toBn(allWorkers(s).filter((w) => w.active).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('workers')} />
+          <Pick title="মাল" sub={tf('{0} রকম', toBn(allItems(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('items')} />
+          <Pick title="দোকান ও খদ্দের" sub={tf('{0} টি নাম', toBn(parties(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('parties')} />
+          <Pick title="কাজের ধাপ ও থাম্ব রুল" sub={tf('{0}টা ধাপ', toBn(stages(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('stages')} />
         </div>
 
-        <p className="sectionlabel">টাকা ও খাতা</p>
+        <p className="sectionlabel">{t("টাকা ও খাতা")}</p>
         <div className="rowlist">
           <Pick title="হাতের টাকা" sub={money(cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed)}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('cash')} />
-          <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? 'জোড়া লাগানো আছে' : 'শুধু ফোনে রাখা হচ্ছে'}
+          <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? t('জোড়া লাগানো আছে') : t('শুধু ফোনে রাখা হচ্ছে')}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('sync')} />
           <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={<Icon name="fwd" size={18} />} onClick={() => setPage('backup')} />
-          <Pick title="নিজের খরচের পাসকোড" sub={s.settings.pin_hash ? 'দেওয়া আছে' : 'দেওয়া নেই'} right={<Icon name="lock" size={18} />} onClick={() => setPin(true)} />
+          <Pick title="নিজের খরচের পাসকোড" sub={s.settings.pin_hash ? t('দেওয়া আছে') : t('দেওয়া নেই')} right={<Icon name="lock" size={18} />} onClick={() => setPin(true)} />
         </div>
 
-        <p className="sectionlabel">দেখা ও পড়া</p>
+        <p className="sectionlabel">{t("দেখা ও পড়া")}</p>
         <div className="rowlist">
-          <Pick title="লেখার আকার ও রং" sub={s.settings.theme === 'system' ? 'ফোনের মতো' : s.settings.theme === 'dark' ? 'অন্ধকার' : 'আলো'}
+          <Pick title="ভাষা" sub={s.settings.lang === 'en' ? 'English' : 'বাংলা'}
+            right={<Icon name="fwd" size={18} />} onClick={() => setPage('lang')} />
+          <Pick title="লেখার আকার ও রং" sub={s.settings.theme === 'system' ? t('ফোনের মতো') : s.settings.theme === 'dark' ? t('অন্ধকার') : t('আলো')}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('display')} />
         </div>
 
         {miss != null && (
           <>
-            <p className="sectionlabel">নিজের জন্য</p>
+            <p className="sectionlabel">{t("নিজের জন্য")}</p>
             <div className="card">
-              <div className="spread"><span>বাছাই ঠিক হচ্ছে?</span>
+              <div className="spread"><span>{t("বাছাই ঠিক হচ্ছে?")}</span>
                 <strong className="num">{toBn(Math.round((1 - miss) * 100))}%</strong></div>
               <p className="small muted" style={{ marginTop: '.4rem' }}>
                 {miss > 0.34
-                  ? 'তিন ভাগের এক ভাগের বেশি সময় পুরো তালিকা খুলতে হচ্ছে — বাছাইয়ের নিয়মটা ঠিক করা দরকার।'
-                  : 'বেশির ভাগ সময় প্রথম তিনটে চিপেই কাজ হয়ে যাচ্ছে।'}
+                  ? t('তিন ভাগের এক ভাগের বেশি সময় পুরো তালিকা খুলতে হচ্ছে — বাছাইয়ের নিয়মটা ঠিক করা দরকার।')
+                  : t('বেশির ভাগ সময় প্রথম তিনটে চিপেই কাজ হয়ে যাচ্ছে।')}
               </p>
             </div>
           </>
@@ -107,8 +112,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
       <TopBar title="অনলাইন খাতা" onBack={onBack} />
       <div className="scroll">
         <p className="hint" style={{ marginTop: '1rem' }}>
-          হিসাব প্রথমে ফোনে লেখা হয়, তারপর নেট পেলে নিজে থেকেই অনলাইনে চলে যায়। ঠিকানা না দিলেও অ্যাপ পুরোপুরি চলে —
-          তখন খাতাটা শুধু এই ফোনেই থাকে।
+          {t("হিসাব প্রথমে ফোনে লেখা হয়, তারপর নেট পেলে নিজে থেকেই অনলাইনে চলে যায়। ঠিকানা না দিলেও অ্যাপ পুরোপুরি চলে — তখন খাতাটা শুধু এই ফোনেই থাকে।")}
         </p>
         <Field label="সার্ভারের ঠিকানা">
           <input className="input" value={endpoint} onChange={(e) => setEndpoint(e.target.value)}
@@ -124,27 +128,27 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
             const err = await testEndpoint(endpoint.trim(), token.trim())
             setBusy('')
             toast.show(err || 'যোগাযোগ ঠিক আছে')
-          }}>{busy === 'test' ? 'দেখছি…' : 'পরীক্ষা করুন'}</button>
-          <button className="btn primary" onClick={save}>সেভ করুন</button>
+          }}>{busy === 'test' ? t('দেখছি…') : t('পরীক্ষা করুন')}</button>
+          <button className="btn primary" onClick={save}>{t("সেভ করুন")}</button>
         </div>
 
         <div className="divider" />
         <div className="card">
           <div className="spread">
-            <span>পাঠানো বাকি</span>
+            <span>{t("পাঠানো বাকি")}</span>
             <strong className="num">{toBn(s.outbox.length)} লাইন</strong>
           </div>
           {s.sync_error && <p className="small" style={{ color: 'var(--crit)', marginTop: '.4rem' }}>{s.sync_error}</p>}
           <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!s.outbox.length}
-            onClick={async () => { const r = await flush(true); toast.show(r.error || `${toBn(r.sent)} লাইন পাঠানো হল`) }}>
-            এখনই পাঠান
+            onClick={async () => { const r = await flush(true); toast.show(r.error || tf('{0} লাইন পাঠানো হল', toBn(r.sent))) }}>
+            {t("এখনই পাঠান")}
           </button>
         </div>
 
         <div className="card">
           <div className="spread">
-            <span>রাতের হিসাব</span>
-            <span className="small muted">{s.brief ? agoBn(s.brief.generated_at) : 'এখনও আসেনি'}</span>
+            <span>{t("রাতের হিসাব")}</span>
+            <span className="small muted">{s.brief ? agoBn(s.brief.generated_at) : t('এখনও আসেনি')}</span>
           </div>
           <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || !s.settings.endpoint}
             onClick={async () => {
@@ -152,37 +156,36 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
               const err = await fetchBrief(false)
               setBusy('')
               toast.show(err || 'রাতের হিসাব এসে গেছে')
-            }}>{busy === 'brief' ? 'আনছি…' : 'এখন আনুন'}</button>
+            }}>{busy === 'brief' ? t('আনছি…') : t('এখন আনুন')}</button>
         </div>
 
-        <p className="sectionlabel">নতুন ফোনে</p>
+        <p className="sectionlabel">{t("নতুন ফোনে")}</p>
         <div className="card">
           <p className="small muted">
-            ফোন হারালে বা বদলালে — নতুন ফোনে এই একই ঠিকানা আর টোকেন বসিয়ে নিচের বোতামটা টিপুন। যা যা অনলাইনে গিয়েছিল,
-            সব ফিরে আসবে। এই ফোনে যা আছে তা মুছবে না।
+            {t("ফোন হারালে বা বদলালে — নতুন ফোনে এই একই ঠিকানা আর টোকেন বসিয়ে নিচের বোতামটা টিপুন। যা যা অনলাইনে গিয়েছিল, সব ফিরে আসবে। এই ফোনে যা আছে তা মুছবে না।")}
           </p>
           <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || !s.settings.endpoint}
             onClick={() => setConfirmRestore(true)}>
-            {busy === 'restore' ? 'নামছে…' : 'অনলাইন থেকে ফিরিয়ে আনুন'}
+            {busy === 'restore' ? t('নামছে…') : t('অনলাইন থেকে ফিরিয়ে আনুন')}
           </button>
         </div>
 
         <p className="small muted" style={{ marginTop: '1rem' }}>
-          এই টোকেন দিয়ে শুধু এই খাতায় লেখা আর পড়া যায় — আর কারও হিসাব নয়, আর মুছে ফেলাও যায় না।
+          {t("এই টোকেন দিয়ে শুধু এই খাতায় লেখা আর পড়া যায় — আর কারও হিসাব নয়, আর মুছে ফেলাও যায় না।")}
         </p>
       </div>
       {confirmRestore && (
         <Sheet title="অনলাইন থেকে ফিরিয়ে আনবেন?" onClose={() => setConfirmRestore(false)}>
-          <p className="hint">যা যা অনলাইনে আছে সব এই ফোনে যোগ হবে। এই ফোনের কোনো লেখা মুছবে না।</p>
+          <p className="hint">{t("যা যা অনলাইনে আছে সব এই ফোনে যোগ হবে। এই ফোনের কোনো লেখা মুছবে না।")}</p>
           <div className="actionbar" style={{ borderTop: 0, padding: '.6rem 0 0' }}>
-            <button className="btn ghost" onClick={() => setConfirmRestore(false)}>থাক</button>
+            <button className="btn ghost" onClick={() => setConfirmRestore(false)}>{t("থাক")}</button>
             <button className="btn primary" onClick={async () => {
               setConfirmRestore(false)
               setBusy('restore')
               const r = await restoreFromServer()
               setBusy('')
-              toast.show(r.error || `${toBn(r.entries)} লাইন ফিরে এসেছে`)
-            }}>ফিরিয়ে আনুন</button>
+              toast.show(r.error || tf('{0} লাইন ফিরে এসেছে', toBn(r.entries)))
+            }}>{t("ফিরিয়ে আনুন")}</button>
           </div>
         </Sheet>
       )}
@@ -204,10 +207,10 @@ function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
     <>
       <TopBar title="কাজ" onBack={onBack} right={<button className="iconbtn" onClick={() => setEdit(blank())} aria-label="নতুন"><Icon name="plus" /></button>} />
       <div className="scroll">
-        {list.length === 0 && <Empty>একটা কাজ যোগ করুন — তারপর রোজকার হিসাব শুরু।</Empty>}
+        {list.length === 0 && <Empty>{t("একটা কাজ যোগ করুন — তারপর রোজকার হিসাব শুরু।")}</Empty>}
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
           {list.map((p) => (
-            <Pick key={p.id} title={p.name_bn} sub={`${p.client_bn || 'খদ্দের লেখা নেই'} · ${p.status === 'active' ? 'চলছে' : 'শেষ'}`}
+            <Pick key={p.id} title={p.name_bn} sub={`${p.client_bn || 'খদ্দের লেখা নেই'} · ${p.status === 'active' ? t('চলছে') : t('শেষ')}`}
               right={<span className="num small">{p.budget ? money(p.budget) : ''}</span>} onClick={() => setEdit(p)} />
           ))}
         </div>
@@ -228,12 +231,12 @@ function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
           <Field label="কত দিনে শেষ করার কথা"><NumField value={edit.plan_days} onChange={(v) => setEdit({ ...edit, plan_days: v })} /></Field>
           <Field label="অবস্থা">
             <div className="chips">
-              <Chip on={edit.status === 'active'} onClick={() => setEdit({ ...edit, status: 'active' })}>চলছে</Chip>
-              <Chip on={edit.status === 'done'} onClick={() => setEdit({ ...edit, status: 'done' })}>শেষ</Chip>
+              <Chip on={edit.status === 'active'} onClick={() => setEdit({ ...edit, status: 'active' })}>{t("চলছে")}</Chip>
+              <Chip on={edit.status === 'done'} onClick={() => setEdit({ ...edit, status: 'done' })}>{t("শেষ")}</Chip>
             </div>
           </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>সেভ করুন</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>
       )}
     </>
@@ -248,10 +251,10 @@ function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
     <>
       <TopBar title="লোকজন" onBack={onBack} right={<button className="iconbtn" onClick={() => setEdit(blank())} aria-label="নতুন"><Icon name="plus" /></button>} />
       <div className="scroll">
-        {list.length === 0 && <Empty>যাদের রোজ মজুরি দেন তাদের একবার বসিয়ে নিন।</Empty>}
+        {list.length === 0 && <Empty>{t("যাদের রোজ মজুরি দেন তাদের একবার বসিয়ে নিন।")}</Empty>}
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
           {list.map((w) => (
-            <Pick key={w.id} title={w.name_bn} sub={w.active ? undefined : 'এখন কাজ করছে না'}
+            <Pick key={w.id} title={w.name_bn} sub={w.active ? undefined : t('এখন কাজ করছে না')}
               right={<span className="num">{money(w.rate)}</span>} onClick={() => setEdit(w)} />
           ))}
         </div>
@@ -263,12 +266,12 @@ function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
           <Field label="ফোন"><input className="input" value={edit.phone} inputMode="tel" onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
           <Field label="অবস্থা">
             <div className="chips">
-              <Chip on={edit.active} onClick={() => setEdit({ ...edit, active: true })}>কাজ করছে</Chip>
-              <Chip on={!edit.active} onClick={() => setEdit({ ...edit, active: false })}>এখন নেই</Chip>
+              <Chip on={edit.active} onClick={() => setEdit({ ...edit, active: true })}>{t("কাজ করছে")}</Chip>
+              <Chip on={!edit.active} onClick={() => setEdit({ ...edit, active: false })}>{t("এখন নেই")}</Chip>
             </div>
           </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim() || !edit.rate} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>সেভ করুন</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>
       )}
     </>
@@ -277,6 +280,7 @@ function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
 
 function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Item | null>(null)
+  const [pick, setPick] = useState(false)
   const list = allItems(s)
   const units = ['বস্তা', 'কেজি', 'পিস', 'ঘনফুট', 'ট্রাক', 'লিটার', 'ফুট']
   const blank = (): Item => ({ id: uid(), kind: 'item', name_bn: '', unit_bn: 'পিস', last_rate: null, active: true, updated_at: '' })
@@ -284,8 +288,11 @@ function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
     <>
       <TopBar title="মাল" onBack={onBack} right={<button className="iconbtn" onClick={() => setEdit(blank())} aria-label="নতুন"><Icon name="plus" /></button>} />
       <div className="scroll">
-        {list.length === 0 && <Empty>মাল কেনার সময় নতুন নাম যোগ করা যায় — আগে থেকে বসাতেই হবে এমন নয়।</Empty>}
+        {list.length === 0 && <Empty>{t("মাল কেনার সময় নতুন নাম যোগ করা যায় — আগে থেকে বসাতেই হবে এমন নয়।")}</Empty>}
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
+          <Pick title="+ চেনা তালিকা থেকে যোগ করুন" sub="পাইপ, ফিটিংস, ভালভ, বাথরুম, বিদ্যুৎ — মাপ ইঞ্চিতে" onClick={() => setPick(true)} />
+        </div>
+        <div className="rowlist" style={{ marginTop: '.5rem' }}>
           {list.map((i) => (
             <Pick key={i.id} title={i.name_bn} sub={i.unit_bn}
               right={<span className="num small">{i.last_rate ? money(i.last_rate) : ''}</span>} onClick={() => setEdit(i)} />
@@ -300,9 +307,10 @@ function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
           </Field>
           <Field label="শেষ দর"><NumField value={edit.last_rate} onChange={(v) => setEdit({ ...edit, last_rate: v })} decimal /></Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>সেভ করুন</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>
       )}
+      {pick && <NewItemSheet onClose={() => setPick(false)} onCreated={() => setPick(false)} />}
     </>
   )
 }
@@ -315,10 +323,10 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
     <>
       <TopBar title="দোকান ও খদ্দের" onBack={onBack} right={<button className="iconbtn" onClick={() => setEdit(blank())} aria-label="নতুন"><Icon name="plus" /></button>} />
       <div className="scroll">
-        {list.length === 0 && <Empty>মাল কেনার সময় দোকানের নাম যোগ করা যায়।</Empty>}
+        {list.length === 0 && <Empty>{t("মাল কেনার সময় দোকানের নাম যোগ করা যায়।")}</Empty>}
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
           {list.map((p) => (
-            <Pick key={p.id} title={p.name_bn} sub={p.ptype === 'supplier' ? `${toBn(p.terms_days)} দিনের বাকি` : 'খদ্দের'} onClick={() => setEdit(p)} />
+            <Pick key={p.id} title={p.name_bn} sub={p.ptype === 'supplier' ? tf('{0} দিনের বাকি', toBn(p.terms_days)) : t('খদ্দের')} onClick={() => setEdit(p)} />
           ))}
         </div>
       </div>
@@ -327,8 +335,8 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
           <Field label="নাম"><input className="input" value={edit.name_bn} onChange={(e) => setEdit({ ...edit, name_bn: e.target.value })} autoFocus /></Field>
           <Field label="কী">
             <div className="chips">
-              <Chip on={edit.ptype === 'supplier'} onClick={() => setEdit({ ...edit, ptype: 'supplier' })}>দোকান</Chip>
-              <Chip on={edit.ptype === 'client'} onClick={() => setEdit({ ...edit, ptype: 'client' })}>খদ্দের</Chip>
+              <Chip on={edit.ptype === 'supplier'} onClick={() => setEdit({ ...edit, ptype: 'supplier' })}>{t("দোকান")}</Chip>
+              <Chip on={edit.ptype === 'client'} onClick={() => setEdit({ ...edit, ptype: 'client' })}>{t("খদ্দের")}</Chip>
             </div>
           </Field>
           {edit.ptype === 'supplier' && (
@@ -336,7 +344,7 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
           )}
           <Field label="ফোন"><input className="input" value={edit.phone} inputMode="tel" onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>সেভ করুন</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>
       )}
     </>
@@ -358,19 +366,19 @@ function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
       <div className="scroll">
         {list.length === 0 && (
           <>
-            <Empty>কাজের ধাপ বসানো না থাকলে অগ্রগতি হিসাব হয় না।</Empty>
+            <Empty>{t("কাজের ধাপ বসানো না থাকলে অগ্রগতি হিসাব হয় না।")}</Empty>
             <button className="btn quiet" style={{ width: '100%' }}
               onClick={async () => { await seedHouse(allItems(s)); toast.show('ঘর তৈরির চেনা ধাপ বসানো হল — নিজের মতো বদলে নিন') }}>
-              ঘর তৈরির চেনা ধাপ বসিয়ে দিন
+              {t("ঘর তৈরির চেনা ধাপ বসিয়ে দিন")}
             </button>
           </>
         )}
 
-        {types.map((t) => (
-          <div key={t}>
-            <p className="sectionlabel">{t} — ধাপ {weight !== 100 && <span style={{ color: 'var(--warn)' }}>(ওজনের যোগফল {toBn(weight)}, ১০০ হওয়া দরকার)</span>}</p>
+        {types.map((ptype) => (
+          <div key={ptype}>
+            <p className="sectionlabel">{t(ptype)} — {t('ধাপ')} {weight !== 100 && <span style={{ color: 'var(--warn)' }}>(ওজনের যোগফল {toBn(weight)}, ১০০ হওয়া দরকার)</span>}</p>
             <div className="card">
-              {list.filter((x) => x.project_type === t).map((st) => (
+              {list.filter((x) => x.project_type === ptype).map((st) => (
                 <button className="review-row" key={st.id} onClick={() => setEdit(st)}>
                   <span><span className="t">{toBn(st.seq)}. {st.name_bn}</span></span>
                   <span className="v num">{toBn(st.weight)}</span>
@@ -378,35 +386,35 @@ function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
                 </button>
               ))}
             </div>
-            <p className="sectionlabel">{t} — প্রতি বর্গফুটে</p>
+            <p className="sectionlabel">{t(ptype)} — {t('প্রতি বর্গফুটে')}</p>
             <div className="card">
-              {cf.filter((x) => x.project_type === t).map((c) => (
+              {cf.filter((x) => x.project_type === ptype).map((c) => (
                 <button className="review-row" key={c.id} onClick={() => setEditC(c)}>
                   <span><span className="t">{nameOf(s, c.item_id)}</span></span>
                   <span className="v num">{num(c.per_sqft, 2)}</span>
                   <Icon name="fwd" size={16} />
                 </button>
               ))}
-              {cf.filter((x) => x.project_type === t).length === 0 && <p className="hint">কিছু বসানো নেই।</p>}
+              {cf.filter((x) => x.project_type === ptype).length === 0 && <p className="hint">{t("কিছু বসানো নেই।")}</p>}
             </div>
           </div>
         ))}
 
         <p className="small muted" style={{ marginTop: '1.2rem' }}>
-          ধাপের ওজন মিলে ১০০ হলে ‘কাজ কতদূর’ থেকে শতকরা নিজে থেকেই বেরোয়। থাম্ব রুল দিয়ে নতুন কাজের হিসাব হয় — কাজ শেষে আসল খরচ দেখে এগুলো ঠিক করে নেবেন।
+          {t("ধাপের ওজন মিলে ১০০ হলে ‘কাজ কতদূর’ থেকে শতকরা নিজে থেকেই বেরোয়। থাম্ব রুল দিয়ে নতুন কাজের হিসাব হয় — কাজ শেষে আসল খরচ দেখে এগুলো ঠিক করে নেবেন।")}
         </p>
       </div>
       {edit && (
         <Sheet title={edit.name_bn} onClose={() => setEdit(null)}>
           <Field label="ধাপের নাম"><input className="input" value={edit.name_bn} onChange={(e) => setEdit({ ...edit, name_bn: e.target.value })} /></Field>
           <Field label="ওজন (সব মিলিয়ে ১০০)"><NumField value={edit.weight} onChange={(v) => setEdit({ ...edit, weight: v ?? 0 })} decimal /></Field>
-          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(edit); setEdit(null) }}>সেভ করুন</button>
+          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>
       )}
       {editC && (
         <Sheet title={nameOf(s, editC.item_id)} onClose={() => setEditC(null)}>
           <Field label="প্রতি বর্গফুটে কত"><NumField value={editC.per_sqft} onChange={(v) => setEditC({ ...editC, per_sqft: v ?? 0 })} decimal /></Field>
-          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(editC); setEditC(null) }}>সেভ করুন</button>
+          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(editC); setEditC(null) }}>{t("সেভ করুন")}</button>
         </Sheet>
       )}
       {toast.msg && <Toast text={toast.msg} />}
@@ -423,19 +431,19 @@ function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
       <TopBar title="হাতের টাকা" onBack={onBack} />
       <div className="scroll">
         <div className="card" style={{ marginTop: '1rem' }}>
-          <div className="spread"><span>এখন হিসাবমতো</span><strong className="num" style={{ fontSize: '1.3rem' }}>{money(cash.computed)}</strong></div>
+          <div className="spread"><span>{t("এখন হিসাবমতো")}</span><strong className="num" style={{ fontSize: '1.3rem' }}>{money(cash.computed)}</strong></div>
           <p className="small muted" style={{ marginTop: '.4rem' }}>
             শেষ গোনা {dateBn(cash.anchor_date, false)} — {money(cash.anchor_amount)}। তারপর ঢুকেছে {money(cash.in_since)}, বেরিয়েছে {money(cash.out_since)}।
           </p>
         </div>
         <p className="hint" style={{ marginTop: '1rem' }}>
-          রোজকার হিসাবের শেষে টাকা গুনলে এই সংখ্যাটা নিজে থেকেই ঠিক হয়ে যায়। প্রথম দিনের জন্য শুধু একবার শুরুর টাকাটা বসিয়ে দিন।
+          {t("রোজকার হিসাবের শেষে টাকা গুনলে এই সংখ্যাটা নিজে থেকেই ঠিক হয়ে যায়। প্রথম দিনের জন্য শুধু একবার শুরুর টাকাটা বসিয়ে দিন।")}
         </p>
         <Field label="শুরুর টাকা"><NumField value={amount} onChange={setAmount} /></Field>
         <button className="btn primary" onClick={async () => {
           await saveSettings({ opening_cash: amount ?? 0, opening_date: isoDate() })
           toast.show('সেভ হয়েছে')
-        }}>সেভ করুন</button>
+        }}>{t("সেভ করুন")}</button>
       </div>
       {toast.msg && <Toast text={toast.msg} />}
     </>
@@ -450,14 +458,14 @@ function BackupPage({ onBack }: { onBack: () => void }) {
     const text = kind === 'csv' ? await buildCsv() : await buildJson()
     const r = await saveFile(backupName(kind), text, kind === 'csv' ? 'text/csv' : 'application/json')
     setBusy('')
-    toast.show(r.ok ? `রাখা হল — ${r.where}` : 'রাখা গেল না')
+    toast.show(r.ok ? tf('রাখা হল — {0}', r.where) : t('রাখা গেল না'))
   }
   return (
     <>
       <TopBar title="ব্যাকআপ" onBack={onBack} />
       <div className="scroll">
         <p className="hint" style={{ marginTop: '1rem' }}>
-          পুরো খাতাটা একটা ফাইলে বেরিয়ে আসে, ফোনের Documents ফোল্ডারে। মাসে একবার করে রাখলে ফোন হারালেও হিসাব থাকে।
+          {t("পুরো খাতাটা একটা ফাইলে বেরিয়ে আসে, ফোনের Documents ফোল্ডারে। মাসে একবার করে রাখলে ফোন হারালেও হিসাব থাকে।")}
         </p>
         <div className="rowlist">
           <Pick title="স্প্রেডশিটের জন্য (CSV)" sub="Excel বা Google Sheet-এ খোলে" onClick={() => run('csv')} right={busy === 'csv' ? <span className="small">…</span> : <Icon name="fwd" size={18} />} />
@@ -469,12 +477,42 @@ function BackupPage({ onBack }: { onBack: () => void }) {
   )
 }
 
+/* One switch, two languages. It takes effect on the next paint — the ledger
+   underneath is untouched, since every stored row stays in Bengali and only
+   the rendering changes. */
+function LangPage({ s, onBack }: { s: State; onBack: () => void }) {
+  const cur = s.settings.lang
+  return (
+    <>
+      <TopBar title="ভাষা" onBack={onBack} />
+      <div className="scroll">
+        <p className="hint" style={{ marginTop: '1rem' }}>
+          {t('একই খাতা, একই সংখ্যা — শুধু লেখাগুলো বদলায়। যা লিখে রেখেছেন, যেমন লোকের নাম বা মালের নাম, সেগুলো যেমন লিখেছেন তেমনই থাকে।')}
+        </p>
+        <div className="rowlist">
+          <Pick on={cur === 'bn'} title="বাংলা" sub="সংখ্যাও বাংলায় — ১,২৫০"
+            right={<Icon name="check" size={18} />} onClick={() => void saveSettings({ lang: 'bn' })} />
+          <Pick on={cur === 'en'} title="English" sub="Same app, English words — 1,250"
+            right={<Icon name="check" size={18} />} onClick={() => void saveSettings({ lang: 'en' })} />
+        </div>
+        <div className="card" style={{ marginTop: '1.4rem' }}>
+          <p className="small muted">{t('নমুনা')}</p>
+          <div className="spread" style={{ marginTop: '.4rem' }}>
+            <span>{t('আজকের মজুরি')}</span>
+            <strong className="num" style={{ fontSize: '1.3rem' }}>{money(4820)}</strong>
+          </div>
+        </div>
+      </div>
+    </>
+  )
+}
+
 function DisplayPage({ s, onBack }: { s: State; onBack: () => void }) {
   return (
     <>
       <TopBar title="লেখার আকার ও রং" onBack={onBack} />
       <div className="scroll">
-        <p className="sectionlabel">লেখার আকার</p>
+        <p className="sectionlabel">{t("লেখার আকার")}</p>
         <div className="chips">
           {[
             ['ছোট', 0.92], ['সাধারণ', 1], ['বড়', 1.12], ['আরও বড়', 1.26],
@@ -483,15 +521,15 @@ function DisplayPage({ s, onBack }: { s: State; onBack: () => void }) {
               onClick={() => void saveSettings({ text_scale: v as number })}>{label as string}</Chip>
           ))}
         </div>
-        <p className="sectionlabel">রং</p>
+        <p className="sectionlabel">{t("রং")}</p>
         <div className="chips">
           {[['ফোনের মতো', 'system'], ['আলো', 'light'], ['অন্ধকার', 'dark']].map(([label, v]) => (
             <Chip key={v} on={s.settings.theme === v} onClick={() => void saveSettings({ theme: v as 'system' | 'light' | 'dark' })}>{label}</Chip>
           ))}
         </div>
         <div className="card" style={{ marginTop: '1.4rem' }}>
-          <p className="small muted">নমুনা</p>
-          <div className="spread" style={{ marginTop: '.4rem' }}><span>আজকের মজুরি</span><strong className="num" style={{ fontSize: '1.3rem' }}>{money(4820)}</strong></div>
+          <p className="small muted">{t("নমুনা")}</p>
+          <div className="spread" style={{ marginTop: '.4rem' }}><span>{t("আজকের মজুরি")}</span><strong className="num" style={{ fontSize: '1.3rem' }}>{money(4820)}</strong></div>
         </div>
       </div>
     </>

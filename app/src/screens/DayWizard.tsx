@@ -3,12 +3,15 @@ import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, useToast
 import { useStore, getState, activeProjects, workers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
-import { MONEY_HEADS_SITE, PAY_MODES, type ID, type Presence, type Item, type Party } from '../lib/model'
+import { MONEY_HEADS_SITE, PAY_MODES, type ID, type Presence, type Item, type Party, type Project } from '../lib/model'
 import { DAYS_FOR, newDraft, loadDraft, saveDraft, clearDraft, buildEntries, wageTotal, matTotal, expTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, screenDemoted, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
 import { capture } from '../lib/photo'
+import { searchCatalog, CATS } from '../lib/catalog'
+import { HOUSE } from '../lib/seed'
 import { scheduleSync } from '../lib/sync'
+import { t, tf } from '../lib/i18n'
 
 type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'expense' | 'progress' | 'cash' | 'review'
 
@@ -136,6 +139,7 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
 /* ---------- 1. project ---------- */
 
 function StepProject({ s, draft, patch, next }: StepProps) {
+  const [newProject, setNewProject] = useState(false)
   const list = useMemo(() => {
     const act = activeProjects(s)
     const order = rankProjects(s.entries, act.map((p) => p.id))
@@ -144,7 +148,7 @@ function StepProject({ s, draft, patch, next }: StepProps) {
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{QUESTION.project}</h2>
+        <h2 className="question">{t(QUESTION.project)}</h2>
         <p className="hint">{dateBn(draft.date)}</p>
         <div className="rowlist">
           {list.map((p) => (
@@ -153,8 +157,21 @@ function StepProject({ s, draft, patch, next }: StepProps) {
               right={<Icon name="fwd" size={18} />}
               onClick={() => { patch({ project_id: p.id }); next() }} />
           ))}
+          <Pick title="+ নতুন কাজ" onClick={() => setNewProject(true)} />
+          {/* With no site running at all the day still has to be enterable —
+              mistri, dokan and cash do not wait for a contract. The entries
+              simply carry no project, and join one only when he starts one. */}
+          {list.length === 0 && (
+            <Pick title="কোনো কাজ চলছে না" sub="শুধু দোকান আর হাতের হিসাব"
+              right={<Icon name="fwd" size={18} />}
+              onClick={() => { patch({ project_id: '' }); next() }} />
+          )}
         </div>
       </div>
+      {newProject && (
+        <NewProjectSheet onClose={() => setNewProject(false)}
+          onCreated={(p) => { setNewProject(false); patch({ project_id: p.id }); next() }} />
+      )}
     </>
   )
 }
@@ -202,12 +219,12 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{QUESTION.attendance}</h2>
+        <h2 className="question">{t(QUESTION.attendance)}</h2>
         <p className="hint">
-          {suggested.size ? 'গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।' : 'যারা এসেছে তাদের টিক দিন।'}
+          {suggested.size ? t('গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।') : t('যারা এসেছে তাদের টিক দিন।')}
           {' '}আধা দিন বা ওভারটাইম দিতে নামের উপর চেপে ধরুন।
         </p>
-        {men.length === 0 && <p className="hint">কোনো লোক যোগ করা নেই। সেটিংস থেকে লোক যোগ করুন।</p>}
+        {men.length === 0 && <p className="hint">{t("কোনো লোক যোগ করা নেই। সেটিংস থেকে লোক যোগ করুন।")}</p>}
         <div className="rowlist">
           {men.map((w) => {
             const a = draft.att[w.id]
@@ -216,7 +233,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
                 <CheckPick
                   on={!!a}
                   title={w.name_bn}
-                  sub={a && a.presence !== 'full' ? (a.presence === 'half' ? 'আধা দিন' : 'ওভারটাইম') : `${money(w.rate)} রোজ`}
+                  sub={a && a.presence !== 'full' ? (a.presence === 'half' ? t('আধা দিন') : t('ওভারটাইম')) : tf('{0} রোজ', money(w.rate))}
                   right={a ? money(a.amount) : ''}
                   onClick={() => toggle(w.id)}
                 />
@@ -229,14 +246,14 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
         <div className="btn ghost" style={{ display: 'grid', placeItems: 'center', minWidth: '6.5rem' }}>
           <span className="num">{toBn(count)} জন</span>
         </div>
-        <button className="btn primary" onClick={next}>এগিয়ে যান</button>
+        <button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button>
       </div>
       {longPress && (
         <Sheet title={nameOf(s, longPress)} onClose={() => setLongPress(null)}>
           <div className="rowlist">
             {(['full', 'half', 'ot'] as Presence[]).map((p) => (
               <Pick key={p} on={draft.att[longPress]?.presence === p}
-                title={p === 'full' ? 'পুরো দিন' : p === 'half' ? 'আধা দিন' : 'ওভারটাইম (দেড় দিন)'}
+                title={p === 'full' ? t('পুরো দিন') : p === 'half' ? t('আধা দিন') : t('ওভারটাইম (দেড় দিন)')}
                 onClick={() => setPresence(longPress, p)} />
             ))}
           </div>
@@ -282,9 +299,9 @@ function StepWages({ s, draft, patch, next }: StepProps) {
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{QUESTION.wages}</h2>
-        <p className="hint">রোজ অনুযায়ী হিসাব করা আছে। আলাদা দিলে সেই লাইনে চাপ দিন।</p>
-        {rows.length === 0 && <p className="hint">কেউ আসেনি, তাই মজুরি নেই।</p>}
+        <h2 className="question">{t(QUESTION.wages)}</h2>
+        <p className="hint">{t("রোজ অনুযায়ী হিসাব করা আছে। আলাদা দিলে সেই লাইনে চাপ দিন।")}</p>
+        {rows.length === 0 && <p className="hint">{t("কেউ আসেনি, তাই মজুরি নেই।")}</p>}
         <div className="card">
           {rows.map(([wid, a]) => (
             <button key={wid} className="review-row" onClick={() => open(wid)}>
@@ -292,7 +309,7 @@ function StepWages({ s, draft, patch, next }: StepProps) {
                 <span className="t">{nameOf(s, wid)}</span>
                 <span className="k">
                   {toBn(DAYS_FOR[a.presence])} দিন × {money(a.rate)}
-                  {a.advance > 0 && ` · অগ্রিম ${money(a.advance)}`}
+                  {a.advance > 0 && tf(' · অগ্রিম {0}', money(a.advance))}
                 </span>
               </span>
               <span className="v num">{money(a.amount + a.advance)}</span>
@@ -300,23 +317,23 @@ function StepWages({ s, draft, patch, next }: StepProps) {
           ))}
           {rows.length > 0 && (
             <div className="total">
-              <span className="k">মোট মজুরি</span>
+              <span className="k">{t("মোট মজুরি")}</span>
               <span className="v num">{money(wageTotal(draft))}</span>
             </div>
           )}
         </div>
       </div>
-      <div className="actionbar"><button className="btn primary" onClick={next}>এগিয়ে যান</button></div>
+      <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>
       {editing && (
         <Sheet title={nameOf(s, editing)} onClose={commit}>
           <div className="chips" style={{ marginBottom: '.6rem' }}>
-            <Chip on={tab === 'amount'} onClick={() => setTab('amount')}>মজুরি</Chip>
-            <Chip on={tab === 'advance'} onClick={() => setTab('advance')}>অগ্রিম</Chip>
+            <Chip on={tab === 'amount'} onClick={() => setTab('amount')}>{t("মজুরি")}</Chip>
+            <Chip on={tab === 'advance'} onClick={() => setTab('advance')}>{t("অগ্রিম")}</Chip>
           </div>
           {tab === 'amount'
             ? <MoneyPad value={amount} onChange={setAmount} />
             : <MoneyPad value={advance} onChange={setAdvance} />}
-          <button className="btn primary" style={{ marginTop: '.8rem' }} onClick={commit}>ঠিক আছে</button>
+          <button className="btn primary" style={{ marginTop: '.8rem' }} onClick={commit}>{t("ঠিক আছে")}</button>
         </Sheet>
       )}
     </>
@@ -366,15 +383,15 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{QUESTION.material}</h2>
-          <p className="hint">আজ কোনো মাল এলে এখানে লিখুন।</p>
+          <h2 className="question">{t(QUESTION.material)}</h2>
+          <p className="hint">{t("আজ কোনো মাল এলে এখানে লিখুন।")}</p>
           {draft.mats.length > 0 && (
             <div className="card" style={{ marginBottom: '.9rem' }}>
               {draft.mats.map((m) => (
                 <div key={m.key} className="review-row">
                   <span>
                     <span className="t">{nameOf(s, m.item_id)}</span>
-                    <span className="k">{num(m.qty, m.qty % 1 ? 2 : 0)} {itemOf(m.item_id)?.unit_bn} × {money(m.rate)}{m.paid ? '' : ' · বাকি'}</span>
+                    <span className="k">{num(m.qty, m.qty % 1 ? 2 : 0)} {itemOf(m.item_id)?.unit_bn} × {money(m.rate)}{m.paid ? '' : t(' · বাকি')}</span>
                   </span>
                   <span className="v num">{money(m.qty * m.rate)}</span>
                   <button className="iconbtn" onClick={() => patch({ mats: draft.mats.filter((x) => x.key !== m.key) })} aria-label="বাদ দিন">
@@ -382,15 +399,15 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
                   </button>
                 </div>
               ))}
-              <div className="total"><span className="k">মোট</span><span className="v num">{money(matTotal(draft))}</span></div>
+              <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(matTotal(draft))}</span></div>
             </div>
           )}
           <div className="yesno">
-            <button onClick={next}>না</button>
-            <button className="on" onClick={() => setSub('item')}>{draft.mats.length ? 'আরও মাল' : 'হ্যাঁ'}</button>
+            <button onClick={next}>{t("না")}</button>
+            <button className="on" onClick={() => setSub('item')}>{draft.mats.length ? t('আরও মাল') : t('হ্যাঁ')}</button>
           </div>
         </div>
-        {draft.mats.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>এগিয়ে যান</button></div>}
+        {draft.mats.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>}
       </>
     )
   }
@@ -399,15 +416,15 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">কী মাল?</h2>
-          <p className="hint">যেগুলো বেশি আনেন সেগুলো আগে দেখানো হচ্ছে।</p>
+          <h2 className="question">{t("কী মাল?")}</h2>
+          <p className="hint">{t("যেগুলো বেশি আনেন সেগুলো আগে দেখানো হচ্ছে।")}</p>
           <div className="chips">
             {top.map((it) => <Chip key={it.id} onClick={() => { noteChip(true); startItem(it) }}>{it.name_bn}</Chip>)}
-            {rest.length > 0 && <Chip onClick={() => { noteChip(false); setShowAll(true) }}>আরও…</Chip>}
-            {all.length === 0 && <Chip onClick={() => setNewItem(true)}>নতুন মাল যোগ করুন</Chip>}
+            {rest.length > 0 && <Chip onClick={() => { noteChip(false); setShowAll(true) }}>{t("আরও…")}</Chip>}
+            {all.length === 0 && <Chip onClick={() => setNewItem(true)}>{t("নতুন মাল যোগ করুন")}</Chip>}
           </div>
         </div>
-        <div className="actionbar"><button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>ফিরে যান</button></div>
+        <div className="actionbar"><button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button></div>
         {showAll && (
           <Sheet title="সব মাল" onClose={() => setShowAll(false)}>
             <div className="rowlist">
@@ -431,8 +448,8 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
           <MoneyPad value={qty} onChange={setQty} prefix="" allowDecimal chips={chips} onChipTaken={() => noteChip(true)} />
         </div>
         <div className="actionbar">
-          <button className="btn ghost" onClick={() => setSub('item')}>ফিরে</button>
-          <button className="btn primary" disabled={!Number(qty)} onClick={() => setSub('rate')}>এগিয়ে যান</button>
+          <button className="btn ghost" onClick={() => setSub('item')}>{t("ফিরে")}</button>
+          <button className="btn primary" disabled={!Number(qty)} onClick={() => setSub('rate')}>{t("এগিয়ে যান")}</button>
         </div>
       </>
     )
@@ -474,7 +491,7 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
       <div className="scroll">
         <h2 className="question">{item?.name_bn} দর কত?</h2>
         <p className="hint">
-          {last ? `গতবার ${money(last.rate)} প্রতি ${item?.unit_bn} · ${dayLabelBn(last.date)}` : 'প্রথমবার — যা দিলেন লিখুন।'}
+          {last ? tf('গতবার {0} প্রতি {1} · {2}', money(last.rate), item?.unit_bn, dayLabelBn(last.date)) : t('প্রথমবার — যা দিলেন লিখুন।')}
         </p>
         <MoneyPad value={rate} onChange={setRate} allowDecimal />
         {rateNum > 0 && (
@@ -486,41 +503,41 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
           </div>
         )}
 
-        <p className="sectionlabel">কার কাছ থেকে</p>
+        <p className="sectionlabel">{t("কার কাছ থেকে")}</p>
         <div className="chips">
           {top.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(p.id)}>{p.name_bn}</Chip>)}
-          {rest.length > 0 && <Chip onClick={() => setAllParties(true)}>আরও…</Chip>}
-          {suppliers.length === 0 && <Chip onClick={() => setNewParty(true)}>+ দোকান যোগ করুন</Chip>}
+          {rest.length > 0 && <Chip onClick={() => setAllParties(true)}>{t("আরও…")}</Chip>}
+          {suppliers.length === 0 && <Chip onClick={() => setNewParty(true)}>{t("+ দোকান যোগ করুন")}</Chip>}
         </div>
 
-        <p className="sectionlabel">টাকা দিয়েছেন?</p>
+        <p className="sectionlabel">{t("টাকা দিয়েছেন?")}</p>
         <div className="yesno">
-          <button className={paid === true ? 'on' : ''} onClick={() => setPaid(true)}>হ্যাঁ, দিয়েছি</button>
-          <button className={paid === false ? 'on' : ''} onClick={() => setPaid(false)}>না, বাকি</button>
+          <button className={paid === true ? 'on' : ''} onClick={() => setPaid(true)}>{t("হ্যাঁ, দিয়েছি")}</button>
+          <button className={paid === false ? 'on' : ''} onClick={() => setPaid(false)}>{t("না, বাকি")}</button>
         </div>
         {paid === false && (
           <p className="hint" style={{ marginTop: '.7rem' }}>
             {partyObj?.terms_days
-              ? `${partyObj.name_bn} — ${toBn(partyObj.terms_days)} দিনের মধ্যে, অর্থাৎ ${dateBn(addDays(isoDate(), partyObj.terms_days), false)}।`
-              : 'হিসাবে বাকি হিসেবে থাকবে।'}
+              ? tf('{0} — {1} দিনের মধ্যে, অর্থাৎ {2}।', partyObj.name_bn, toBn(partyObj.terms_days), dateBn(addDays(isoDate(), partyObj.terms_days), false))
+              : t('হিসাবে বাকি হিসেবে থাকবে।')}
           </p>
         )}
 
         <button className="btn quiet small" style={{ marginTop: '1rem' }}
           onClick={async () => { const id = await capture(); if (id) setPhoto(id) }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-            <Icon name="camera" size={18} />{photo ? 'বিলের ছবি নেওয়া হয়েছে' : 'বিলের ছবি (ইচ্ছে হলে)'}
+            <Icon name="camera" size={18} />{photo ? t('বিলের ছবি নেওয়া হয়েছে') : t('বিলের ছবি (ইচ্ছে হলে)')}
           </span>
         </button>
       </div>
       <div className="actionbar">
-        <button className="btn ghost" onClick={onBack}>ফিরে</button>
-        <button className="btn primary" disabled={!rateNum || paid === null} onClick={() => onDone(paid === true, party, photo)}>যোগ করুন</button>
+        <button className="btn ghost" onClick={onBack}>{t("ফিরে")}</button>
+        <button className="btn primary" disabled={!rateNum || paid === null} onClick={() => onDone(paid === true, party, photo)}>{t("যোগ করুন")}</button>
       </div>
       {allParties && (
         <Sheet title="সব দোকান" onClose={() => setAllParties(false)}>
           <div className="rowlist">
-            {suppliers.map((p) => <Pick key={p.id} title={p.name_bn} sub={p.terms_days ? `${toBn(p.terms_days)} দিনের বাকি` : undefined} onClick={() => { setParty(p.id); setAllParties(false) }} />)}
+            {suppliers.map((p) => <Pick key={p.id} title={p.name_bn} sub={p.terms_days ? tf('{0} দিনের বাকি', toBn(p.terms_days)) : undefined} onClick={() => { setParty(p.id); setAllParties(false) }} />)}
             <Pick title="+ নতুন দোকান" onClick={() => { setAllParties(false); setNewParty(true) }} />
           </div>
         </Sheet>
@@ -555,8 +572,8 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{QUESTION.expense}</h2>
-          <p className="hint">গাড়ি ভাড়া, মেশিন, চা — মজুরি আর মাল ছাড়া বাকি সব।</p>
+          <h2 className="question">{t(QUESTION.expense)}</h2>
+          <p className="hint">{t("গাড়ি ভাড়া, মেশিন, চা — মজুরি আর মাল ছাড়া বাকি সব।")}</p>
           {draft.exps.length > 0 && (
             <div className="card" style={{ marginBottom: '.9rem' }}>
               {draft.exps.map((e) => (
@@ -566,15 +583,15 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
                   <button className="iconbtn" onClick={() => patch({ exps: draft.exps.filter((x) => x.key !== e.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
                 </div>
               ))}
-              <div className="total"><span className="k">মোট</span><span className="v num">{money(expTotal(draft))}</span></div>
+              <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(expTotal(draft))}</span></div>
             </div>
           )}
           <div className="yesno">
-            <button onClick={next}>না</button>
-            <button className="on" onClick={() => setSub('head')}>{draft.exps.length ? 'আরও খরচ' : 'হ্যাঁ'}</button>
+            <button onClick={next}>{t("না")}</button>
+            <button className="on" onClick={() => setSub('head')}>{draft.exps.length ? t('আরও খরচ') : t('হ্যাঁ')}</button>
           </div>
         </div>
-        {draft.exps.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>এগিয়ে যান</button></div>}
+        {draft.exps.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>}
       </>
     )
   }
@@ -583,14 +600,14 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">কীসের খরচ?</h2>
+          <h2 className="question">{t("কীসের খরচ?")}</h2>
           <div className="chips">
             {top.map((h) => <Chip key={h} onClick={() => { noteChip(true); setHead(h); setSub('amount') }}>{h}</Chip>)}
-            <Chip onClick={() => { noteChip(false); setShowAll(true) }}>আরও…</Chip>
+            <Chip onClick={() => { noteChip(false); setShowAll(true) }}>{t("আরও…")}</Chip>
           </div>
-          <p className="hint" style={{ marginTop: '1.1rem' }}>মজুরি এখানে লিখবেন না — সেটা আগের পাতায় হিসাব হয়ে গেছে।</p>
+          <p className="hint" style={{ marginTop: '1.1rem' }}>{t("মজুরি এখানে লিখবেন না — সেটা আগের পাতায় হিসাব হয়ে গেছে।")}</p>
         </div>
-        <div className="actionbar"><button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>ফিরে যান</button></div>
+        <div className="actionbar"><button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button></div>
         {showAll && (
           <Sheet title="সব খরচের খাত" onClose={() => setShowAll(false)}>
             <div className="rowlist">
@@ -607,20 +624,20 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
       <div className="scroll">
         <h2 className="question">{head} — কত?</h2>
         <MoneyPad value={amount} onChange={setAmount} chips={chips} onChipTaken={() => noteChip(true)} />
-        <p className="sectionlabel">কীভাবে দিলেন</p>
+        <p className="sectionlabel">{t("কীভাবে দিলেন")}</p>
         <div className="chips">
           {PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{m}</Chip>)}
         </div>
         <button className="btn quiet small" style={{ marginTop: '1rem' }}
           onClick={async () => { const id = await capture(); if (id) setPhoto(id) }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-            <Icon name="camera" size={18} />{photo ? 'ছবি নেওয়া হয়েছে' : 'বিলের ছবি (ইচ্ছে হলে)'}
+            <Icon name="camera" size={18} />{photo ? t('ছবি নেওয়া হয়েছে') : t('বিলের ছবি (ইচ্ছে হলে)')}
           </span>
         </button>
       </div>
       <div className="actionbar">
-        <button className="btn ghost" onClick={() => setSub('head')}>ফিরে</button>
-        <button className="btn primary" disabled={!Number(amount)} onClick={add}>যোগ করুন</button>
+        <button className="btn ghost" onClick={() => setSub('head')}>{t("ফিরে")}</button>
+        <button className="btn primary" disabled={!Number(amount)} onClick={add}>{t("যোগ করুন")}</button>
       </div>
     </>
   )
@@ -635,10 +652,10 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{QUESTION.progress}</h2>
-          <p className="hint">এই কাজের ধাপগুলো এখনও ঠিক করা হয়নি। সেটিংস → ধাপ থেকে একবার ঠিক করে নিলে এখানে কাজের অগ্রগতি নিজে থেকেই হিসাব হবে।</p>
+          <h2 className="question">{t(QUESTION.progress)}</h2>
+          <p className="hint">{t("এই কাজের ধাপগুলো এখনও ঠিক করা হয়নি। সেটিংস → ধাপ থেকে একবার ঠিক করে নিলে এখানে কাজের অগ্রগতি নিজে থেকেই হিসাব হবে।")}</p>
         </div>
-        <div className="actionbar"><button className="btn primary" onClick={next}>এগিয়ে যান</button></div>
+        <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>
       </>
     )
   }
@@ -647,17 +664,17 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{QUESTION.progress}</h2>
-        <p className="hint">এখন চলছে — <strong>{cur.name_bn}</strong>{info.next ? ` · এরপর ${info.next.name_bn}` : ''}</p>
+        <h2 className="question">{t(QUESTION.progress)}</h2>
+        <p className="hint">{t("এখন চলছে —")} <strong>{cur.name_bn}</strong>{info.next ? tf(' · এরপর {0}', info.next.name_bn) : ''}</p>
         <div className="rowlist">
           <Pick on={chosen === null && !draft.progress} title="এখনও চলছে" sub="আজ আলাদা কিছু হয়নি"
             onClick={() => { patch({ progress: null }); next() }} />
-          <Pick on={chosen === 'half'} title={`${cur.name_bn} — অর্ধেক হয়েছে`}
+          <Pick on={chosen === 'half'} title={tf('{0} — অর্ধেক হয়েছে', cur.name_bn)}
             onClick={() => { patch({ progress: { stage_seq: cur.seq, state: 'half' } }); next() }} />
-          <Pick on={chosen === 'done'} title={`${cur.name_bn} — শেষ হয়েছে`} sub={info.next ? `কাল থেকে ${info.next.name_bn}` : 'কাজ শেষের দিকে'}
+          <Pick on={chosen === 'done'} title={tf('{0} — শেষ হয়েছে', cur.name_bn)} sub={info.next ? tf('কাল থেকে {0}', info.next.name_bn) : t('কাজ শেষের দিকে')}
             onClick={() => { patch({ progress: { stage_seq: cur.seq, state: 'done' } }); next() }} />
         </div>
-        <p className="hint" style={{ marginTop: '1.2rem' }}>শতকরা কত হল সেটা আপনাকে আন্দাজ করতে হবে না — ধাপের ওজন থেকে নিজে থেকে হিসাব হয়ে যায়।</p>
+        <p className="hint" style={{ marginTop: '1.2rem' }}>{t("শতকরা কত হল সেটা আপনাকে আন্দাজ করতে হবে না — ধাপের ওজন থেকে নিজে থেকে হিসাব হয়ে যায়।")}</p>
       </div>
     </>
   )
@@ -680,12 +697,12 @@ function StepCash({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">গুনে কত হল?</h2>
+          <h2 className="question">{t("গুনে কত হল?")}</h2>
           <MoneyPad value={value} onChange={setValue} />
         </div>
         <div className="actionbar">
-          <button className="btn ghost" onClick={() => setCounting(false)}>ফিরে</button>
-          <button className="btn primary" disabled={!value} onClick={() => { patch({ cash_counted: Number(value) }); setCounting(false) }}>ঠিক আছে</button>
+          <button className="btn ghost" onClick={() => setCounting(false)}>{t("ফিরে")}</button>
+          <button className="btn primary" disabled={!value} onClick={() => { patch({ cash_counted: Number(value) }); setCounting(false) }}>{t("ঠিক আছে")}</button>
         </div>
       </>
     )
@@ -694,12 +711,12 @@ function StepCash({ s, draft, patch, next }: StepProps) {
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{QUESTION.cash}</h2>
+        <h2 className="question">{t(QUESTION.cash)}</h2>
         {neverCounted && draft.cash_counted == null ? (
-          <p className="hint">প্রথমবার — একবার গুনে বলে দিন, তারপর থেকে অ্যাপ নিজেই হিসাব রাখবে।</p>
+          <p className="hint">{t("প্রথমবার — একবার গুনে বলে দিন, তারপর থেকে অ্যাপ নিজেই হিসাব রাখবে।")}</p>
         ) : (
           <>
-            <p className="hint">{draft.cash_counted != null ? 'আপনি গুনে বললেন' : 'খাতার হিসাবে এখন থাকার কথা'}</p>
+            <p className="hint">{draft.cash_counted != null ? t('আপনি গুনে বললেন') : t('খাতার হিসাবে এখন থাকার কথা')}</p>
             <div className="moneyfield num" style={{ paddingTop: '.2rem' }}>{money(draft.cash_counted ?? expected)}</div>
             {draft.cash_counted != null && (
               <p className="hint" style={{ textAlign: 'center', marginTop: '-.4rem' }}>খাতায় ছিল {money(expected)}</p>
@@ -709,7 +726,7 @@ function StepCash({ s, draft, patch, next }: StepProps) {
         {diff != null && Math.abs(diff) >= 1 && (
           <div className={'alert ' + (Math.abs(diff) > 2000 ? 'crit' : 'warn')} style={{ marginTop: '.6rem' }}>
             <span className="dot" />
-            <span>খাতার থেকে {money(Math.abs(diff))} {diff > 0 ? 'বেশি' : 'কম'}। কোনো খরচ লিখতে ভুলে গেছেন কি?</span>
+            <span>খাতার থেকে {money(Math.abs(diff))} {diff > 0 ? t('বেশি') : t('কম')}। কোনো খরচ লিখতে ভুলে গেছেন কি?</span>
           </div>
         )}
         <div className="rowlist" style={{ marginTop: '1.1rem' }}>
@@ -720,20 +737,20 @@ function StepCash({ s, draft, patch, next }: StepProps) {
             </>
           ) : (
             <>
-              <Pick title={draft.cash_counted != null ? 'ঠিক আছে, এগোই' : 'হ্যাঁ, এটাই আছে'}
+              <Pick title={draft.cash_counted != null ? t('ঠিক আছে, এগোই') : t('হ্যাঁ, এটাই আছে')}
                 onClick={() => { if (draft.cash_counted == null) patch({ cash_counted: expected }); next() }} />
-              <Pick title={draft.cash_counted != null ? 'আবার গুনি' : 'না, গুনে বলছি'} onClick={() => { setValue(''); setCounting(true) }} />
+              <Pick title={draft.cash_counted != null ? t('আবার গুনি') : t('না, গুনে বলছি')} onClick={() => { setValue(''); setCounting(true) }} />
             </>
           )}
         </div>
         <p className="hint" style={{ marginTop: '1.2rem' }}>
           {!neverCounted && cash.anchor_date
-            ? `শেষ গোনা হয়েছিল ${dayLabelBn(cash.anchor_date)}, তখন ছিল ${money(cash.anchor_amount)}।`
+            ? tf('শেষ গোনা হয়েছিল {0}, তখন ছিল {1}।', dayLabelBn(cash.anchor_date), money(cash.anchor_amount))
             : ''}
         </p>
       </div>
       {draft.cash_counted != null && (
-        <div className="actionbar"><button className="btn primary" onClick={next}>এগিয়ে যান</button></div>
+        <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>
       )}
     </>
   )
@@ -751,53 +768,53 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{QUESTION.review}</h2>
+        <h2 className="question">{t(QUESTION.review)}</h2>
         <p className="hint">{project_bn ? project_bn + ' · ' : ''}{dateBn(draft.date)}</p>
         <div className="card">
           <button className="review-row" onClick={() => onJump('attendance')}>
-            <span><span className="t">মজুরি</span><span className="k">{toBn(men)} জন</span></span>
+            <span><span className="t">{t("মজুরি")}</span><span className="k">{toBn(men)} জন</span></span>
             <span className="v num">{money(wageTotal(draft))}</span>
             <Icon name="fwd" size={16} />
           </button>
           <button className="review-row" onClick={() => onJump('material')}>
-            <span><span className="t">মাল</span><span className="k">{draft.mats.length ? draft.mats.map((m) => nameOf(s, m.item_id)).join(', ') : 'কিছু আসেনি'}</span></span>
+            <span><span className="t">{t("মাল")}</span><span className="k">{draft.mats.length ? draft.mats.map((m) => nameOf(s, m.item_id)).join(', ') : t('কিছু আসেনি')}</span></span>
             <span className="v num">{money(matTotal(draft))}</span>
             <Icon name="fwd" size={16} />
           </button>
           <button className="review-row" onClick={() => onJump('expense')}>
-            <span><span className="t">অন্য খরচ</span><span className="k">{draft.exps.length ? draft.exps.map((e) => e.head_bn).join(', ') : 'কিছু নেই'}</span></span>
+            <span><span className="t">{t("অন্য খরচ")}</span><span className="k">{draft.exps.length ? draft.exps.map((e) => e.head_bn).join(', ') : t('কিছু নেই')}</span></span>
             <span className="v num">{money(expTotal(draft))}</span>
             <Icon name="fwd" size={16} />
           </button>
-          <div className="total"><span className="k">আজকের মোট খরচ</span><span className="v num">{money(dayTotal(draft))}</span></div>
+          <div className="total"><span className="k">{t("আজকের মোট খরচ")}</span><span className="v num">{money(dayTotal(draft))}</span></div>
         </div>
 
         <div className="card">
           <button className="review-row" onClick={() => onJump('progress')}>
-            <span><span className="t">কাজের অগ্রগতি</span>
-              <span className="k">{draft.progress ? (draft.progress.state === 'done' ? 'একটা ধাপ শেষ' : 'অর্ধেক হয়েছে') : 'আজ বদল নেই'}</span></span>
+            <span><span className="t">{t("কাজের অগ্রগতি")}</span>
+              <span className="k">{draft.progress ? (draft.progress.state === 'done' ? t('একটা ধাপ শেষ') : t('অর্ধেক হয়েছে')) : t('আজ বদল নেই')}</span></span>
             <Icon name="fwd" size={16} />
           </button>
           <button className="review-row" onClick={() => onJump('cash')}>
-            <span><span className="t">হাতে টাকা</span><span className="k">দিনের শেষে</span></span>
+            <span><span className="t">{t("হাতে টাকা")}</span><span className="k">{t("দিনের শেষে")}</span></span>
             <span className="v num">{draft.cash_counted != null ? money(draft.cash_counted) : '—'}</span>
             <Icon name="fwd" size={16} />
           </button>
         </div>
 
         <div className="field" style={{ marginTop: '1rem' }}>
-          <label>কিছু লিখে রাখবেন? (ইচ্ছে হলে)</label>
+          <label>{t("কিছু লিখে রাখবেন? (ইচ্ছে হলে)")}</label>
           <textarea className="input" value={draft.note} onChange={(e) => patch({ note: e.target.value })} placeholder="যেমন — বিকেলে বৃষ্টিতে কাজ বন্ধ" />
         </div>
 
         {extrasAvailable && (
-          <button className="btn quiet small" style={{ marginTop: '.4rem' }} onClick={onExtras}>আরও কিছু আছে?</button>
+          <button className="btn quiet small" style={{ marginTop: '.4rem' }} onClick={onExtras}>{t("আরও কিছু আছে?")}</button>
         )}
-        {empty && <p className="hint" style={{ marginTop: '1rem' }}>আজ কিছুই লেখা হয়নি। এভাবে সেভ করলে শুধু ‘আজ কাজ হয়নি’ লেখা থাকবে।</p>}
+        {empty && <p className="hint" style={{ marginTop: '1rem' }}>{t("আজ কিছুই লেখা হয়নি। এভাবে সেভ করলে শুধু ‘আজ কাজ হয়নি’ লেখা থাকবে।")}</p>}
       </div>
       <div className="actionbar">
         <button className="btn primary" disabled={saving} onClick={() => { setSaving(true); void onSave() }}>
-          {saving ? 'সেভ হচ্ছে…' : 'সেভ করুন'}
+          {saving ? t('সেভ হচ্ছে…') : t('সেভ করুন')}
         </button>
       </div>
     </>
@@ -806,12 +823,22 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
 
 /* ---------- inline master creation ---------- */
 
+/* Adding a new item: type the name, or tap it out of the common list. The
+   catalogue is a lookup, not a suggestion — nothing in it exists in his ledger
+   until he picks it, and the wizard's chips still come only from what he has
+   actually bought. Whatever he types wins: the typed name is what gets saved
+   if he presses যোগ করুন, and the list below is only ever a shortcut to it. */
 export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (i: Item) => void }) {
+  const s = useStore((x) => x)
   const [name, setName] = useState('')
   const [unit, setUnit] = useState('')
-  const units = ['বস্তা', 'কেজি', 'পিস', 'ঘনফুট', 'ট্রাক', 'লিটার', 'ফুট']
-  const create = async () => {
-    const it: Item = { id: uid(), kind: 'item', name_bn: name.trim(), unit_bn: unit || 'পিস', last_rate: null, active: true, updated_at: new Date().toISOString() }
+  const [cat, setCat] = useState<string | null>(null)
+  const units = ['বস্তা', 'কেজি', 'পিস', 'ঘনফুট', 'ট্রাক', 'লিটার', 'ফুট', 'মিটার', 'বর্গফুট', 'প্যাকেট']
+  const have = useMemo(() => new Set(items(s).map((i) => i.name_bn)), [s.masters])
+  const found = useMemo(() => searchCatalog(name, cat, have).slice(0, 60), [name, cat, have])
+
+  const create = async (name_bn: string, unit_bn: string) => {
+    const it: Item = { id: uid(), kind: 'item', name_bn, unit_bn, last_rate: null, active: true, updated_at: new Date().toISOString() }
     await saveMaster(it)
     onCreated(it)
   }
@@ -821,7 +848,54 @@ export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCr
       <Field label="কীসের হিসাবে">
         <div className="chips">{units.map((u) => <Chip key={u} on={unit === u} onClick={() => setUnit(u)}>{u}</Chip>)}</div>
       </Field>
-      <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem' }}>যোগ করুন</button>
+      <button className="btn primary" disabled={!name.trim()} onClick={() => create(name.trim(), unit || 'পিস')} style={{ marginTop: '.6rem' }}>{t("যোগ করুন")}</button>
+
+      <div className="divider" />
+      <p className="sectionlabel" style={{ marginTop: 0 }}>{name.trim() ? t('চেনা তালিকায় যা মিলল') : t('চেনা তালিকা থেকে বেছে নিন')}</p>
+      {!name.trim() && (
+        <div className="chips">
+          {CATS.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(cat === c ? null : c)}>{c}</Chip>)}
+        </div>
+      )}
+      {found.length > 0 && (
+        <div className="rowlist" style={{ marginTop: '.6rem' }}>
+          {found.map((c) => (
+            <Pick key={c.name_bn} title={c.name_bn} sub={c.unit_bn} onClick={() => create(c.name_bn, c.unit_bn)} />
+          ))}
+        </div>
+      )}
+      {name.trim() && found.length === 0 && (
+        <p className="small muted">{t("চেনা তালিকায় এই নামে কিছু নেই — উপরের ‘যোগ করুন’ টিপলেই নিজের নামে যোগ হয়ে যাবে।")}</p>
+      )}
+      {!name.trim() && !cat && (
+        <p className="small muted">{t("পাইপ, ফিটিংস, ভালভ, বাথরুম, বিদ্যুৎ — মাপ ইঞ্চিতে। নাম টিপে বসালেই খোঁজাও যায়।")}</p>
+      )}
+    </Sheet>
+  )
+}
+
+/* A job started from inside the day's entry — the contract arrives on a
+   Tuesday, not on the day he set the app up. Name is enough; area, budget and
+   plan days are all editable later in সেটিংস → কাজ. */
+export function NewProjectSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (p: Project) => void }) {
+  const [name, setName] = useState('')
+  const [client, setClient] = useState('')
+  const [budget, setBudget] = useState<number | null>(null)
+  const create = async () => {
+    const p: Project = {
+      id: uid(), kind: 'project', name_bn: name.trim(), client_bn: client.trim(), ptype: HOUSE,
+      area_sqft: null, budget, start_date: isoDate(), plan_days: null, status: 'active',
+      updated_at: new Date().toISOString(),
+    }
+    await saveMaster(p)
+    onCreated(p)
+  }
+  return (
+    <Sheet title="নতুন কাজ" onClose={onClose}>
+      <Field label="কাজের নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমন — রামপুর বাড়ি" autoFocus /></Field>
+      <Field label="কার কাজ (ইচ্ছে হলে)"><input className="input" value={client} onChange={(e) => setClient(e.target.value)} /></Field>
+      <Field label="চুক্তির টাকা (জানা থাকলে)"><NumField value={budget} onChange={setBudget} /></Field>
+      <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem' }}>{t("যোগ করুন")}</button>
     </Sheet>
   )
 }
@@ -835,12 +909,12 @@ export function NewPartySheet({ onClose, onCreated, kind = 'supplier' }: { onClo
     onCreated(p)
   }
   return (
-    <Sheet title={kind === 'supplier' ? 'নতুন দোকান' : 'নতুন খদ্দের'} onClose={onClose}>
+    <Sheet title={kind === 'supplier' ? t('নতুন দোকান') : t('নতুন খদ্দের')} onClose={onClose}>
       <Field label="নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
       {kind === 'supplier' && (
         <Field label="কত দিনের বাকিতে দেয় (না জানলে ০)"><NumField value={terms} onChange={setTerms} /></Field>
       )}
-      <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem' }}>যোগ করুন</button>
+      <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem' }}>{t("যোগ করুন")}</button>
     </Sheet>
   )
 }

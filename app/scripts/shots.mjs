@@ -1,7 +1,7 @@
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 const server = await createServer({ server: { port: 5197 } }); await server.listen()
-const b = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium' })
+const b = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {})
 const page = await b.newPage({ viewport: { width: 400, height: 860 }, deviceScaleFactor: 2 })
 const t = async s => { await page.getByText(s).first().click(); await page.waitForTimeout(220) }
 await page.goto('http://localhost:5197/'); await page.waitForTimeout(700)

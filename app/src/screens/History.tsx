@@ -6,6 +6,7 @@ import type { Entry } from '../lib/model'
 import { liveEntries } from '../lib/calc'
 import { reversalOf, newDraft, type Draft } from '../lib/draft'
 import { scheduleSync } from '../lib/sync'
+import { t, tf } from '../lib/i18n'
 
 export function History({ onBack, onEnterDate }: { onBack: () => void; onEnterDate: (d: Draft) => void }) {
   const s = useStore((x) => x)
@@ -25,15 +26,15 @@ export function History({ onBack, onEnterDate }: { onBack: () => void; onEnterDa
 
   return (
     <>
-      <TopBar title="পুরোনো হিসাব" sub={`${toBn(days.length)} দিনের লেখা`} onBack={onBack}
+      <TopBar title="পুরোনো হিসাব" sub={tf('{0} দিনের লেখা', toBn(days.length))} onBack={onBack}
         right={<button className="iconbtn" onClick={() => setPickDate(true)} aria-label="তারিখ বেছে নিন"><Icon name="plus" /></button>} />
       <div className="scroll">
-        {days.length === 0 && <Empty>এখনও কিছু লেখা হয়নি।</Empty>}
+        {days.length === 0 && <Empty>{t("এখনও কিছু লেখা হয়নি।")}</Empty>}
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
           {days.map(([date, rows]) => {
             const cost = dayCost(rows)
             return (
-              <Pick key={date} title={dayLabelBn(date)} sub={`${dateBn(date)} · ${toBn(rows.length)} লাইন`}
+              <Pick key={date} title={dayLabelBn(date)} sub={tf('{0} · {1} লাইন', dateBn(date), toBn(rows.length))}
                 right={<span className="num" style={{ fontWeight: 600 }}>{money(cost)}</span>}
                 onClick={() => setOpenDate(date)} />
             )
@@ -49,7 +50,7 @@ export function History({ onBack, onEnterDate }: { onBack: () => void; onEnterDa
 
       {pickDate && (
         <Sheet title="কোন দিনের হিসাব?" onClose={() => setPickDate(false)}>
-          <p className="hint">যে দিনটা বাদ পড়ে গেছে সেটা বেছে নিন।</p>
+          <p className="hint">{t("যে দিনটা বাদ পড়ে গেছে সেটা বেছে নিন।")}</p>
           <div className="rowlist">
             {Array.from({ length: 10 }, (_, k) => addDays(isoDate(), -k)).map((d) => (
               <Pick key={d} title={dayLabelBn(d)} sub={dateBn(d)}
@@ -96,20 +97,20 @@ function DayDetail({ s, date, onCorrected }: { s: State; date: string; onCorrect
             <button className="iconbtn" onClick={() => setConfirm(e)} aria-label="সংশোধন"><Icon name="edit" size={18} /></button>
           </div>
         ))}
-        {rows.filter((e) => e.kind !== 'day').length === 0 && <p className="hint">এই দিনে শুধু ‘কাজ হয়নি’ লেখা আছে।</p>}
+        {rows.filter((e) => e.kind !== 'day').length === 0 && <p className="hint">{t("এই দিনে শুধু ‘কাজ হয়নি’ লেখা আছে।")}</p>}
       </div>
       <p className="small muted" style={{ marginTop: '.8rem' }}>
-        কোনো লাইন মুছে ফেলা হয় না — ভুল হলে তার উল্টো লাইন লেখা হয়, তাই খাতায় সব ইতিহাস থেকে যায়।
+        {t("কোনো লাইন মুছে ফেলা হয় না — ভুল হলে তার উল্টো লাইন লেখা হয়, তাই খাতায় সব ইতিহাস থেকে যায়।")}
       </p>
       {confirm && (
         <div className="sheet-backdrop" onClick={() => setConfirm(null)}>
           <div className="sheet" onClick={(ev) => ev.stopPropagation()}>
             <div className="grip" />
-            <h2>এই লাইনটা বাতিল করবেন?</h2>
+            <h2>{t("এই লাইনটা বাতিল করবেন?")}</h2>
             <p className="hint">{describe(s, confirm)} — {money(amountOf(confirm))}</p>
             <div className="actionbar" style={{ borderTop: 0, padding: '.6rem 0 0' }}>
-              <button className="btn ghost" onClick={() => setConfirm(null)}>থাক</button>
-              <button className="btn danger" onClick={() => { const e = confirm; setConfirm(null); void undo(e) }}>বাতিল করুন</button>
+              <button className="btn ghost" onClick={() => setConfirm(null)}>{t("থাক")}</button>
+              <button className="btn danger" onClick={() => { const e = confirm; setConfirm(null); void undo(e) }}>{t("বাতিল করুন")}</button>
             </div>
           </div>
         </div>
@@ -120,7 +121,7 @@ function DayDetail({ s, date, onCorrected }: { s: State; date: string; onCorrect
 
 function describe(s: State, e: Entry): string {
   switch (e.kind) {
-    case 'attendance': return `${nameOf(s, e.worker_id)} — মজুরি`
+    case 'attendance': return tf('{0} — মজুরি', nameOf(s, e.worker_id))
     case 'stock': return `${nameOf(s, e.item_id)} — ${num(e.qty, e.qty % 1 ? 2 : 0)}`
     case 'money': return e.head_bn
     case 'progress': return 'কাজের অগ্রগতি'
@@ -130,10 +131,10 @@ function describe(s: State, e: Entry): string {
 
 function label(e: Entry): string {
   switch (e.kind) {
-    case 'attendance': return e.presence === 'half' ? 'আধা দিন' : e.presence === 'ot' ? 'ওভারটাইম' : 'পুরো দিন'
-    case 'stock': return e.dir === 'in' ? (e.paid ? 'কেনা' : 'বাকিতে কেনা') : e.dir === 'sale' ? 'বিক্রি' : e.dir === 'transfer' ? 'কাজে পাঠানো' : 'গোনা'
-    case 'money': return e.personal ? 'নিজের খাতা' : e.mode
-    case 'progress': return e.state === 'done' ? 'ধাপ শেষ' : 'অর্ধেক'
+    case 'attendance': return e.presence === 'half' ? t('আধা দিন') : e.presence === 'ot' ? t('ওভারটাইম') : t('পুরো দিন')
+    case 'stock': return e.dir === 'in' ? (e.paid ? t('কেনা') : t('বাকিতে কেনা')) : e.dir === 'sale' ? t('বিক্রি') : e.dir === 'transfer' ? t('কাজে পাঠানো') : t('গোনা')
+    case 'money': return e.personal ? t('নিজের খাতা') : e.mode
+    case 'progress': return e.state === 'done' ? t('ধাপ শেষ') : t('অর্ধেক')
     default: return ''
   }
 }

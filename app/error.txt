@@ -1,0 +1,27 @@
+2026-08-28
+Problem: bash heredoc (cat > file <<'EOF') aborted with "unexpected EOF while looking for matching `''" when the content contained Bengali text and inch marks.
+Location: writing app/src/lib/catalog.ts
+Action: creating a new source file from the shell.
+Cause: the Git Bash wrapper mangled the quoted heredoc; no file was created.
+Fix: use the Write tool for multi-line non-ASCII files; use python heredocs only for small ASCII patches.
+
+2026-08-28
+Problem: npm test failed — "Failed to launch chromium because executable doesn't exist at /opt/pw-browsers/chromium".
+Location: app/scripts/smoke.mjs, smoke-sync.mjs, shots.mjs, shot-dash.mjs, t-pct.mjs
+Action: running the smoke suite after editing NewItemSheet.
+Cause: the scripts hardcoded the Linux container path the app was originally built in.
+Fix: launch with process.env.PW_CHROMIUM when set, otherwise Playwright's own default; then `npx playwright install chromium` once. 23/23 flows pass.
+
+2026-08-28
+Problem: playwright clicked the wrong element / timed out on getByText('বাংলা', {exact:true}) in the new language step.
+Location: app/scripts/smoke.mjs
+Action: driving the new onboarding language screen in the smoke test.
+Cause: the Pick component nests the sub-label inside the same span as the title, so an exact text match lands on an element that is not the button.
+Fix: click .pick by index (.pick nth(0)/nth(1)) for two-option rows instead of matching their text.
+
+2026-08-28
+Problem: a codemod wrapped module-level constant maps (QUESTION, TITLES) in t(), which would have frozen the language at import time.
+Location: app/src/screens/DayWizard.tsx, app/src/screens/Shop.tsx
+Action: bulk-wrapping Bengali strings for the English switch.
+Cause: t() called where a module constant is defined runs once, before settings are loaded.
+Fix: keep constant maps in Bengali and call t() at the render site; never at module scope.

@@ -1,5 +1,13 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { toBn, parseNum, groupIndian } from '../lib/bn'
+import { t } from '../lib/i18n'
+
+/* Every word that reaches the screen through this kit is translated here, at
+   the last moment before it is drawn. That is deliberate: the ledger keeps
+   Bengali — units, expense heads, item names — and only the rendering
+   changes, so switching language can never rewrite a stored row.
+   A string with no English of its own simply comes back in Bengali. */
+const tr = (x: ReactNode): ReactNode => (typeof x === 'string' ? t(x) : x)
 
 /* ---------- icons ----------
    Hand-drawn stroke set, 24px grid, so nothing looks like a pasted icon font. */
@@ -45,9 +53,9 @@ export function TopBar({ title, sub, onBack, right }: { title: string; sub?: str
   return (
     <div className="topbar">
       {onBack && (
-        <button className="iconbtn" onClick={onBack} aria-label="ফিরে যান"><Icon name="back" /></button>
+        <button className="iconbtn" onClick={onBack} aria-label={t('ফিরে যান')}><Icon name="back" /></button>
       )}
-      <h1>{title}{sub && <span className="sub">{sub}</span>}</h1>
+      <h1>{t(title)}{sub && <span className="sub">{tr(sub)}</span>}</h1>
       {right}
     </div>
   )
@@ -58,7 +66,7 @@ export function Pick({ on, title, sub, right, onClick, disabled }: {
 }) {
   return (
     <button className={'pick' + (on ? ' on' : '')} onClick={onClick} disabled={disabled}>
-      <span className="t">{title}{sub && <span className="s">{sub}</span>}</span>
+      <span className="t">{tr(title)}{sub && <span className="s">{tr(sub)}</span>}</span>
       {right}
     </button>
   )
@@ -70,7 +78,7 @@ export function CheckPick({ on, title, sub, right, onClick }: {
   return (
     <button className={'pick' + (on ? ' on' : '')} onClick={onClick}>
       <span className="check">{on && <Icon name="check" size={16} stroke={2.6} />}</span>
-      <span className="t">{title}{sub && <span className="s">{sub}</span>}</span>
+      <span className="t">{tr(title)}{sub && <span className="s">{tr(sub)}</span>}</span>
       {right && <span className="r">{right}</span>}
     </button>
   )
@@ -79,7 +87,7 @@ export function CheckPick({ on, title, sub, right, onClick }: {
 export function Chip({ on, children, onClick, sub }: { on?: boolean; children: ReactNode; onClick?: () => void; sub?: string }) {
   return (
     <button className={'chip' + (on ? ' on' : '')} onClick={onClick}>
-      {children}{sub && <span className="sub">{sub}</span>}
+      {tr(children)}{sub && <span className="sub">{t(sub)}</span>}
     </button>
   )
 }
@@ -94,7 +102,7 @@ export function Sheet({ title, onClose, children }: { title?: string; onClose: (
     <div className="sheet-backdrop" onClick={onClose}>
       <div className="sheet" onClick={(e) => e.stopPropagation()}>
         <div className="grip" />
-        {title && <h2>{title}</h2>}
+        {title && <h2>{t(title)}</h2>}
         {children}
       </div>
     </div>
@@ -102,11 +110,11 @@ export function Sheet({ title, onClose, children }: { title?: string; onClose: (
 }
 
 export function Toast({ text }: { text: string }) {
-  return <div className="toast">{text}</div>
+  return <div className="toast">{t(text)}</div>
 }
 
 export function Empty({ children }: { children: ReactNode }) {
-  return <div className="empty">{children}</div>
+  return <div className="empty">{tr(children)}</div>
 }
 
 /* ---------- money entry ----------
@@ -150,9 +158,9 @@ export function MoneyPad({ value, onChange, prefix = '₹', allowDecimal = false
         {['1','2','3','4','5','6','7','8','9'].map((k) => (
           <button key={k} onClick={() => press(k)}>{toBn(k)}</button>
         ))}
-        <button className="fn" onClick={() => press(allowDecimal ? '.' : 'clr')}>{allowDecimal ? '.' : 'মুছুন'}</button>
+        <button className="fn" onClick={() => press(allowDecimal ? '.' : 'clr')}>{allowDecimal ? '.' : t('মুছুন')}</button>
         <button onClick={() => press('0')}>{toBn('0')}</button>
-        <button className="fn" onClick={() => press('del')} aria-label="একটা মুছুন"><Icon name="back" size={20} /></button>
+        <button className="fn" onClick={() => press('del')} aria-label={t('একটা মুছুন')}><Icon name="back" size={20} /></button>
       </div>
     </div>
   )
@@ -172,7 +180,7 @@ export function NumField({ value, onChange, placeholder, decimal }: {
       className="input num"
       inputMode={decimal ? 'decimal' : 'numeric'}
       value={raw}
-      placeholder={placeholder}
+      placeholder={placeholder && t(placeholder)}
       onChange={(e) => {
         setRaw(e.target.value)
         const n = parseNum(e.target.value)
@@ -184,7 +192,7 @@ export function NumField({ value, onChange, placeholder, decimal }: {
 }
 
 export function Field({ label, children }: { label: string; children: ReactNode }) {
-  return <div className="field"><label>{label}</label>{children}</div>
+  return <div className="field"><label>{t(label)}</label>{children}</div>
 }
 
 export function useToast() {

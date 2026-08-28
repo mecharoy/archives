@@ -8,6 +8,7 @@
 import { dbAll, dbPutMany } from './db'
 import { SHEET_COLUMNS, type AnyMaster, type Entry } from './model'
 import { apiUrl, getState, boot } from './store'
+import { t, tf } from './i18n'
 
 const KIND_OF_TAB: Record<string, string> = {
   Projects: 'project', Workers: 'worker', Items: 'item', Parties: 'party',
@@ -29,17 +30,17 @@ export interface RestoreResult { masters: number; entries: number; error: string
 export async function restoreFromServer(): Promise<RestoreResult> {
   const s = getState()
   const url = apiUrl('/pull')
-  if (!url || !s.settings.token) return { masters: 0, entries: 0, error: 'সেটিংসে ঠিকানা দেওয়া নেই' }
+  if (!url || !s.settings.token) return { masters: 0, entries: 0, error: t('সেটিংসে ঠিকানা দেওয়া নেই') }
 
   let data: { ok?: boolean; error?: string; tables?: Record<string, unknown[][]> }
   try {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + s.settings.token }, cache: 'no-store' })
-    if (!res.ok) return { masters: 0, entries: 0, error: res.status === 401 ? 'টোকেন মিলল না' : `সার্ভার ${res.status}` }
+    if (!res.ok) return { masters: 0, entries: 0, error: res.status === 401 ? t('টোকেন মিলল না') : tf('সার্ভার {0}', res.status) }
     data = await res.json()
   } catch {
-    return { masters: 0, entries: 0, error: 'নেট পাওয়া যাচ্ছে না' }
+    return { masters: 0, entries: 0, error: t('নেট পাওয়া যাচ্ছে না') }
   }
-  if (!data.ok || !data.tables) return { masters: 0, entries: 0, error: data.error || 'উত্তর বোঝা গেল না' }
+  if (!data.ok || !data.tables) return { masters: 0, entries: 0, error: data.error || t('উত্তর বোঝা গেল না') }
 
   const haveMasters = new Set((await dbAll<AnyMaster>('masters')).map((m) => m.id))
   const haveEntries = new Set((await dbAll<Entry>('entries')).map((e) => e.id))
