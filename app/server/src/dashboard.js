@@ -228,8 +228,10 @@ export function dashboardHtml() {
       if (!r.ok) { $('briefstate').textContent = 'No brief published yet — his app is showing its own arithmetic.'; return; }
       return r.json().then(function (b) {
         var age = (Date.now() - Date.parse(b.generated_at)) / 3600000;
-        $('briefstate').innerHTML = 'Last published ' + Math.round(age) + ' h ago' +
-          (age > 36 ? ' — <span class="pill crit">his app is calling it stale</span>' : ' — <span class="pill ok">fresh</span>');
+        var when = age < 1 ? 'less than an hour ago' : Math.round(age) + ' h ago';
+        $('briefstate').innerHTML = 'Last published ' + when +
+          (age > 36 ? ' — <span class="pill crit">his app is calling it stale</span>'
+                    : ' — <span class="pill ok">fresh</span>');
       });
     }).catch(function () { $('briefstate').textContent = '—'; });
   }
