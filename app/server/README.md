@@ -95,6 +95,6 @@ The schema is generated from the app's own column definition by
 
 ## Testing
 
-`./test.sh` runs thirty-five checks against a local D1 — auth, household
+`./test.sh` runs thirty-six checks against a local D1 — auth, household
 isolation, the retry that must not duplicate, reversals netting to zero, and
 every total the dashboard shows. Start `npm run server:dev` first.

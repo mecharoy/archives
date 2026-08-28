@@ -42,11 +42,14 @@ R=$(post "{\"token\":\"$DEV\",\"rows\":[
 ]}")
 ck "five rows accepted" "$(echo "$R" | jq '.accepted | length')" "5"
 
-# the retry that must not duplicate
+# The retry that must not duplicate. Asserted through the API rather than a
+# direct query, so it checks the property that actually matters: the total
+# does not move when the same row arrives a second time.
 post "{\"token\":\"$DEV\",\"rows\":[{\"id\":\"a1\",\"tab\":\"Attendance\",\"mode\":\"append\",\"values\":[\"a1\",\"b1\",\"$TODAY\",\"p1\",\"w1\",\"full\",1,600,600,0,\"\",\"t\"]}]}" > /dev/null
-CNT=$(npx wrangler d1 execute site-khata --local --config wrangler.jsonc --json \
-      --command "SELECT COUNT(*) c FROM attendance" 2>/dev/null | jq -r '.[0].results[0].c')
-ck "a retried row is not duplicated" "$CNT" "1"
+ck "a retried row is not duplicated" \
+   "$(curl -s -H "Authorization: Bearer $DEV" $B/summary | jq -r '.projects[0].labour')" "600"
+ck "and only one such row exists" \
+   "$(curl -s -H "Authorization: Bearer $DEV" $B/pull | jq -r '[.tables.Attendance[] | select(.[0]=="a1")] | length')" "1"
 
 S=$(curl -s -H "Authorization: Bearer $DEV" $B/summary)
 ck "summary readable with device token" "$(echo "$S" | jq -r .ok)" "true"
@@ -73,9 +76,8 @@ ck "a reversed stage stops counting" "$(curl -s -H "Authorization: Bearer $DEV" 
 
 # masters restate rather than pile up
 post "{\"token\":\"$DEV\",\"rows\":[{\"id\":\"o2\",\"tab\":\"Workers\",\"mode\":\"upsert\",\"values\":[\"w1\",\"রতন মণ্ডল\",650,\"\",true,\"t2\"]}]}" > /dev/null
-WC=$(npx wrangler d1 execute site-khata --local --config wrangler.jsonc --json \
-     --command "SELECT COUNT(*) c, MAX(rate) r FROM workers" 2>/dev/null | jq -r '.[0].results[0] | "\(.c)/\(.r)"')
-ck "a master row updates in place" "$WC" "1/650"
+ck "a master row updates in place" \
+   "$(curl -s -H "Authorization: Bearer $DEV" $B/pull | jq -r '.tables.Workers | length')/$(curl -s -H "Authorization: Bearer $DEV" $B/pull | jq -r '.tables.Workers[0][2]')" "1/650"
 
 ck "pull returns the ledger" "$(curl -s -H "Authorization: Bearer $DEV" $B/pull | jq -r '.tables.Attendance | length')" "2"
 

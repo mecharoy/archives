@@ -232,7 +232,7 @@ typed once in March, so a bad count fixes itself the next time he counts.
 same-as-yesterday, the shop, the estimator, a correction, the personal book and
 a backup — 23 flows, checking the arithmetic on the way through.
 
-`npm run server:test` runs 35 checks against a local D1: auth, household
+`npm run server:test` runs 36 checks against a local D1: auth, household
 isolation, the retry that must not duplicate a day, reversals netting to zero,
 and every total the dashboard shows.
 
