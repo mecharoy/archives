@@ -161,13 +161,13 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       <>
         <div className="scroll">
           <h2 className="question">{t('কারা কাজ করে?')}</h2>
-          <p className="hint">{t('নাম আর রোজ। যতজন মনে আছে দিন, বাকিরা পরে যোগ হবে।')}</p>
+          <p className="hint">{t('নাম, আর একদিন কাজ করলে কত টাকা পায়। যতজন মনে আছে দিন, বাকিরা পরে যোগ হবে।')}</p>
           {men.map((m, k) => (
             <div key={k} style={{ display: 'flex', gap: '.5rem', marginBottom: '.6rem' }}>
               <input className="input" style={{ flex: 2 }} placeholder={t('নাম')} value={m.name}
                 onChange={(e) => setMen(men.map((x, j) => (j === k ? { ...x, name: e.target.value } : x)))} />
               <div style={{ flex: 1 }}>
-                <NumField value={m.rate} placeholder="রোজ" onChange={(v) => setMen(men.map((x, j) => (j === k ? { ...x, rate: v } : x)))} />
+                <NumField value={m.rate} placeholder="দিনে ₹" onChange={(v) => setMen(men.map((x, j) => (j === k ? { ...x, rate: v } : x)))} />
               </div>
             </div>
           ))}

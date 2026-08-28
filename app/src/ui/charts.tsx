@@ -38,7 +38,7 @@ export function SCurve({ data }: { data: NonNullable<NonNullable<Brief['series']
           </g>
         ))}
         <text className="axis" x={L} y={H - 6}>{toBn(0)}</text>
-        <text className="axis" x={W - R} y={H - 6} textAnchor="end">{toBn(maxX)} দিন</text>
+        <text className="axis" x={W - R} y={H - 6} textAnchor="end">{tf('{0} দিন', toBn(maxX))}</text>
         <polyline className="plan" points={line(data.plan)} />
         <polyline className="actual" points={line(data.actual)} />
         {last >= 0 && <circle cx={x(days[last])} cy={y(data.actual[last])} r={4} fill="var(--accent)" stroke="var(--surface)" strokeWidth={2} />}
@@ -80,7 +80,7 @@ export function BurnBars({ rows, done }: { rows: { item_bn: string; pct: number;
         </div>
       ))}
       <p className="small muted" style={{ marginTop: '.5rem' }}>
-        খাড়া দাগটা কাজের অগ্রগতি — {toBn(Math.round(done))}%। তার ডানদিকে যা আছে, কাজের তুলনায় সেটা বেশি খরচ হচ্ছে।
+        {tf('খাড়া দাগটা কাজের অগ্রগতি — {0}%। তার ডানদিকে যা আছে, কাজের তুলনায় সেটা বেশি খরচ হচ্ছে।', toBn(Math.round(done)))}
       </p>
     </div>
   )

@@ -6,7 +6,7 @@
 
 import { kvSet } from './db'
 import { getState, setState, apiUrl, type Brief, type Status, activeProjects, stages, coeffs, allItems, nameOf } from './store'
-import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries } from './calc'
+import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries, SETTLE_HEAD } from './calc'
 import { hoursSince, isoDate, daysBetween, addDays, money, toBn } from './bn'
 import type { Entry, StockEntry } from './model'
 import { t, tf } from './i18n'
@@ -169,7 +169,7 @@ export function monthSpend(es: Entry[]): number {
     if (e.date < from) continue
     if (e.kind === 'attendance') total += e.amount + e.advance
     else if (e.kind === 'stock' && (e.dir === 'in' || e.dir === 'transfer')) total += e.amount
-    else if (e.kind === 'money' && e.dir === 'paid' && !e.personal) total += e.amount
+    else if (e.kind === 'money' && e.dir === 'paid' && !e.personal && e.head_bn !== SETTLE_HEAD) total += e.amount
   }
   return total
 }
@@ -197,7 +197,7 @@ export function sCurve(projectId: string): NonNullable<NonNullable<Brief['series
       if (e.date > upto) continue
       if (e.kind === 'attendance') c += e.amount
       else if (e.kind === 'stock' && (e.dir === 'in' || e.dir === 'transfer')) c += e.amount
-      else if (e.kind === 'money' && e.dir === 'paid' && !e.personal) c += e.amount
+      else if (e.kind === 'money' && e.dir === 'paid' && !e.personal && e.head_bn !== SETTLE_HEAD) c += e.amount
     }
     actual.push(round2(c / 100000))
   }

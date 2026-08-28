@@ -38,4 +38,10 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Only ever read, only when he taps "from the phone book", and only the
+         one name he then picks is written to the ledger. -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- Payment reminders on a due date. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
 </manifest>

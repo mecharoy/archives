@@ -50,7 +50,7 @@ export function Shop({ onBack }: { onBack: () => void }) {
                 <div className="review-row" key={d.entry_id}>
                   <span>
                     <span className="t">{d.party_id ? nameOf(s, d.party_id) : t('নাম লেখা নেই')}</span>
-                    <span className="k">{nameOf(s, d.item_id)} · {d.due_date < isoDate() ? t('সময় পেরিয়েছে') : dateBn(d.due_date, false) + ' তারিখে'}</span>
+                    <span className="k">{nameOf(s, d.item_id)} · {d.due_date < isoDate() ? t('সময় পেরিয়েছে') : tf('{0} তারিখে', dateBn(d.due_date, false))}</span>
                   </span>
                   <span className="v num" style={{ color: d.due_date < isoDate() ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
                 </div>
@@ -68,7 +68,7 @@ export function Shop({ onBack }: { onBack: () => void }) {
               <div className="review-row" key={l.item_id}>
                 <span>
                   <span className="t">{nameOf(s, l.item_id)}</span>
-                  <span className="k">{money(l.rate)} দরে</span>
+                  <span className="k">{tf('{0} দরে', money(l.rate))}</span>
                 </span>
                 <span className="v num" style={{ color: l.qty < 0 ? 'var(--crit)' : undefined }}>
                   {num(l.qty, l.qty % 1 ? 2 : 0)} {items(s).find((i) => i.id === l.item_id)?.unit_bn}
@@ -106,6 +106,11 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
   const [project, setProject] = useState<ID | ''>('')
   const [paid, setPaid] = useState<boolean | null>(null)
   const [photo, setPhoto] = useState<ID | ''>('')
+  /* Goods do not always get written down the moment they move — a sale at
+     four o'clock can be entered after the shutters are down, and a delivery
+     that came yesterday is still yesterday's. Today is the default; the row
+     also keeps the clock time it was written, which is what created_at is. */
+  const [date, setDate] = useState(isoDate())
   const [showAll, setShowAll] = useState(false)
   const [newItem, setNewItem] = useState(false)
   const [newParty, setNewParty] = useState(false)
@@ -136,13 +141,14 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
     const q = Number(qty) || 0
     const r = Number(rate) || 0
     const p = list.find((x) => x.id === party)
+    const credit = (flow === 'in' || flow === 'sale') && paid === false
     const e: StockEntry = {
-      id: uid(), kind: 'stock', batch: uid(), date: isoDate(),
+      id: uid(), kind: 'stock', batch: uid(), date,
       project_id: flow === 'transfer' ? project : '', created_at: new Date().toISOString(),
       item_id: item.id, dir: flow, qty: q, rate: r, amount: Math.round(q * r * 100) / 100,
       party_id: flow === 'transfer' ? '' : party,
-      due_date: flow === 'in' && paid === false ? addDays(isoDate(), p?.terms_days ?? 0) : '',
-      paid: flow === 'in' ? paid === true : true, photo_id: photo,
+      due_date: credit ? addDays(date, p?.terms_days ?? 0) : '',
+      paid: flow === 'in' || flow === 'sale' ? paid !== false : true, photo_id: photo,
     }
     await saveEntries([e])
     if (flow === 'in' && r > 0) await saveMaster({ ...item, last_rate: r })
@@ -183,7 +189,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
             <h2 className="question">
               {flow === 'count' ? tf('{0} গুনে কত {1}?', item.name_bn, unit) : tf('কত {0}?', unit)}
             </h2>
-            {flow !== 'in' && <p className="hint">দোকানে আছে {num(held, held % 1 ? 2 : 0)} {unit}</p>}
+            {flow !== 'in' && <p className="hint">{tf('দোকানে আছে {0} {1}', num(held, held % 1 ? 2 : 0), t(unit))}</p>}
             <MoneyPad value={qty} onChange={setQty} prefix="" allowDecimal chips={qtyChips(s.entries, item.id)} onChipTaken={() => noteChip(true)} />
             {flow !== 'in' && flow !== 'count' && Number(qty) > held && (
               <div className="alert warn" style={{ marginTop: '.8rem' }}>
@@ -256,13 +262,18 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
                   <Chip onClick={() => setNewParty(true)}>{t("+ নতুন")}</Chip>
                   {flow === 'sale' && <Chip on={party === ''} onClick={() => setParty('')}>{t("খুচরো খদ্দের")}</Chip>}
                 </div>
-                {flow === 'in' && (
+                {(flow === 'in' || flow === 'sale') && (
                   <>
-                    <p className="sectionlabel">{t("টাকা দিয়েছেন?")}</p>
+                    <p className="sectionlabel">{flow === 'sale' ? t('টাকা পেয়েছেন?') : t('টাকা দিয়েছেন?')}</p>
                     <div className="yesno">
                       <button className={paid === true ? 'on' : ''} onClick={() => setPaid(true)}>{t("হ্যাঁ")}</button>
                       <button className={paid === false ? 'on' : ''} onClick={() => setPaid(false)}>{t("না, বাকি")}</button>
                     </div>
+                    {paid === false && flow === 'sale' && !party && (
+                      <p className="small muted" style={{ marginTop: '.5rem' }}>
+                        {t('বাকিতে বিক্রি হলে খদ্দেরের নাম দিন — নইলে কার কাছে পাওনা তা আর মনে থাকবে না।')}
+                      </p>
+                    )}
                     <button className="btn quiet small" style={{ marginTop: '1rem' }}
                       onClick={async () => { const id = await capture(); if (id) setPhoto(id) }}>
                       <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
@@ -273,10 +284,22 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
                 )}
               </>
             )}
+
+            <div className="divider" />
+            <p className="sectionlabel" style={{ marginTop: 0 }}>{t("কবেকার হিসাব?")}</p>
+            <div className="chips">
+              <Chip on={date === isoDate()} onClick={() => setDate(isoDate())}>{t('আজ')}</Chip>
+              <Chip on={date === addDays(isoDate(), -1)} onClick={() => setDate(addDays(isoDate(), -1))}>{t('গতকাল')}</Chip>
+            </div>
+            <input className="input" type="date" value={date} max={isoDate()} style={{ marginTop: '.6rem' }}
+              onChange={(e) => e.target.value && setDate(e.target.value)} />
+            <p className="small muted" style={{ marginTop: '.4rem' }}>
+              {tf('লেখা হচ্ছে {0} · এখনকার সময় ধরে রাখা হবে', dateBn(date, false))}
+            </p>
           </div>
           <div className="actionbar">
             <button className="btn primary"
-              disabled={(flow === 'in' && paid === null) || (flow === 'transfer' && !project)}
+              disabled={((flow === 'in' || flow === 'sale') && paid === null) || (flow === 'transfer' && !project)}
               onClick={commit}>{t("সেভ করুন")}</button>
           </div>
           {newParty && <NewPartySheet kind={kind} onClose={() => setNewParty(false)} onCreated={(p) => { setParty(p.id); setNewParty(false) }} />}

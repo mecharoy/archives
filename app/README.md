@@ -197,6 +197,16 @@ transfer to a site at cost, and a physical count that becomes the new anchor.
 Items are shared with the sites, so a fitting has one identity whether it is
 sold over the counter or carried to a job.
 
+Adding an item also offers **size and type chips** — inches, millimetres,
+grades — that land in the name itself, because a shop does not stock "pipe", it
+stocks half-inch pipe and one-inch pipe with different rates and different
+piles in the corner. Keeping the size in the name is what lets a count of ১"
+pipe never be silently mixed with ২".
+
+Suppliers and customers can be pulled **from the phone book** rather than
+typed, one person at a time; the parties list has a search box and a
+supplier/customer filter once it grows past a screenful.
+
 Adding an item offers a **common goods list** (`src/lib/catalog.ts`) — pipes,
 fittings, valves and taps, bathroom, electrical, building material, hardware,
 paint, about 170 rows with sizes in inches — searchable in either language and
@@ -205,13 +215,37 @@ It is a lookup, never a suggestion: nothing in it exists in his ledger until he
 taps it, and the evening's chips still come only from what he has actually
 bought.
 
+**টাকা দেওয়া-নেওয়া** — what he owes and what he is owed, and the screen that
+settles both. A due is never edited shut: the unpaid purchase stays exactly as
+it was written and a payment is its own row against the same party, oldest bill
+first, so the ledger stays append-only and can still answer "what do I owe
+Sharma Traders today". A settlement carries its own head and is skipped by
+every cost total — the cement was counted the day it arrived, and counting it
+again when the bill is paid would double the job's cost. Sales can now be made
+on credit the same way, so the money side has two directions rather than one.
+
+The three standing numbers — **হাতে · পাবেন · দেবেন** — sit fixed along the
+bottom of the home screen wherever he is. The second and third are buttons.
+
+**টাকার তাগাদা** — the phone says a due out loud on the morning it matters, at
+nine, one day before by default. The queue is rebuilt from the ledger on every
+change and cancelled wholesale first, so a bill paid tonight cannot nag
+tomorrow. Nothing leaves the phone to make that happen.
+
 **নিজের খরচ** — its own four-digit passcode. Money taken from the business
 enters as a drawing, so household spending never lands in a project's cost.
 
-**নতুন কাজের হিসাব** — a plain calculator. Coefficients × area for quantities,
-his own last purchase price for rates, his own finished jobs for labour per
-square foot, then overhead and margin. No model anywhere near it. Items he has
-never bought are named and excluded rather than guessed at.
+**নতুন কাজের হিসাব** — a step-by-step estimate, one question a screen: the area
+of a single floor and how many floors (built-up is the product, not a guess);
+the kind of foundation, whose separate cost he types because no app can know
+what piling costs on his soil; the material, quantity by his own thumb rules
+and rate by what he himself last paid, with every rate open to correction on
+the spot; then labour, counted either **by the day** — trades, how many men,
+how many days, how much a day, which is how he actually pays — or by the square
+foot from what his own finished jobs came to. Then the other costs he adds
+himself, a contingency, overhead and margin, and a quotation he can send on
+WhatsApp. No model anywhere near it. Items he has never bought are named and
+excluded rather than guessed at.
 
 **পুরোনো হিসাব** — every day, and corrections. Nothing is ever edited or
 deleted: a correction writes the mirror-image row, so the ledger stays
@@ -222,6 +256,18 @@ Worker has no delete route at all.
 typed once in March, so a bad count fixes itself the next time he counts.
 
 ---
+
+## Erasing everything
+
+সেটিংস → **সব মুছে নতুন করে শুরু** wipes the phone and, if asked, the household
+on the server with it. It is the only operation in the app that destroys rather
+than appends, so it is the only one behind a code. The code is nowhere in the
+bundle — the app carries its SHA-256 hash and the Worker holds its own copy as
+the `RESET_CODE` secret, so wiping the server needs the code even from a phone
+whose token has been pulled out of the APK. The server goes first: if it
+refuses, the phone keeps its rows rather than leaving him with nothing
+anywhere. The household and its device token survive a wipe, so the phone in
+his hand keeps working and simply starts again from empty.
 
 ## The failure modes this guards against
 
@@ -236,6 +282,9 @@ typed once in March, so a bad count fixes itself the next time he counts.
 | Someone extracts the device token from the APK | It reads and appends to one household only — it cannot publish a brief, export, reach another household, or delete anything |
 | Phone lost | Everything already sent is on the server: install the APK on the new phone and tap **অনলাইন থেকে ফিরিয়ে আনুন**. Plus সেটিংস → ব্যাকআপ writes the whole ledger to Documents as CSV or JSON, and `GET /export.csv` does the same from your side |
 | Bengali vs ASCII digits | Amounts use a custom keypad, and every text field accepts either |
+| A paid-off bill keeps showing as owed | Payments net against the oldest due for that party, and reminders are rebuilt from scratch on every change |
+| Paying a bill counted as a second expense | A settlement carries its own head, which every cost total skips while the cash still moves |
+| The reset code extracted from the APK | Only its hash ships; the server keeps its own copy and refuses a wipe without it |
 | IST date rolling over wrongly | Local `YYYY-MM-DD` everywhere, never `toISOString()` |
 
 ---
@@ -261,18 +310,22 @@ typed once in March, so a bad count fixes itself the next time he counts.
 ## Layout
 
     src/lib/       bn (numerals, money, dates) · i18n + en (the English words)
-                   catalog (common goods) · db · model · calc · suggest
-                   draft · sync · brief · restore · backup · photo · pin · seed · store
-    src/screens/   Home · DayWizard · Shop · Personal · Estimator · History
-                   Settings · Onboarding
+                   catalog (common goods, sizes) · contacts · remind · reset
+                   db · model · calc · suggest · draft · sync · brief
+                   restore · backup · photo · pin · seed · store
+    src/screens/   Home · DayWizard · Shop · Payments · Personal · Estimator
+                   History · Settings · Onboarding
     src/ui/        kit (icons, keypad, sheets) · charts
     server/        the Worker: routes, summary SQL, dashboard, schema, test.sh
     scripts/       make-icons · gen-schema · smoke · smoke-sync
 
 `npm test` drives a real browser through onboarding, a full day's entry,
-same-as-yesterday, the shop, the estimator, a correction, the personal book,
-the English switch and a backup — 28 flows, checking the arithmetic on the way
-through, and asserting that no English word ever reaches a stored row.
+same-as-yesterday, the shop, a credit sale and its settlement, the estimator
+end to end, a correction, the personal book, the English switch, a refused
+factory reset and a backup — 35 flows, checking the arithmetic on the way
+through (four men for thirty days at ₹600 must come to ₹72,000), asserting that
+no English word ever reaches a stored row, and that a refused reset deletes
+nothing.
 
 `npm run server:test` runs 36 checks against a local D1: auth, household
 isolation, the retry that must not duplicate a day, reversals netting to zero,

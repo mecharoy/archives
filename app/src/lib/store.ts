@@ -8,6 +8,7 @@ import type { AnyMaster, Entry, Project, Worker, Item, Party, Stage, Coeff, ID }
 import { rowForEntry, rowForMaster } from './model'
 import { isoDate } from './bn'
 import { setLang, type Lang } from './i18n'
+import type { RemindWhen } from './remind'
 
 export interface Settings {
   endpoint: string
@@ -24,6 +25,7 @@ export interface Settings {
   theme: 'system' | 'light' | 'dark'
   text_scale: number
   lang: Lang
+  remind: RemindWhen
   owner_bn: string
   runs_shop: boolean
   runs_sites: boolean
@@ -41,7 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   opening_cash: 0, opening_date: isoDate(), pin_hash: '',
   auto_sync: true, onboarded: false, chips_taken: 0, chips_expanded: 0,
   theme: 'system', text_scale: 1,
-  lang: 'bn', owner_bn: '', runs_shop: true, runs_sites: true,
+  lang: 'bn', remind: 'day', owner_bn: '', runs_shop: true, runs_sites: true,
 }
 
 export interface OutboxRow { id: ID; tab: string; mode: 'append' | 'upsert'; values: (string | number | boolean)[]; tries: number; last_error: string; created_at: string }

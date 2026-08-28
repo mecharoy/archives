@@ -8,7 +8,8 @@ import { DAYS_FOR, newDraft, loadDraft, saveDraft, clearDraft, buildEntries, wag
 import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, screenDemoted, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
 import { capture } from '../lib/photo'
-import { searchCatalog, CATS } from '../lib/catalog'
+import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
+import { ContactPicker } from './Settings'
 import { HOUSE } from '../lib/seed'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
@@ -222,7 +223,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
         <h2 className="question">{t(QUESTION.attendance)}</h2>
         <p className="hint">
           {suggested.size ? t('গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।') : t('যারা এসেছে তাদের টিক দিন।')}
-          {' '}আধা দিন বা ওভারটাইম দিতে নামের উপর চেপে ধরুন।
+          {' '}{t('আধা দিন বা ওভারটাইম দিতে নামের উপর চেপে ধরুন।')}
         </p>
         {men.length === 0 && <p className="hint">{t("কোনো লোক যোগ করা নেই। সেটিংস থেকে লোক যোগ করুন।")}</p>}
         <div className="rowlist">
@@ -233,7 +234,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
                 <CheckPick
                   on={!!a}
                   title={w.name_bn}
-                  sub={a && a.presence !== 'full' ? (a.presence === 'half' ? t('আধা দিন') : t('ওভারটাইম')) : tf('{0} রোজ', money(w.rate))}
+                  sub={a && a.presence !== 'full' ? (a.presence === 'half' ? t('আধা দিন') : t('ওভারটাইম')) : tf('দিনে {0}', money(w.rate))}
                   right={a ? money(a.amount) : ''}
                   onClick={() => toggle(w.id)}
                 />
@@ -244,7 +245,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
       </div>
       <div className="actionbar">
         <div className="btn ghost" style={{ display: 'grid', placeItems: 'center', minWidth: '6.5rem' }}>
-          <span className="num">{toBn(count)} জন</span>
+          <span className="num">{tf('{0} জন', toBn(count))}</span>
         </div>
         <button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button>
       </div>
@@ -308,7 +309,7 @@ function StepWages({ s, draft, patch, next }: StepProps) {
               <span>
                 <span className="t">{nameOf(s, wid)}</span>
                 <span className="k">
-                  {toBn(DAYS_FOR[a.presence])} দিন × {money(a.rate)}
+                  {tf('{0} দিন × {1}', toBn(DAYS_FOR[a.presence]), money(a.rate))}
                   {a.advance > 0 && tf(' · অগ্রিম {0}', money(a.advance))}
                 </span>
               </span>
@@ -343,7 +344,9 @@ function StepWages({ s, draft, patch, next }: StepProps) {
 /* ---------- 4. material ---------- */
 
 function StepMaterial({ s, draft, patch, next }: StepProps) {
-  const [sub, setSub] = useState<'ask' | 'item' | 'qty' | 'rate'>(draft.mats.length ? 'ask' : 'ask')
+  // Straight to the chips. The old yes/no screen asked a question the next
+  // screen answered anyway; the way past it is now a button on the same screen.
+  const [sub, setSub] = useState<'ask' | 'item' | 'qty' | 'rate'>(draft.mats.length ? 'ask' : 'item')
   const [cur, setCur] = useState<DraftMat | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [qty, setQty] = useState('')
@@ -424,7 +427,11 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
             {all.length === 0 && <Chip onClick={() => setNewItem(true)}>{t("নতুন মাল যোগ করুন")}</Chip>}
           </div>
         </div>
-        <div className="actionbar"><button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button></div>
+        <div className="actionbar">
+          {draft.mats.length > 0
+            ? <button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button>
+            : <button className="btn ghost" style={{ flex: 1 }} onClick={next}>{t("আজ মাল আসেনি")}</button>}
+        </div>
         {showAll && (
           <Sheet title="সব মাল" onClose={() => setShowAll(false)}>
             <div className="rowlist">
@@ -444,7 +451,7 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{it?.name_bn} কত {it?.unit_bn}?</h2>
+          <h2 className="question">{tf('{0} কত {1}?', t(it?.name_bn || ''), t(it?.unit_bn || ''))}</h2>
           <MoneyPad value={qty} onChange={setQty} prefix="" allowDecimal chips={chips} onChipTaken={() => noteChip(true)} />
         </div>
         <div className="actionbar">
@@ -489,7 +496,7 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{item?.name_bn} দর কত?</h2>
+        <h2 className="question">{tf('{0} দর কত?', t(item?.name_bn || ''))}</h2>
         <p className="hint">
           {last ? tf('গতবার {0} প্রতি {1} · {2}', money(last.rate), item?.unit_bn, dayLabelBn(last.date)) : t('প্রথমবার — যা দিলেন লিখুন।')}
         </p>
@@ -499,7 +506,7 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
             <div className="spread"><span>{num(qty, qty % 1 ? 2 : 0)} {item?.unit_bn} × {money(rateNum)}</span>
               <strong className="num">{money(qty * rateNum)}</strong></div>
             {rise && <p className="small" style={{ color: 'var(--warn)', marginTop: '.4rem' }}>
-              গতবারের থেকে {toBn(Math.round(((rateNum - last!.rate) / last!.rate) * 100))}% বেশি।</p>}
+              {tf('গতবারের থেকে {0}% বেশি।', toBn(Math.round(((rateNum - last!.rate) / last!.rate) * 100)))}</p>}
           </div>
         )}
 
@@ -550,7 +557,7 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
 /* ---------- 5. other expenses ---------- */
 
 function StepExpense({ s, draft, patch, next }: StepProps) {
-  const [sub, setSub] = useState<'ask' | 'head' | 'amount'>('ask')
+  const [sub, setSub] = useState<'ask' | 'head' | 'amount'>(draft.exps.length ? 'ask' : 'head')
   const [head, setHead] = useState('')
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState(PAY_MODES[0])
@@ -607,7 +614,11 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
           </div>
           <p className="hint" style={{ marginTop: '1.1rem' }}>{t("মজুরি এখানে লিখবেন না — সেটা আগের পাতায় হিসাব হয়ে গেছে।")}</p>
         </div>
-        <div className="actionbar"><button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button></div>
+        <div className="actionbar">
+          {draft.exps.length > 0
+            ? <button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button>
+            : <button className="btn ghost" style={{ flex: 1 }} onClick={next}>{t("আর কোনো খরচ নেই")}</button>}
+        </div>
         {showAll && (
           <Sheet title="সব খরচের খাত" onClose={() => setShowAll(false)}>
             <div className="rowlist">
@@ -622,7 +633,7 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{head} — কত?</h2>
+        <h2 className="question">{tf('{0} — কত?', t(head))}</h2>
         <MoneyPad value={amount} onChange={setAmount} chips={chips} onChipTaken={() => noteChip(true)} />
         <p className="sectionlabel">{t("কীভাবে দিলেন")}</p>
         <div className="chips">
@@ -719,14 +730,14 @@ function StepCash({ s, draft, patch, next }: StepProps) {
             <p className="hint">{draft.cash_counted != null ? t('আপনি গুনে বললেন') : t('খাতার হিসাবে এখন থাকার কথা')}</p>
             <div className="moneyfield num" style={{ paddingTop: '.2rem' }}>{money(draft.cash_counted ?? expected)}</div>
             {draft.cash_counted != null && (
-              <p className="hint" style={{ textAlign: 'center', marginTop: '-.4rem' }}>খাতায় ছিল {money(expected)}</p>
+              <p className="hint" style={{ textAlign: 'center', marginTop: '-.4rem' }}>{tf('খাতায় ছিল {0}', money(expected))}</p>
             )}
           </>
         )}
         {diff != null && Math.abs(diff) >= 1 && (
           <div className={'alert ' + (Math.abs(diff) > 2000 ? 'crit' : 'warn')} style={{ marginTop: '.6rem' }}>
             <span className="dot" />
-            <span>খাতার থেকে {money(Math.abs(diff))} {diff > 0 ? t('বেশি') : t('কম')}। কোনো খরচ লিখতে ভুলে গেছেন কি?</span>
+            <span>{tf('খাতার থেকে {0} {1}। কোনো খরচ লিখতে ভুলে গেছেন কি?', money(Math.abs(diff)), diff > 0 ? t('বেশি') : t('কম'))}</span>
           </div>
         )}
         <div className="rowlist" style={{ marginTop: '1.1rem' }}>
@@ -772,7 +783,7 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
         <p className="hint">{project_bn ? project_bn + ' · ' : ''}{dateBn(draft.date)}</p>
         <div className="card">
           <button className="review-row" onClick={() => onJump('attendance')}>
-            <span><span className="t">{t("মজুরি")}</span><span className="k">{toBn(men)} জন</span></span>
+            <span><span className="t">{t("মজুরি")}</span><span className="k">{tf('{0} জন', toBn(men))}</span></span>
             <span className="v num">{money(wageTotal(draft))}</span>
             <Icon name="fwd" size={16} />
           </button>
@@ -845,10 +856,28 @@ export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCr
   return (
     <Sheet title="নতুন মাল" onClose={onClose}>
       <Field label="মালের নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমন — সিমেন্ট" autoFocus /></Field>
+      {name.trim() && (
+        <Field label="মাপ বা ধরন (থাকলে)">
+          {VARIANTS.map((g) => (
+            <div key={g.group_bn} style={{ marginBottom: '.4rem' }}>
+              <p className="small muted" style={{ margin: '.2rem 0' }}>{t(g.group_bn)}</p>
+              <div className="chips">
+                {g.values.map((v) => (
+                  <Chip key={v} on={name.trim().endsWith(v)}
+                    onClick={() => setName(name.trim().endsWith(v) ? name.trim().slice(0, -v.length).trim() : name.trim() + ' ' + v)}>
+                    {v}
+                  </Chip>
+                ))}
+              </div>
+            </div>
+          ))}
+          <p className="small muted">{t('মাপ নামের সঙ্গেই থাকে, তাই ১" আর ২" পাইপের মজুত আলাদা করে গোনা হয়।')}</p>
+        </Field>
+      )}
       <Field label="কীসের হিসাবে">
         <div className="chips">{units.map((u) => <Chip key={u} on={unit === u} onClick={() => setUnit(u)}>{u}</Chip>)}</div>
       </Field>
-      <button className="btn primary" disabled={!name.trim()} onClick={() => create(name.trim(), unit || 'পিস')} style={{ marginTop: '.6rem' }}>{t("যোগ করুন")}</button>
+      <button className="btn primary" disabled={!name.trim()} onClick={() => create(name.trim(), unit || 'পিস')} style={{ marginTop: '.6rem', width: '100%' }}>{t("যোগ করুন")}</button>
 
       <div className="divider" />
       <p className="sectionlabel" style={{ marginTop: 0 }}>{name.trim() ? t('চেনা তালিকায় যা মিলল') : t('চেনা তালিকা থেকে বেছে নিন')}</p>
@@ -902,19 +931,28 @@ export function NewProjectSheet({ onClose, onCreated }: { onClose: () => void; o
 
 export function NewPartySheet({ onClose, onCreated, kind = 'supplier' }: { onClose: () => void; onCreated: (p: Party) => void; kind?: 'supplier' | 'client' }) {
   const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
   const [terms, setTerms] = useState<number | null>(0)
+  const [book, setBook] = useState(false)
   const create = async () => {
-    const p: Party = { id: uid(), kind: 'party', name_bn: name.trim(), ptype: kind, terms_days: terms ?? 0, phone: '', updated_at: new Date().toISOString() }
+    const p: Party = { id: uid(), kind: 'party', name_bn: name.trim(), ptype: kind, terms_days: terms ?? 0, phone: phone.trim(), updated_at: new Date().toISOString() }
     await saveMaster(p)
     onCreated(p)
   }
+  if (book) return <ContactPicker onClose={() => setBook(false)} onPicked={(c) => { setName(c.name); setPhone(c.phone); setBook(false) }} />
   return (
     <Sheet title={kind === 'supplier' ? t('নতুন দোকান') : t('নতুন খদ্দের')} onClose={onClose}>
+      {/* He already has these people saved. Typing the name again on a phone
+          keyboard is the slowest thing in the app. */}
+      <div className="chips" style={{ marginBottom: '.7rem' }}>
+        <Chip onClick={() => setBook(true)}>{t('ফোনের তালিকা থেকে')}</Chip>
+      </div>
       <Field label="নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+      <Field label="ফোন (ইচ্ছে হলে)"><input className="input" value={phone} inputMode="tel" onChange={(e) => setPhone(e.target.value)} /></Field>
       {kind === 'supplier' && (
         <Field label="কত দিনের বাকিতে দেয় (না জানলে ০)"><NumField value={terms} onChange={setTerms} /></Field>
       )}
-      <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem' }}>{t("যোগ করুন")}</button>
+      <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem', width: '100%' }}>{t("যোগ করুন")}</button>
     </Sheet>
   )
 }

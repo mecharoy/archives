@@ -9,6 +9,10 @@ import { isoDate, addDays } from './bn'
 import { t } from './i18n'
 
 export const DRAWING_HEAD = 'ব্যবসা থেকে নেওয়া'
+/* Settling an old bill is not a new expense — the goods were counted the day
+   they arrived. This head keeps that payment out of every cost total while
+   still moving the cash. */
+export const SETTLE_HEAD = 'বাকি মেটানো'
 
 export function reversedIds(entries: Entry[]): Set<ID> {
   const s = new Set<ID>()
@@ -49,7 +53,7 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
   const material = byKind(mine, 'stock')
     .filter((e) => e.dir === 'in' || e.dir === 'transfer')
     .reduce((a, e) => a + (e.amount || 0), 0)
-  const money = byKind(mine, 'money').filter((e) => !e.personal)
+  const money = byKind(mine, 'money').filter((e) => !e.personal && e.head_bn !== SETTLE_HEAD)
   const other = money.filter((e) => e.dir === 'paid').reduce((a, e) => a + (e.amount || 0), 0)
   const received = money.filter((e) => e.dir === 'received').reduce((a, e) => a + (e.amount || 0), 0)
   const cost = labour + material + other
@@ -159,12 +163,73 @@ function isCash(_s: StockEntry): boolean { return true }
 
 export interface Due { party_id: ID; date: string; due_date: string; amount: number; item_id: ID; entry_id: ID }
 
+/* A due is opened by an unpaid row and closed by a payment to that party —
+   never by editing the original row, which stays exactly as it was written.
+   Payments land on the oldest due first, the way a shopkeeper actually
+   settles: last month's bill before this week's. */
+const SETTLED = (entries: Entry[], dir: 'paid' | 'received') => {
+  const money = liveEntries(entries).filter((e) => e.kind === 'money') as MoneyEntry[]
+  const byParty = new Map<ID, number>()
+  for (const m of money) {
+    if (m.personal || m.head_bn !== SETTLE_HEAD || m.dir !== dir) continue
+    byParty.set(m.party_id, (byParty.get(m.party_id) || 0) + (m.amount || 0))
+  }
+  return byParty
+}
+
+function netted(rows: Due[], paid: Map<ID, number>): Due[] {
+  const left = new Map(paid)
+  const out: Due[] = []
+  for (const d of rows) {
+    let amount = d.amount
+    const pot = left.get(d.party_id) || 0
+    if (pot > 0) {
+      const used = Math.min(pot, amount)
+      amount -= used
+      left.set(d.party_id, pot - used)
+    }
+    if (amount > 0.5) out.push({ ...d, amount })
+  }
+  return out
+}
+
+/** What he still owes his suppliers. */
 export function openDues(entries: Entry[]): Due[] {
   const stock = liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]
-  return stock
+  const rows = stock
     .filter((s) => (s.dir === 'in' || s.dir === 'transfer') && !s.paid && (s.amount || 0) > 0)
     .map((s) => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || s.date, amount: s.amount, item_id: s.item_id, entry_id: s.id }))
     .sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
+  return netted(rows, SETTLED(entries, 'paid'))
+}
+
+/** What his customers still owe him — a sale written down as not yet paid. */
+export function openReceivables(entries: Entry[]): Due[] {
+  const stock = liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]
+  const rows = stock
+    .filter((s) => s.dir === 'sale' && !s.paid && (s.amount || 0) > 0)
+    .map((s) => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || s.date, amount: s.amount, item_id: s.item_id, entry_id: s.id }))
+    .sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
+  return netted(rows, SETTLED(entries, 'received'))
+}
+
+export function receivablesSplit(entries: Entry[]) {
+  const all = openReceivables(entries)
+  const today = isoDate()
+  const week = addDays(today, 7)
+  return {
+    all,
+    overdue: all.filter((d) => d.due_date < today).reduce((a, d) => a + d.amount, 0),
+    thisWeek: all.filter((d) => d.due_date >= today && d.due_date <= week).reduce((a, d) => a + d.amount, 0),
+    total: all.reduce((a, d) => a + d.amount, 0),
+  }
+}
+
+/** One party's standing balance, for the payment screen. */
+export function partyBalance(entries: Entry[], party_id: ID) {
+  const owe = openDues(entries).filter((d) => d.party_id === party_id).reduce((a, d) => a + d.amount, 0)
+  const get = openReceivables(entries).filter((d) => d.party_id === party_id).reduce((a, d) => a + d.amount, 0)
+  return { owe, get }
 }
 
 export function duesSplit(entries: Entry[]) {
@@ -249,6 +314,6 @@ export function batchSummary(entries: Entry[], batch: string) {
   const rows = entries.filter((e) => e.batch === batch)
   const wages = (byKind(rows, 'attendance') as AttendanceEntry[]).reduce((a, e) => a + e.amount + e.advance, 0)
   const material = (byKind(rows, 'stock') as StockEntry[]).reduce((a, e) => a + (e.dir === 'in' || e.dir === 'transfer' ? e.amount : 0), 0)
-  const other = (byKind(rows, 'money') as MoneyEntry[]).filter((e) => e.dir === 'paid').reduce((a, e) => a + e.amount, 0)
+  const other = (byKind(rows, 'money') as MoneyEntry[]).filter((e) => e.dir === 'paid' && e.head_bn !== SETTLE_HEAD).reduce((a, e) => a + e.amount, 0)
   return { wages, material, other, total: wages + material + other }
 }

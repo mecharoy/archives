@@ -147,3 +147,16 @@ export function searchCatalog(q: string, cat: string | null, have: Set<string>):
     return cat ? c.cat === cat : false
   })
 }
+
+/* Sizes and grades, for an item he is typing himself.
+
+   A shop does not stock "pipe" — it stocks half-inch pipe and one-inch pipe,
+   and they have different rates and different piles in the corner. So the
+   size is part of the item's name rather than a field of its own: the ledger
+   then counts each size separately without a schema that knows what a size
+   is, and a stock count of ১" pipe can never be silently mixed with ২". */
+export const VARIANTS: { group_bn: string; values: string[] }[] = [
+  { group_bn: 'ইঞ্চি', values: ['১/২"', '৩/৪"', '১"', '১¼"', '১½"', '২"', '৩"', '৪"', '৬"'] },
+  { group_bn: 'মিলিমিটার', values: ['৮ মিমি', '১০ মিমি', '১২ মিমি', '১৬ মিমি', '২০ মিমি', '২৫ মিমি'] },
+  { group_bn: 'ধরন', values: ['OPC ৪৩', 'OPC ৫৩', 'PPC', 'সাদা', 'রঙিন', 'ছোট', 'মাঝারি', 'বড়', 'ভারী', 'হালকা'] },
+]

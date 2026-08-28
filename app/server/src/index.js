@@ -47,6 +47,7 @@ async function route(request, env, url, path) {
   if (path === '/pull' && m === 'GET') return pull(request, env, url)
   if (path === '/summary' && m === 'GET') return summary(request, env, url)
   if (path === '/brief.json' && m === 'GET') return getBrief(request, env, url)
+  if (path === '/wipe' && m === 'POST') return wipe(request, env)
 
   // --- you ---
   if (path === '/brief' && (m === 'PUT' || m === 'POST')) return putBrief(request, env, url)
@@ -221,6 +222,35 @@ async function putBrief(request, env, url) {
     `INSERT OR REPLACE INTO briefs (household_id, body, generated_at, received_at) VALUES (?1, ?2, ?3, ?4)`
   ).bind(hid, JSON.stringify(body), body.generated_at, now).run()
   return json({ ok: true, stored_at: now })
+}
+
+/* ---------------------------------------------------------------- wipe
+
+   The one route that deletes. It is deliberately not reachable with the
+   device token alone: the reset code must come with it, and the code lives
+   only in your head and in the RESET_CODE secret. An extracted APK therefore
+   still cannot erase his household.
+
+   It empties one household's rows and its brief. The household itself and
+   its device token survive, so the phone he is holding keeps working and
+   simply starts again from nothing. */
+
+async function wipe(request, env) {
+  const body = await request.json().catch(() => ({}))
+  const household = await householdFor(env, body.token)
+  if (!household) return json({ ok: false, error: 'token' }, 401)
+
+  const expected = env.RESET_CODE || ''
+  if (!expected) return json({ ok: false, error: 'সার্ভারে রিসেট কোড বসানো নেই' }, 400)
+  if (!sameToken(String(body.code || ''), expected)) return json({ ok: false, error: 'কোড মিলল না' }, 403)
+
+  let deleted = 0
+  for (const tab of Object.keys(COLUMNS)) {
+    const res = await env.DB.prepare(`DELETE FROM ${TABLE_OF[tab]} WHERE household_id = ?1`).bind(household.id).run()
+    deleted += res.meta?.changes || 0
+  }
+  await env.DB.prepare('DELETE FROM briefs WHERE household_id = ?1').bind(household.id).run()
+  return json({ ok: true, household: household.name, deleted })
 }
 
 /* -------------------------------------------------------------- export */

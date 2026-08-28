@@ -4,7 +4,7 @@ import { SCurve, BurnBars } from '../ui/charts'
 import { useStore, activeProjects, workers, stages, items, allItems, nameOf, type State, type Brief } from '../lib/store'
 import { money, toBn, num, agoBn, dayLabelBn, isoDate, addDays } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
-import { cashState, projectTotals, entriesInLastDays, lastEntryDate, shopStock, duesSplit } from '../lib/calc'
+import { cashState, projectTotals, entriesInLastDays, lastEntryDate, shopStock, duesSplit, receivablesSplit } from '../lib/calc'
 import { lastAttendance, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
 import { flush } from '../lib/sync'
@@ -24,7 +24,7 @@ type Tab = 'work' | 'stock' | 'money'
 export function Home({ onDay, onSameAsYesterday, onGo }: {
   onDay: () => void
   onSameAsYesterday: (d: Draft) => void
-  onGo: (screen: 'shop' | 'personal' | 'estimate' | 'settings' | 'history' | 'project') => void
+  onGo: (screen: 'shop' | 'personal' | 'estimate' | 'settings' | 'history' | 'project' | 'payments') => void
 }) {
   const s = useStore((x) => x)
   const [refreshing, setRefreshing] = useState(false)
@@ -122,6 +122,8 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
 
         <SyncLine s={s} />
       </div>
+
+      <StandingTotals s={s} onGo={onGo} />
     </>
   )
 }
@@ -265,7 +267,7 @@ function StockTab({ s, onGo }: { s: State; onGo: (x: 'shop' | 'project') => void
 
 /* ---------- হিসাব ---------- */
 
-function MoneyTab({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: 'personal' | 'history' | 'project') => void }) {
+function MoneyTab({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: 'personal' | 'history' | 'project' | 'payments') => void }) {
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const spend = useMemo(() => monthSpend(s.entries), [s.entries])
@@ -316,6 +318,10 @@ function MoneyTab({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: 'perso
       )}
 
       <div className="tilegrid">
+        <button className="tile" onClick={() => onGo('payments')}>
+          <Icon name="wallet" size={24} stroke={1.6} />
+          <span><span className="t" style={{ display: 'block' }}>{t('টাকা দেওয়া-নেওয়া')}</span><span className="s">{t('বাকি মেটানো, পাওনা তোলা')}</span></span>
+        </button>
         <button className="tile" onClick={() => onGo('personal')}>
           <Icon name="wallet" size={24} stroke={1.6} />
           <span><span className="t" style={{ display: 'block' }}>{t('নিজের খরচ')}</span><span className="s">{t('আলাদা খাতা')}</span></span>
@@ -351,6 +357,32 @@ function SyncLine({ s }: { s: State }) {
         {s.sync_error ? ` · ${s.sync_error}` : ''}
       </p>
     </>
+  )
+}
+
+/* The three numbers he actually carries in his head, kept on screen wherever
+   he is: what is in the tin, what is owed to him, what he owes. Tapping the
+   second or third opens the screen that settles it. */
+function StandingTotals({ s, onGo }: { s: State; onGo: (x: 'payments') => void }) {
+  const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
+  const get = useMemo(() => receivablesSplit(s.entries), [s.entries])
+  const owe = useMemo(() => duesSplit(s.entries), [s.entries])
+  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
+  return (
+    <div className="footbar">
+      <div className="foot">
+        <span className="k">{t('হাতে')}</span>
+        <span className="v num">{counted ? money(cash.computed) : '—'}</span>
+      </div>
+      <button className="foot" onClick={() => onGo('payments')}>
+        <span className="k">{t('পাবেন')}</span>
+        <span className={'v num' + (get.overdue > 0 ? ' warn' : '')}>{money(get.total)}</span>
+      </button>
+      <button className="foot" onClick={() => onGo('payments')}>
+        <span className="k">{t('দেবেন')}</span>
+        <span className={'v num' + (owe.overdue > 0 ? ' crit' : '')}>{money(owe.total)}</span>
+      </button>
+    </div>
   )
 }
 

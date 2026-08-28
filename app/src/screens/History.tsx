@@ -124,8 +124,8 @@ function describe(s: State, e: Entry): string {
     case 'attendance': return tf('{0} — মজুরি', nameOf(s, e.worker_id))
     case 'stock': return `${nameOf(s, e.item_id)} — ${num(e.qty, e.qty % 1 ? 2 : 0)}`
     case 'money': return e.head_bn
-    case 'progress': return 'কাজের অগ্রগতি'
-    default: return 'দিনের হিসাব'
+    case 'progress': return t('কাজের অগ্রগতি')
+    default: return t('দিনের হিসাব')
   }
 }
 

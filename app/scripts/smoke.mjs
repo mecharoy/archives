@@ -76,8 +76,6 @@ await step('wages screen totals', async () => {
   await tap('এগিয়ে যান')
 })
 await step('material: add a purchase', async () => {
-  await page.getByText('মাল এসেছে?').waitFor({ timeout: 3000 })
-  await tap('হ্যাঁ')
   await page.getByText('কী মাল?').waitFor({ timeout: 3000 })
   await page.getByText('সিমেন্ট', { exact: true }).first().click()
   await page.getByText('সিমেন্ট কত বস্তা?').waitFor({ timeout: 3000 })
@@ -97,9 +95,9 @@ await step('material total is 4100', async () => {
   if (!t.includes('৪,১০০')) throw new Error('expected ৪,১০০ got ' + t)
   await tap('এগিয়ে যান')
 })
-await step('expenses: no', async () => {
-  await page.getByText('আর কোনো খরচ?').waitFor({ timeout: 3000 })
-  await page.getByText('না', { exact: true }).first().click()
+await step('expenses: none today', async () => {
+  await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 })
+  await tap('আর কোনো খরচ নেই')
 })
 await step('progress: mark half', async () => {
   await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 })
@@ -174,17 +172,45 @@ await step('shop flow: goods in', async () => {
   const body = await page.locator('.scroll').first().innerText()
   if (!body.includes('এখন যা আছে')) throw new Error('stock list missing')
 })
-await step('estimator runs end to end', async () => {
+await step('estimator: size, floors and foundation', async () => {
   await home()
   await page.locator('.tile', { hasText: 'নতুন কাজের হিসাব' }).click()
   await page.locator('.chip').first().click()
+  await page.getByText('এক তলার মাপ কত বর্গফুট?').waitFor({ timeout: 3000 })
   for (const d of ['১', '০', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
+  await page.locator('.field .chips .chip').nth(1).click()        // two floors
+  await page.waitForTimeout(200)
+  const total = await page.locator('.small.muted').first().innerText()
+  if (!total.includes('২০০০')) throw new Error('built-up should be 1000 x 2 floors, got ' + total)
   await tap('এগিয়ে যান')
+})
+await step('estimator: material priced from his own purchases', async () => {
   await page.getByText('মালের হিসাব').waitFor({ timeout: 3000 })
   const mat = await page.locator('.total .v').first().innerText()
   if (mat === '₹০') throw new Error('estimator priced nothing — last purchase rate did not reach it')
+  await tap('এগিয়ে যান')
+})
+await step('estimator: labour by the day', async () => {
+  await page.getByText('মজুরি কীভাবে ধরবেন?').waitFor({ timeout: 3000 })
+  await page.locator('.pick').first().click()                     // by the day
+  await tap('+ কাজের লোক যোগ করুন')
+  await page.locator('.card input.input').first().fill('রাজমিস্ত্রি')
+  await page.locator('.card input.num').nth(0).fill('4')          // four men
+  await page.locator('.card input.num').nth(1).fill('600')        // at 600 a day
+  await page.locator('.field input.num').last().fill('30')        // for thirty days
+  await page.waitForTimeout(300)
+  const labour = await page.locator('.total .v').last().innerText()
+  if (!labour.includes('৭২,০০০')) throw new Error('4 men x 30 days x 600 should be 72,000 — got ' + labour)
+  await tap('এগিয়ে যান')
+})
+await step('estimator: quote comes out whole', async () => {
+  await page.getByText('অন্য খরচ').first().waitFor({ timeout: 3000 })
+  await tap('এগিয়ে যান')
+  await page.getByText('লাভ ও মোট').waitFor({ timeout: 3000 })
   await tap('দর তৈরি করুন')
   await page.getByText('দরপত্র').first().waitFor({ timeout: 3000 })
+  const quote = await page.locator('.card').first().innerText()
+  if (!quote.includes('তলা')) throw new Error('quote should name the floors')
 })
 await step('history lists days and can reverse', async () => {
   await home()
@@ -205,6 +231,57 @@ await step('personal book with pin', async () => {
   for (const d of ['৫', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('সেভ করুন')
   await page.waitForTimeout(500)
+})
+await step('a credit sale becomes a receivable', async () => {
+  await home()
+  await page.locator('.tabs .tab', { hasText: 'মজুত' }).click()
+  await page.locator('.tile', { hasText: 'দোকানের মজুত' }).click()
+  await tap('বিক্রি হয়েছে')
+  await page.getByText('সিমেন্ট', { exact: true }).first().click()
+  for (const d of ['৫']) await page.locator('.pad button', { hasText: d }).first().click()
+  await tap('এগিয়ে যান')
+  for (const d of ['৫', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
+  await tap('এগিয়ে যান')
+  await page.getByText('কাকে বিক্রি?').waitFor({ timeout: 3000 })
+  await page.locator('.chip', { hasText: '+ নতুন' }).first().click()
+  await page.locator('.sheet input.input').first().fill('হালদার বাবু')
+  await page.locator('.sheet .btn.primary').click()
+  await tap('না, বাকি')
+  await tap('সেভ করুন')
+  await page.waitForTimeout(700)
+  await home()
+  const foot = await page.locator('.footbar').innerText()
+  if (!foot.includes('২,৫০০')) throw new Error('the ₹2,500 credit sale should show as receivable: ' + foot)
+})
+await step('settling it clears the balance', async () => {
+  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.tile', { hasText: 'টাকা দেওয়া-নেওয়া' }).click()
+  await page.getByText('যাদের কাছে পাওনা').waitFor({ timeout: 3000 })
+  await page.getByText('হালদার বাবু').first().click()
+  await page.locator('.sheet .btn.primary').click()
+  await page.waitForTimeout(700)
+  await home()
+  const foot = await page.locator('.footbar').innerText()
+  if (foot.includes('২,৫০০')) throw new Error('the receivable should be settled: ' + foot)
+})
+await step('reset refuses a wrong code', async () => {
+  await home()
+  await page.locator('.topbar .iconbtn').nth(1).click()
+  await tap('সব মুছে নতুন করে শুরু')
+  await page.locator('input.input').first().fill('1234')
+  await tap('মুছে ফেলুন')
+  await tap('হ্যাঁ, সব মুছে দিন')
+  await page.waitForTimeout(600)
+  const body = await page.locator('.app').innerText()
+  if (!body.includes('কোড মিলল না')) throw new Error('a wrong code must be refused')
+  const rows = await page.evaluate(() => new Promise((res) => {
+    const r = indexedDB.open('sitekhata')
+    r.onsuccess = () => {
+      const all = r.result.transaction('entries', 'readonly').objectStore('entries').getAll()
+      all.onsuccess = () => res(all.result.length)
+    }
+  }))
+  if (!rows) throw new Error('a refused reset must not have deleted anything')
 })
 await step('english switch flips the whole screen', async () => {
   await home()

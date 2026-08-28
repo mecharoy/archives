@@ -25,3 +25,17 @@ Location: app/src/screens/DayWizard.tsx, app/src/screens/Shop.tsx
 Action: bulk-wrapping Bengali strings for the English switch.
 Cause: t() called where a module constant is defined runs once, before settings are loaded.
 Fix: keep constant maps in Bengali and call t() at the render site; never at module scope.
+
+2026-08-28
+Problem: `cat > file <<'EOF'` in Bash aborted again on a large Bengali block with apostrophes in the English text.
+Location: app/src/lib/en.ts (dictionary additions)
+Action: appending ~150 translations.
+Cause: the Git Bash wrapper mangles quoted heredocs containing non-ASCII plus apostrophes.
+Fix: write the block with the Write tool to a scratchpad file, then splice it in with a small node script.
+
+2026-08-28
+Problem: playwright timed out clicking a chip inside a Field ('.chips' nth(1)).
+Location: app/scripts/smoke.mjs — estimator floors step.
+Action: choosing "2 floors" in the new estimator.
+Cause: MoneyPad renders its own .chips container, so the index pointed at the wrong group.
+Fix: scope to '.field .chips .chip' rather than counting .chips containers.

@@ -6,13 +6,15 @@ import { Personal } from './screens/Personal'
 import { Estimator } from './screens/Estimator'
 import { Settings } from './screens/Settings'
 import { History } from './screens/History'
+import { Payments } from './screens/Payments'
 import { Onboarding } from './screens/Onboarding'
 import { useStore, activeProjects, allWorkers } from './lib/store'
 import { startSyncLoop } from './lib/sync'
+import { reschedule } from './lib/remind'
 import { useToast, Toast } from './ui/kit'
 import type { Draft } from './lib/draft'
 
-type Screen = 'home' | 'day' | 'shop' | 'personal' | 'estimate' | 'settings' | 'history'
+type Screen = 'home' | 'day' | 'shop' | 'personal' | 'estimate' | 'settings' | 'history' | 'payments'
 
 export function App() {
   const ready = useStore((s) => s.ready)
@@ -23,6 +25,15 @@ export function App() {
   const toast = useToast()
 
   useEffect(() => { startSyncLoop() }, [])
+
+  /* Reminders are rebuilt whenever the ledger changes — a bill paid this
+     evening must not nag him tomorrow morning. Cheap: it cancels ours and
+     schedules what the current dues say. */
+  const entryCount = useStore((s) => s.entries.length)
+  useEffect(() => {
+    if (!ready || settings.remind === 'off') return
+    void reschedule()
+  }, [ready, entryCount, settings.remind])
 
   /* theme and text size follow the settings, and the Android status bar
      follows the theme so the top of the screen never looks borrowed. */
@@ -88,6 +99,7 @@ export function App() {
       {screen === 'estimate' && <Estimator onBack={goHome} />}
       {screen === 'settings' && <Settings onBack={goHome} />}
       {screen === 'history' && <History onBack={goHome} onEnterDate={(d) => { setDraft(d); setScreen('day') }} />}
+      {screen === 'payments' && <Payments onBack={goHome} />}
       {toast.msg && <Toast text={toast.msg} />}
     </div>
   )
