@@ -4,7 +4,7 @@
    the money head list never contains anything that could mean wages. */
 
 export type ID = string
-export type MasterKind = 'project' | 'worker' | 'item' | 'party' | 'stage' | 'coeff'
+export type MasterKind = 'project' | 'worker' | 'item' | 'party' | 'stage' | 'coeff' | 'bill'
 
 export interface Master {
   id: ID
@@ -64,7 +64,24 @@ export interface Coeff extends Master {
   per_sqft: number
 }
 
-export type AnyMaster = Project | Worker | Item | Party | Stage | Coeff
+/* A payment he knows is coming: rent on the 5th, a school fee, the electricity
+   bill, money promised to a person on a date. It is a master and not a ledger
+   entry on purpose — a reminder has a life (move the date, mark it paid, let a
+   monthly one come round again), and ledger entries are append-only. Paying it
+   writes a real money row; this only ever remembers that it is due. */
+export interface Bill extends Master {
+  kind: 'bill'
+  name_bn: string        // what it is
+  to_bn: string          // who it goes to
+  amount: number
+  due_date: string       // YYYY-MM-DD
+  repeat: 'once' | 'monthly'
+  personal: boolean      // his own book, or the business
+  paid_on: string        // '' while it is still owed
+  note: string
+}
+
+export type AnyMaster = Project | Worker | Item | Party | Stage | Coeff | Bill
 
 /* ---- the ledger ---- */
 
@@ -155,6 +172,7 @@ export const SHEET_COLUMNS: Record<string, string[]> = {
   Parties: ['id', 'name_bn', 'ptype', 'terms_days', 'phone', 'updated_at'],
   Stages: ['id', 'project_type', 'seq', 'name_bn', 'weight', 'updated_at'],
   Coefficients: ['id', 'project_type', 'item_id', 'per_sqft', 'updated_at'],
+  Bills: ['id', 'name_bn', 'to_bn', 'amount', 'due_date', 'repeat', 'personal', 'paid_on', 'note', 'updated_at'],
   Day: ['id', 'batch', 'date', 'project_id', 'cash_counted', 'cash_computed', 'note', 'reverses', 'created_at'],
   Attendance: ['id', 'batch', 'date', 'project_id', 'worker_id', 'presence', 'days', 'rate', 'amount', 'advance', 'reverses', 'created_at'],
   Stock: ['id', 'batch', 'date', 'project_id', 'item_id', 'dir', 'qty', 'rate', 'amount', 'party_id', 'due_date', 'paid', 'photo_id', 'reverses', 'created_at'],
@@ -167,6 +185,7 @@ const TAB_FOR_KIND: Record<EntryKind, string> = {
 }
 const TAB_FOR_MASTER: Record<MasterKind, string> = {
   project: 'Projects', worker: 'Workers', item: 'Items', party: 'Parties', stage: 'Stages', coeff: 'Coefficients',
+  bill: 'Bills',
 }
 
 function cell(v: unknown): string | number | boolean {

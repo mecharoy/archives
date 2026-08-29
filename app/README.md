@@ -79,6 +79,41 @@ npm run apk
 Free tier covers this many times over: 100k Worker requests/day and 5M D1 row
 reads, 100k writes, 5 GB. A busy day here is about fifty writes.
 
+## Your dashboard
+
+Open the Worker's root URL, paste the admin token once, and it stays signed
+in. **The period is a week** — the last seven days, with the seven before them
+alongside for comparison. A month was too long to act on: by the time a
+monthly figure looks wrong, three weeks of it are already spent.
+
+Four panels answer "where did the week go":
+
+| Panel | What it answers |
+|---|---|
+| **By head** | What site money went on — cart hire, machine hire, tea, repairs |
+| **By shop** | Which supplier the material came from, and what is still unpaid to them |
+| **By man** | Who worked, how many days, what he was paid and what he took as an advance |
+| **By material** | What was bought, in his own units, and whether the rate he paid moved |
+
+Each row carries its four-week figure underneath, so "high" and "higher than
+usual" are visibly different questions. The bars are sized against the biggest
+row in the panel — the eye finds the problem before it reads a number.
+
+**His own book** gets its own two panels: household spending by head, with
+money taken out of the business reported separately (a transfer, never a
+household expense — counting it as one would double it), and the dates he has
+written down for himself.
+
+**Job by job** gives each live site its own card: what it cost this week,
+wages against material, man-days, what came in, which stage the men are on,
+cost per square foot, and how much it has earned that he has not been paid
+for. Under that, where that job's money went and what was bought for it —
+because "spending is ahead of the work" is only useful with "on what".
+
+The header line says how many days are recorded and how many rows they rest
+on. A confident reading off nine rows is worse than no reading, and that line
+is how you know which one you are looking at.
+
 ## The nightly brief
 
 It runs itself. A scheduled task on the Windows machine wakes at 22:30, reads
@@ -211,6 +246,21 @@ Switch to English, enter a week, switch back, and the rows are identical byte
 for byte — there is a test that asserts exactly that. A string with no English
 of its own falls back to Bengali rather than to a blank, so adding a screen can
 never break the English build. English lives in one file, `src/lib/en.ts`.
+
+**দিতে হবে** — the dates he sets for himself, inside his own book behind the
+passcode. Rent on the 5th, a school fee, the electricity bill, money promised
+to a person: a name, a who, an amount, a date, and whether it comes round
+every month. It shows what is overdue and what is coming, the phone speaks up
+on the morning it matters, and pressing **দিয়ে দিয়েছি** writes the expense
+into his book for him — so a reminder is never a sticky note that leaves the
+month's spending wrong. A monthly one closes and reappears on the same day
+next month, pulled back when that month is short. Paid ones are kept, not
+deleted; they are his own history.
+
+A bill is a master, not a ledger row, which is the whole reason this works: a
+reminder has a life — move the date, correct the amount, mark it paid — and
+ledger rows are append-only by design. The money only ever becomes a fact at
+the moment he says he paid it.
 
 **আজকের হিসাব** — the eight-screen wizard. Big type, one decision a screen, a
 `৩ / ৭` counter so he can see the end, a back arrow that never loses what he
@@ -361,6 +411,7 @@ his hand keeps working and simply starts again from empty.
                    History · Settings · Onboarding
     src/ui/        kit (icons, keypad, sheets) · charts
     server/        the Worker: routes, summary SQL, dashboard, schema, test.sh
+    src/lib/       … bills (dates he sets for himself)
     nightly/       run · compute (every number) · check (the guard) · prompt
     scripts/       make-icons · gen-schema · smoke · smoke-sync
                    check-dashboard · nightly-check · server-check

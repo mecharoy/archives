@@ -23,9 +23,12 @@ const SUMMARY = {
     dues_total: 62000, dues_overdue: 12400, dues_this_week: 8000,
     receivable_total: 25000, receivable_overdue: 0, receivable_this_week: 25000,
     shop_stock_value: 14000,
-    spend_this_month: 210000, wages_this_month: 84000,
-    received_this_month: 150000, drawings_this_month: 20000,
+    spend_this_week: 52000, wages_this_week: 21000, material_this_week: 28000,
+    other_this_week: 3000, received_this_week: 40000, drawings_this_week: 5000,
+    spend_prev_week: 40000, wages_prev_week: 18000, received_prev_week: 0,
+    spend_change_pct: 30,
     entries_last_3_days: 2, last_entry_date: '2026-08-28',
+    days_entered_this_week: 6, days_entered_prev_week: 7,
     active_projects: 1, workers_active: 6,
   },
   projects: [{
@@ -38,6 +41,11 @@ const SUMMARY = {
     burn: [{ item_bn: 'রড', used: 4.2, est: 3.6, pct: 116, status: 'crit' }],
     spend: { days: [0, 30, 60, 89], cum: [0, 210000, 520000, 840000] },
   }],
+  bills: {
+    personal: { total: 9000, overdue: 4000, this_week: 5000, count: 2 },
+    business: { total: 0, overdue: 0, this_week: 0, count: 0 },
+    list: [{ name_bn: 'ঘরভাড়া', to_bn: 'বাড়িওয়ালা', amount: 4000, due_date: '2026-08-27', repeat: 'monthly', personal: true, days_away: -2, overdue: true }],
+  },
 }
 
 /* ---------- the numbers ---------- */
@@ -53,6 +61,13 @@ ck('overdue dues are critical', base.cards[1].status, 'crit')
 ck('nothing overdue to him is only a warning', base.cards[2].status, 'warn')
 ck('both languages on every card', base.cards.every((c) => c.label_bn && c.label_en && c.sub_bn && c.sub_en), 'true')
 
+const spendCard = base.cards.find((c) => c.label_en === 'Spent this week')
+ck('the spend card is a week, not a month', Boolean(spendCard), 'true')
+ck('and it says how the week compares', spendCard.sub_en, '30% more than the week before')
+const billCard = base.cards.find((c) => c.label_en === 'His own dates')
+ck('an overdue date he set reaches the cards', billCard.status, 'crit')
+ck('showing the overdue amount, not the total', billCard.value, '₹4,000')
+
 ck('cpi under 1 makes the job critical', base.projects[0].status, 'crit')
 ck('percentages are whole numbers', base.projects[0].pct_spent, 47)
 
@@ -63,7 +78,7 @@ ck('plan is the straight line his budget describes', sc.plan.map((x) => Math.rou
 ck('burn is carried through', base.series.burn[0].pct, 116)
 
 /* An empty ledger must still produce a brief, not a crash. */
-const EMPTY = { business: { cash_counted: null, cash_variance: null, dues_total: 0, dues_overdue: 0, dues_this_week: 0, receivable_total: 0, receivable_overdue: 0, receivable_this_week: 0, shop_stock_value: 0, spend_this_month: 0, wages_this_month: 0, entries_last_3_days: 0, last_entry_date: null }, projects: [] }
+const EMPTY = { business: { cash_counted: null, cash_variance: null, dues_total: 0, dues_overdue: 0, dues_this_week: 0, receivable_total: 0, receivable_overdue: 0, receivable_this_week: 0, shop_stock_value: 0, spend_this_week: 0, wages_this_week: 0, spend_change_pct: null, entries_last_3_days: 0, last_entry_date: null }, projects: [] }
 const bare = skeleton(EMPTY)
 ck('an empty ledger still makes cards', bare.cards.length > 0, 'true')
 ck('an uncounted till says so', bare.cards[0].sub_en, 'not counted yet')

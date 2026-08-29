@@ -232,6 +232,51 @@ await step('personal book with pin', async () => {
   await tap('সেভ করুন')
   await page.waitForTimeout(500)
 })
+/* The whole point of the reminder: he writes a date down once, and the app
+   both shows it coming and, when he pays, books the expense for him — so the
+   money lands in his own book without him typing it a second time. */
+await step('a date he sets for himself', async () => {
+  await home()
+  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
+  await page.getByText('দিতে হবে').first().waitFor({ timeout: 3000 })
+  await page.locator('.chip', { hasText: 'নতুন তারিখ' }).click()
+  await page.locator('.sheet input.input').first().fill('ঘরভাড়া')
+  await page.locator('.sheet input.input').nth(1).fill('বাড়িওয়ালা')
+  await page.locator('.sheet input.input').nth(2).fill('4000')
+  await page.locator('.sheet .chip', { hasText: 'আজ' }).first().click()
+  await page.locator('.sheet .btn.primary').click()
+  await page.waitForTimeout(600)
+})
+
+await step('it shows as due today', async () => {
+  const row = page.locator('.pick', { hasText: 'ঘরভাড়া' }).first()
+  await row.waitFor({ timeout: 3000 })
+  const txt = await row.innerText()
+  if (!/আজই/.test(txt)) throw new Error('the reminder does not say it is due today: ' + txt)
+  if (!/৪,০০০/.test(txt)) throw new Error('the reminder does not carry the amount: ' + txt)
+})
+
+/* Paying it must write a real expense row — otherwise the reminder is a
+   sticky note and the month's spending is wrong. */
+await step('paying it books the expense on its own', async () => {
+  const before = await page.locator('.review-row').count()
+  await page.locator('.pick', { hasText: 'ঘরভাড়া' }).first().click()
+  await tap('দিয়ে দিয়েছি')
+  await page.waitForTimeout(800)
+  const after = await page.locator('.review-row').count()
+  if (after <= before) throw new Error('paying the reminder wrote no expense row')
+  const list = await page.locator('.review-row').first().innerText()
+  if (!/ঘরভাড়া/.test(list)) throw new Error('the expense is not under its own name: ' + list)
+})
+
+await step('and it stops asking', async () => {
+  const still = await page.locator('.pick', { hasText: 'ঘরভাড়া' }).count()
+  /* Monthly, so exactly one comes back — next month, not this one. */
+  const txt = still ? await page.locator('.pick', { hasText: 'ঘরভাড়া' }).first().innerText() : ''
+  if (/আজই/.test(txt)) throw new Error('the paid reminder is still asking for today')
+})
+
 await step('a credit sale becomes a receivable', async () => {
   await home()
   await page.locator('.tabs .tab', { hasText: 'মজুত' }).click()

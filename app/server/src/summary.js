@@ -1,11 +1,22 @@
-/* The forty-odd numbers the nightly run reads.
-   These are computed here, once, from the stored rows — never sent up by the
-   phone and never re-derived by a model. Reversal rows carry negative amounts,
-   so the money sums net out on their own; only the stage percentage needs to
-   know that a reversed row is cancelled, and that is the one thing done in
-   JavaScript rather than SQL. */
+/* Everything the dashboard and the nightly run read.
 
-const MONTH_START = "date(strftime('%Y-%m-01','now','localtime'))"
+   All of it is computed here, once, from the stored rows — never sent up by
+   the phone and never re-derived by a model. Reversal rows carry negative
+   amounts, so the money sums net out on their own; only the stage percentage
+   needs to know that a reversed row is cancelled, and that is the one thing
+   done in JavaScript rather than SQL.
+
+   The reporting period is a WEEK — the last seven days including today, with
+   the seven before it alongside for comparison. A month is too long to act
+   on: by the time a monthly figure looks wrong, three weeks of it are already
+   spent. Where a monthly figure genuinely reads better it is labelled
+   `last_28_days`, never "this month", so nobody mistakes it for a calendar
+   month that resets on the 1st. */
+
+const WEEK = "date('now','localtime','-6 day')"        // last 7 days, today included
+const PREV_FROM = "date('now','localtime','-13 day')"  // the 7 before that
+const PREV_TO = "date('now','localtime','-7 day')"
+const M28 = "date('now','localtime','-27 day')"        // four whole weeks
 
 async function one(db, sql, ...args) {
   const row = await db.prepare(sql).bind(...args).first()
@@ -21,6 +32,11 @@ async function all(db, sql, ...args) {
    Kept identical to the app's SETTLE_HEAD; if one side ever changes it, the
    dashboard starts double-counting and the tests here say so. */
 const SETTLE_HEAD = 'বাকি মেটানো'
+
+/* Money moved from the business into the household. Not a household expense
+   and not a business cost — a transfer, and it has to be kept out of both
+   or it is counted twice. */
+const DRAWING_HEAD = 'ব্যবসা থেকে নেওয়া'
 
 const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
@@ -53,8 +69,12 @@ function net(rows, settlements, dir) {
 const round = (v) => Math.round(n(v) * 100) / 100
 
 export async function buildSummary(db, hid) {
-  const [projects, stages, progress, lastCount, openRows, settlements, monthly, activity, stock] = await Promise.all([
-    all(db, 'SELECT id, name_bn, ptype, budget, area_sqft, start_date, plan_days, status FROM projects WHERE household_id = ?1 ORDER BY status, name_bn', hid),
+  const [
+    projects, stages, progress, lastCount, openRows, settlements,
+    thisWeek, prevWeek, activity, stock,
+    heads, suppliers, workmen, goods, personalRows, personalTotals, counts, billRows,
+  ] = await Promise.all([
+    all(db, 'SELECT id, name_bn, client_bn, ptype, budget, area_sqft, start_date, plan_days, status FROM projects WHERE household_id = ?1 ORDER BY status, name_bn', hid),
     all(db, 'SELECT project_type, seq, name_bn, weight FROM stages WHERE household_id = ?1 ORDER BY project_type, seq', hid),
     all(db, 'SELECT id, project_id, stage_seq, state, reverses FROM progress WHERE household_id = ?1', hid),
     one(db, `SELECT cash_counted, cash_computed, date FROM day
@@ -69,22 +89,16 @@ export async function buildSummary(db, hid) {
     all(db, `SELECT party_id, dir, COALESCE(SUM(amount),0) AS amount
              FROM money WHERE household_id = ?1 AND personal = 0 AND head_bn = ?2
              GROUP BY party_id, dir`, hid, SETTLE_HEAD),
-    one(db, `SELECT
-               (SELECT COALESCE(SUM(amount),0) FROM attendance
-                 WHERE household_id = ?1 AND date >= ${MONTH_START}) AS wages,
-               (SELECT COALESCE(SUM(amount),0) FROM stock
-                 WHERE household_id = ?1 AND date >= ${MONTH_START} AND dir IN ('in','transfer')) AS material,
-               (SELECT COALESCE(SUM(amount),0) FROM money
-                 WHERE household_id = ?1 AND date >= ${MONTH_START} AND dir = 'paid' AND personal = 0
-                   AND head_bn <> '${SETTLE_HEAD}') AS other,
-               (SELECT COALESCE(SUM(amount),0) FROM money
-                 WHERE household_id = ?1 AND date >= ${MONTH_START} AND dir = 'received' AND personal = 0) AS received,
-               (SELECT COALESCE(SUM(amount),0) FROM money
-                 WHERE household_id = ?1 AND date >= ${MONTH_START} AND personal = 1
-                   AND head_bn = 'ব্যবসা থেকে নেওয়া') AS drawings`, hid),
+
+    periodTotals(db, hid, `date >= ${WEEK}`),
+    periodTotals(db, hid, `date >= ${PREV_FROM} AND date < ${PREV_TO}`),
+
     one(db, `SELECT
                (SELECT COUNT(*) FROM day WHERE household_id = ?1
                  AND date >= date('now','localtime','-2 day')) AS last3,
+               (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1 AND date >= ${WEEK}) AS days_week,
+               (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1
+                 AND date >= ${PREV_FROM} AND date < ${PREV_TO}) AS days_prev,
                (SELECT MAX(date) FROM day WHERE household_id = ?1) AS last_date,
                (SELECT COUNT(*) FROM projects WHERE household_id = ?1 AND status = 'active') AS active,
                (SELECT COUNT(*) FROM workers WHERE household_id = ?1 AND active = 1) AS men`, hid),
@@ -92,6 +106,90 @@ export async function buildSummary(db, hid) {
                COALESCE(SUM(CASE WHEN project_id = '' AND dir = 'in' THEN amount ELSE 0 END), 0)
              - COALESCE(SUM(CASE WHEN dir IN ('sale','transfer') THEN amount ELSE 0 END), 0) AS value
              FROM stock WHERE household_id = ?1`, hid),
+
+    /* ---- the four breakdowns, over the week ---- */
+
+    // What the site money went on, biggest first. Settling an old bill is not
+    // a cost and is excluded, or every payment week would look like a spree.
+    all(db, `SELECT head_bn,
+                    COALESCE(SUM(CASE WHEN date >= ${WEEK} THEN amount ELSE 0 END), 0) AS week,
+                    COALESCE(SUM(amount), 0) AS last_28_days,
+                    COUNT(*) AS times
+             FROM money
+             WHERE household_id = ?1 AND personal = 0 AND dir = 'paid'
+               AND head_bn <> ?2 AND date >= ${M28}
+             GROUP BY head_bn HAVING last_28_days <> 0 ORDER BY week DESC, last_28_days DESC LIMIT 12`, hid, SETTLE_HEAD),
+
+    // Which shop the material came from, and what is still unpaid to them.
+    all(db, `SELECT COALESCE(p.name_bn, '(নাম নেই)') AS name_bn, s.party_id,
+                    COALESCE(SUM(CASE WHEN s.date >= ${WEEK} THEN s.amount ELSE 0 END), 0) AS week,
+                    COALESCE(SUM(s.amount), 0) AS last_28_days,
+                    COALESCE(SUM(CASE WHEN s.paid = 0 THEN s.amount ELSE 0 END), 0) AS unpaid,
+                    COUNT(*) AS times
+             FROM stock s LEFT JOIN parties p ON p.household_id = s.household_id AND p.id = s.party_id
+             WHERE s.household_id = ?1 AND s.dir IN ('in','transfer') AND s.date >= ${M28}
+             GROUP BY s.party_id ORDER BY week DESC, last_28_days DESC LIMIT 10`, hid),
+
+    // Who worked, how many days, what they were paid, what they took as advance.
+    all(db, `SELECT COALESCE(w.name_bn, '(নাম নেই)') AS name_bn, a.worker_id,
+                    COALESCE(SUM(CASE WHEN a.date >= ${WEEK} THEN a.days ELSE 0 END), 0) AS days_week,
+                    COALESCE(SUM(CASE WHEN a.date >= ${WEEK} THEN a.amount ELSE 0 END), 0) AS paid_week,
+                    COALESCE(SUM(CASE WHEN a.date >= ${WEEK} THEN a.advance ELSE 0 END), 0) AS advance_week,
+                    COALESCE(SUM(a.days), 0) AS days_28
+             FROM attendance a LEFT JOIN workers w ON w.household_id = a.household_id AND w.id = a.worker_id
+             WHERE a.household_id = ?1 AND a.date >= ${M28}
+             GROUP BY a.worker_id ORDER BY paid_week DESC, days_28 DESC LIMIT 25`, hid),
+
+    // What was actually bought, in his own units.
+    all(db, `SELECT COALESCE(i.name_bn, '(নাম নেই)') AS name_bn, COALESCE(i.unit_bn, '') AS unit_bn,
+                    COALESCE(SUM(CASE WHEN s.date >= ${WEEK} THEN s.qty ELSE 0 END), 0) AS qty_week,
+                    COALESCE(SUM(CASE WHEN s.date >= ${WEEK} THEN s.amount ELSE 0 END), 0) AS week,
+                    COALESCE(SUM(s.amount), 0) AS last_28_days,
+                    MAX(s.rate) AS top_rate, MIN(s.rate) AS low_rate
+             FROM stock s LEFT JOIN items i ON i.household_id = s.household_id AND i.id = s.item_id
+             WHERE s.household_id = ?1 AND s.dir IN ('in','transfer') AND s.date >= ${M28}
+             GROUP BY s.item_id ORDER BY week DESC, last_28_days DESC LIMIT 12`, hid),
+
+    /* ---- the household book ---- */
+
+    // His own spending, by head. Money taken out of the business is a
+    // transfer, not a household expense, and is reported on its own below.
+    all(db, `SELECT head_bn,
+                    COALESCE(SUM(CASE WHEN date >= ${WEEK} THEN amount ELSE 0 END), 0) AS week,
+                    COALESCE(SUM(amount), 0) AS last_28_days,
+                    COUNT(*) AS times
+             FROM money
+             WHERE household_id = ?1 AND personal = 1 AND dir = 'paid'
+               AND head_bn <> ?2 AND date >= ${M28}
+             GROUP BY head_bn HAVING last_28_days <> 0 ORDER BY last_28_days DESC LIMIT 12`, hid, DRAWING_HEAD),
+
+    one(db, `SELECT
+               (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
+                 AND personal = 1 AND dir = 'paid' AND head_bn <> '${DRAWING_HEAD}' AND date >= ${WEEK}) AS spent_week,
+               (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
+                 AND personal = 1 AND dir = 'paid' AND head_bn <> '${DRAWING_HEAD}' AND date >= ${M28}) AS spent_28,
+               (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
+                 AND personal = 1 AND dir = 'paid' AND head_bn <> '${DRAWING_HEAD}'
+                 AND date >= ${PREV_FROM} AND date < ${PREV_TO}) AS spent_prev,
+               (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
+                 AND personal = 1 AND head_bn = '${DRAWING_HEAD}' AND date >= ${WEEK}) AS drawn_week,
+               (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
+                 AND personal = 1 AND head_bn = '${DRAWING_HEAD}' AND date >= ${M28}) AS drawn_28`, hid),
+
+    one(db, `SELECT
+               (SELECT COUNT(*) FROM day WHERE household_id = ?1) AS days,
+               (SELECT COUNT(*) FROM attendance WHERE household_id = ?1) AS attendance,
+               (SELECT COUNT(*) FROM stock WHERE household_id = ?1) AS stock,
+               (SELECT COUNT(*) FROM money WHERE household_id = ?1) AS money,
+               (SELECT COUNT(*) FROM money WHERE household_id = ?1 AND personal = 1) AS personal,
+               (SELECT COUNT(*) FROM progress WHERE household_id = ?1) AS progress,
+               (SELECT MIN(date) FROM day WHERE household_id = ?1) AS first_date`, hid),
+
+    /* Payments he has written down himself — rent, a fee, a promise to a
+       person. Unpaid ones only: a paid one is history, not a warning. */
+    all(db, `SELECT name_bn, to_bn, amount, due_date, repeat, personal, note
+             FROM bills WHERE household_id = ?1 AND COALESCE(paid_on,'') = ''
+             ORDER BY due_date LIMIT 40`, hid),
   ])
 
   const perProject = []
@@ -100,7 +198,12 @@ export async function buildSummary(db, hid) {
         (SELECT COALESCE(SUM(amount),0) FROM attendance WHERE household_id = ?1 AND project_id = ?2) AS labour,
         (SELECT COALESCE(SUM(amount),0) FROM stock WHERE household_id = ?1 AND project_id = ?2 AND dir IN ('in','transfer')) AS material,
         (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0) AS other,
-        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'received' AND personal = 0) AS received`,
+        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'received' AND personal = 0) AS received,
+        (SELECT COALESCE(SUM(amount),0) FROM attendance WHERE household_id = ?1 AND project_id = ?2 AND date >= ${WEEK}) AS labour_week,
+        (SELECT COALESCE(SUM(amount),0) FROM stock WHERE household_id = ?1 AND project_id = ?2 AND dir IN ('in','transfer') AND date >= ${WEEK}) AS material_week,
+        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0 AND date >= ${WEEK}) AS other_week,
+        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'received' AND personal = 0 AND date >= ${WEEK}) AS received_week,
+        (SELECT COALESCE(SUM(days),0) FROM attendance WHERE household_id = ?1 AND project_id = ?2 AND date >= ${WEEK}) AS mandays_week`,
       hid, p.id)
 
     const cost = n(t.labour) + n(t.material) + n(t.other)
@@ -115,6 +218,7 @@ export async function buildSummary(db, hid) {
     perProject.push({
       id: p.id,
       name_bn: p.name_bn,
+      client_bn: p.client_bn || null,
       status: p.status,
       // The planned line is drawn from these two and nothing else.
       start_date: p.start_date || null,
@@ -126,17 +230,41 @@ export async function buildSummary(db, hid) {
       other: round(t.other),
       cost: round(cost),
       received: round(t.received),
+      unbilled: round(earned - n(t.received)),
       pct_done: round(pct_done),
       pct_spent: round(pct_spent),
       earned: round(earned),
       cpi: cpi == null ? null : Math.round(cpi * 1000) / 1000,
       at_finish: at_finish == null ? null : round(at_finish),
       profit: at_finish == null || budget <= 0 ? null : round(budget - at_finish),
+      cost_per_sqft: n(p.area_sqft) > 0 ? round(cost / n(p.area_sqft)) : null,
+      // What happened on this job in the last seven days, so a week that went
+      // quiet on one site is visible even while the totals still look fine.
+      week: {
+        labour: round(t.labour_week),
+        material: round(t.material_week),
+        other: round(t.other_week),
+        received: round(t.received_week),
+        spend: round(n(t.labour_week) + n(t.material_week) + n(t.other_week)),
+        mandays: round(t.mandays_week),
+      },
+      stage_now_bn: currentStage(p, stages, progress),
+      days_running: p.start_date ? daysBetween(p.start_date) : null,
       flag_bn: budget <= 0 ? 'বাজেট দেওয়া নেই'
         : gap > 15 ? 'খরচ কাজের অনেক আগে'
         : gap > 6 ? 'খরচ কাজের থেকে এগিয়ে'
         : 'ঠিক আছে',
       burn: await burn(db, hid, p, pct_done),
+      // Where this job's money actually went, so "spending is ahead" can be
+      // followed by "on what".
+      heads: await all(db, `SELECT head_bn, COALESCE(SUM(amount),0) AS amount, COUNT(*) AS times
+             FROM money WHERE household_id = ?1 AND project_id = ?2 AND personal = 0 AND dir = 'paid'
+             GROUP BY head_bn HAVING amount <> 0 ORDER BY amount DESC LIMIT 10`, hid, p.id),
+      items: await all(db, `SELECT COALESCE(i.name_bn,'(নাম নেই)') AS name_bn, COALESCE(i.unit_bn,'') AS unit_bn,
+                    COALESCE(SUM(s.qty),0) AS qty, COALESCE(SUM(s.amount),0) AS amount
+             FROM stock s LEFT JOIN items i ON i.household_id = s.household_id AND i.id = s.item_id
+             WHERE s.household_id = ?1 AND s.project_id = ?2 AND s.dir IN ('in','transfer')
+             GROUP BY s.item_id ORDER BY amount DESC LIMIT 12`, hid, p.id),
       // The spend curve, so the chart on his phone is drawn from rows rather
       // than guessed by a model that has only totals to work from.
       spend: await spendCurve(db, hid, p),
@@ -149,13 +277,24 @@ export async function buildSummary(db, hid) {
   const dues = net(openRows.filter((r) => r.dir === 'in' || r.dir === 'transfer'), settlements, 'paid')
   const owed = net(openRows.filter((r) => r.dir === 'sale'), settlements, 'received')
 
+  const spendWeek = n(thisWeek.wages) + n(thisWeek.material) + n(thisWeek.other)
+  const spendPrev = n(prevWeek.wages) + n(prevWeek.material) + n(prevWeek.other)
+
   return {
     generated_at: new Date().toISOString(),
+    period: {
+      unit: 'week',
+      from: isoDaysAgo(6),
+      to: isoDaysAgo(0),
+      prev_from: isoDaysAgo(13),
+      prev_to: isoDaysAgo(7),
+    },
     business: {
       cash_counted: counted,
       cash_counted_on: lastCount.date || null,
       cash_computed: computed,
       cash_variance: counted == null || computed == null ? null : round(counted - computed),
+      // "this week" on a due date means falling due in the next seven days.
       dues_total: round(dues.total),
       dues_overdue: round(dues.overdue),
       dues_this_week: round(dues.week),
@@ -163,18 +302,112 @@ export async function buildSummary(db, hid) {
       receivable_overdue: round(owed.overdue),
       receivable_this_week: round(owed.week),
       shop_stock_value: round(stock.value),
-      spend_this_month: round(n(monthly.wages) + n(monthly.material) + n(monthly.other)),
-      wages_this_month: round(monthly.wages),
-      received_this_month: round(monthly.received),
-      drawings_this_month: round(monthly.drawings),
+      // "this week" on a spend means the last seven days.
+      spend_this_week: round(spendWeek),
+      wages_this_week: round(thisWeek.wages),
+      material_this_week: round(thisWeek.material),
+      other_this_week: round(thisWeek.other),
+      received_this_week: round(thisWeek.received),
+      drawings_this_week: round(personalTotals.drawn_week),
+      spend_prev_week: round(spendPrev),
+      wages_prev_week: round(prevWeek.wages),
+      received_prev_week: round(prevWeek.received),
+      spend_change_pct: spendPrev > 0 ? round(((spendWeek - spendPrev) / spendPrev) * 100) : null,
       entries_last_3_days: n(activity.last3),
+      days_entered_this_week: n(activity.days_week),
+      days_entered_prev_week: n(activity.days_prev),
       last_entry_date: activity.last_date || null,
       active_projects: n(activity.active),
       workers_active: n(activity.men),
     },
+    /* The four site breakdowns. Every row carries the week and the four-week
+       figure beside it, so "high" and "unusual" are different questions. */
+    breakdown: {
+      heads: heads.map((r) => ({ head_bn: r.head_bn, week: round(r.week), last_28_days: round(r.last_28_days), times: n(r.times) })),
+      suppliers: suppliers.map((r) => ({
+        name_bn: r.name_bn, week: round(r.week), last_28_days: round(r.last_28_days),
+        unpaid: round(r.unpaid), times: n(r.times),
+      })),
+      workers: workmen.map((r) => ({
+        name_bn: r.name_bn, days_week: round(r.days_week), paid_week: round(r.paid_week),
+        advance_week: round(r.advance_week), days_28: round(r.days_28),
+      })),
+      items: goods.map((r) => ({
+        name_bn: r.name_bn, unit_bn: r.unit_bn, qty_week: round(r.qty_week),
+        week: round(r.week), last_28_days: round(r.last_28_days),
+        // A rate that moved inside four weeks is worth a sentence.
+        rate_low: round(r.low_rate), rate_high: round(r.top_rate),
+      })),
+    },
+    /* Dates he has set for himself. Overdue first, because a missed rent day
+       is the one thing on this page that costs him a relationship. */
+    bills: billList(billRows),
+    /* His own book, kept apart from the business exactly as the app keeps it.
+       Drawings are a transfer out of the business, not a household expense,
+       so they are reported separately and never added to `spent`. */
+    personal: {
+      spent_this_week: round(personalTotals.spent_week),
+      spent_prev_week: round(personalTotals.spent_prev),
+      spent_last_28_days: round(personalTotals.spent_28),
+      drawn_this_week: round(personalTotals.drawn_week),
+      drawn_last_28_days: round(personalTotals.drawn_28),
+      // Taking out more than the household spends is not a problem; taking
+      // out less means the household is being fed from somewhere else.
+      heads: personalRows.map((r) => ({
+        head_bn: r.head_bn, week: round(r.week), last_28_days: round(r.last_28_days), times: n(r.times),
+      })),
+    },
+    /* How much ledger there is to reason over. A confident insight drawn from
+       nine rows is worse than no insight, and this is how the reader knows. */
+    coverage: {
+      days_recorded: n(counts.days),
+      first_entry_date: counts.first_date || null,
+      rows: {
+        attendance: n(counts.attendance), stock: n(counts.stock),
+        money: n(counts.money), personal: n(counts.personal), progress: n(counts.progress),
+      },
+    },
     projects: perProject,
   }
 }
+
+/** Bills he has written down, split into the two books and the three urgencies. */
+function billList(rows) {
+  const today = new Date().toISOString().slice(0, 10)
+  const week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+  const shape = (r) => ({
+    name_bn: r.name_bn, to_bn: r.to_bn || null, amount: round(r.amount),
+    due_date: r.due_date, repeat: r.repeat || 'once',
+    personal: Boolean(r.personal),
+    days_away: Math.round((Date.parse(r.due_date + 'T00:00:00Z') - Date.parse(today + 'T00:00:00Z')) / 86400000),
+    overdue: r.due_date < today,
+  })
+  const all = rows.map(shape)
+  const sum = (list) => round(list.reduce((a, x) => a + n(x.amount), 0))
+  const split = (personal) => {
+    const mine = all.filter((x) => x.personal === personal)
+    const late = mine.filter((x) => x.overdue)
+    const soon = mine.filter((x) => !x.overdue && x.due_date <= week)
+    return { total: sum(mine), overdue: sum(late), this_week: sum(soon), count: mine.length }
+  }
+  return { personal: split(true), business: split(false), list: all.slice(0, 25) }
+}
+
+/** Wages, material and site expenses over one date range. */
+async function periodTotals(db, hid, where) {
+  return one(db, `SELECT
+      (SELECT COALESCE(SUM(amount),0) FROM attendance WHERE household_id = ?1 AND ${where}) AS wages,
+      (SELECT COALESCE(SUM(amount),0) FROM stock
+        WHERE household_id = ?1 AND ${where} AND dir IN ('in','transfer')) AS material,
+      (SELECT COALESCE(SUM(amount),0) FROM money
+        WHERE household_id = ?1 AND ${where} AND dir = 'paid' AND personal = 0
+          AND head_bn <> '${SETTLE_HEAD}') AS other,
+      (SELECT COALESCE(SUM(amount),0) FROM money
+        WHERE household_id = ?1 AND ${where} AND dir = 'received' AND personal = 0) AS received`, hid)
+}
+
+const isoDaysAgo = (d) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10)
+const daysBetween = (from) => Math.max(0, Math.round((Date.now() - Date.parse(from + 'T00:00:00Z')) / 86400000))
 
 /** Stage weights, with reversed rows cancelled. Half counts half. */
 function stagePercent(project, stages, progress) {
@@ -182,15 +415,7 @@ function stagePercent(project, stages, progress) {
   if (!mine.length) return 0
   const total = mine.reduce((a, s) => a + n(s.weight), 0) || 100
 
-  const reversed = new Set(progress.filter((r) => r.reverses).map((r) => r.reverses))
-  const live = progress.filter((r) => r.project_id === project.id && !r.reverses && !reversed.has(r.id))
-
-  const best = new Map()
-  for (const r of live) {
-    if (best.get(r.stage_seq) === 'done') continue
-    if (best.get(r.stage_seq) === 'half' && r.state === 'half') continue
-    best.set(r.stage_seq, r.state)
-  }
+  const best = bestStates(project, progress)
   let done = 0
   for (const s of mine) {
     const state = best.get(s.seq)
@@ -198,6 +423,28 @@ function stagePercent(project, stages, progress) {
     else if (state === 'half') done += n(s.weight) / 2
   }
   return Math.min(100, (done / total) * 100)
+}
+
+/** The first stage not finished — what the men are actually on right now. */
+function currentStage(project, stages, progress) {
+  const mine = stages.filter((s) => s.project_type === project.ptype).sort((a, b) => n(a.seq) - n(b.seq))
+  if (!mine.length) return null
+  const best = bestStates(project, progress)
+  for (const s of mine) if (best.get(s.seq) !== 'done') return s.name_bn
+  return null // every stage done
+}
+
+/** The best state reached per stage, with reversed rows cancelled. */
+function bestStates(project, progress) {
+  const reversed = new Set(progress.filter((r) => r.reverses).map((r) => r.reverses))
+  const live = progress.filter((r) => r.project_id === project.id && !r.reverses && !reversed.has(r.id))
+  const best = new Map()
+  for (const r of live) {
+    if (best.get(r.stage_seq) === 'done') continue
+    if (best.get(r.stage_seq) === 'half' && r.state === 'half') continue
+    best.set(r.stage_seq, r.state)
+  }
+  return best
 }
 
 /* Money actually spent on one job, day by day, added up as it goes.

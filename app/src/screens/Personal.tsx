@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
-import { Icon, TopBar, Chip, MoneyPad, useToast, Toast, Empty } from '../ui/kit'
-import { useStore, saveEntries, saveSettings, noteChip } from '../lib/store'
+import { Icon, TopBar, Chip, Pick, Sheet, Field, NumField, MoneyPad, useToast, Toast, Empty } from '../ui/kit'
+import { useStore, saveEntries, saveMaster, saveSettings, noteChip, allBills } from '../lib/store'
 import { uid } from '../lib/db'
-import { money, isoDate, dayLabelBn } from '../lib/bn'
-import { MONEY_HEADS_PERSONAL, PAY_MODES, type MoneyEntry } from '../lib/model'
+import { money, toBn, isoDate, dateBn, dayLabelBn, addDays } from '../lib/bn'
+import { MONEY_HEADS_PERSONAL, PAY_MODES, type Bill, type MoneyEntry } from '../lib/model'
 import { rankHeads, amountChips } from '../lib/suggest'
 import { DRAWING_HEAD, liveEntries } from '../lib/calc'
+import { openBills, billTotals, blankBill, payBill, daysAway, isOverdue } from '../lib/bills'
 import { hashPin, checkPin } from '../lib/pin'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
@@ -17,6 +18,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
   const [wrong, setWrong] = useState(false)
   const [setting, setSetting] = useState(false)
   const [adding, setAdding] = useState<null | 'expense' | 'drawing'>(null)
+  const [bill, setBill] = useState<Bill | null>(null)
   const toast = useToast()
 
   const rows = useMemo(() => {
@@ -79,6 +81,10 @@ export function Personal({ onBack }: { onBack: () => void }) {
           </button>
         </div>
 
+        <BillSection bills={openBills(allBills(s), true)}
+          onAdd={() => setBill(blankBill(true))}
+          onOpen={(b) => setBill(b)} />
+
         <p className="sectionlabel">{t("এ মাসের হিসাব")}</p>
         {rows.length === 0 && <Empty>{t("এ মাসে এখনও কিছু লেখা হয়নি।")}</Empty>}
         {rows.length > 0 && (
@@ -95,9 +101,120 @@ export function Personal({ onBack }: { onBack: () => void }) {
           {t("ব্যবসা থেকে নেওয়া টাকা ব্যবসার খরচ নয় — তাই কাজের হিসাবে এটা ধরা হয় না, শুধু হাতের টাকা কমে।")}
         </p>
       </div>
+      {bill && (
+        <BillSheet bill={bill} onClose={() => setBill(null)}
+          onSaved={(m) => { setBill(null); toast.show(m) }} />
+      )}
       {setting && <PinSheet onClose={() => setSetting(false)} onSaved={() => { setSetting(false); toast.show('পাসকোড সেভ হয়েছে') }} />}
       {toast.msg && <Toast text={toast.msg} />}
     </>
+  )
+}
+
+/* ---------- what is coming ----------
+
+   The one question this answers: is anything due before I next look at this
+   screen? So it leads with the overdue and the near, says the date in words,
+   and puts the amount where the eye already is. Nothing is a total until he
+   asks — a list of five bills adding to a number he cannot pay this week is
+   not information, it is worry. */
+function BillSection({ bills, onAdd, onOpen }: {
+  bills: Bill[]; onAdd: () => void; onOpen: (b: Bill) => void
+}) {
+  const t2 = billTotals(bills, true)
+  return (
+    <>
+      <p className="sectionlabel">{t("দিতে হবে")}</p>
+      {bills.length === 0 && (
+        <Empty>{t("ঘরভাড়া, ইস্কুলের মাইনে, বিদ্যুৎ বিল — যা তারিখ ধরে দিতে হয়, একবার লিখে রাখলে সেদিন সকালে ফোন মনে করিয়ে দেবে।")}</Empty>
+      )}
+      {bills.length > 0 && (
+        <div className="rowlist">
+          {bills.slice(0, 6).map((b) => {
+            const away = daysAway(b)
+            const late = isOverdue(b)
+            return (
+              <Pick key={b.id}
+                title={b.name_bn + (b.to_bn ? ' — ' + b.to_bn : '')}
+                sub={late ? tf('{0} দিন পেরিয়ে গেছে', toBn(Math.abs(away)))
+                  : away === 0 ? t('আজই')
+                  : away === 1 ? t('কাল')
+                  : tf('{0} দিন পরে · {1}', toBn(away), dateBn(b.due_date))}
+                right={<span className="num" style={{ color: late ? 'var(--crit)' : undefined }}>{money(b.amount)}</span>}
+                onClick={() => onOpen(b)} />
+            )
+          })}
+        </div>
+      )}
+      <div className="chips" style={{ marginTop: '.6rem' }}>
+        <Chip onClick={onAdd}>{t('+ নতুন তারিখ')}</Chip>
+        {t2.overdue > 0 && <Chip sub={money(t2.overdue)}>{t('পেরিয়ে গেছে')}</Chip>}
+        {t2.week > 0 && <Chip sub={money(t2.week)}>{t('সাত দিনে')}</Chip>}
+      </div>
+    </>
+  )
+}
+
+/* Adding one, and paying it. Paying writes an ordinary expense row, so the
+   money shows up in the month exactly like anything he types by hand. */
+function BillSheet({ bill, onClose, onSaved }: {
+  bill: Bill; onClose: () => void; onSaved: (msg: string) => void
+}) {
+  const [b, setB] = useState<Bill>(bill)
+  const fresh = !bill.updated_at
+  const set = (p: Partial<Bill>) => setB({ ...b, ...p })
+  const ok = b.name_bn.trim() !== '' && (b.amount || 0) > 0 && b.due_date !== ''
+
+  const save = async () => {
+    await saveMaster({ ...b, name_bn: b.name_bn.trim(), to_bn: b.to_bn.trim(), updated_at: new Date().toISOString() })
+    scheduleSync(300)
+    onSaved(fresh ? 'মনে করিয়ে দেওয়া হবে' : 'সেভ হয়েছে')
+  }
+
+  return (
+    <Sheet title={fresh ? 'নতুন তারিখ' : b.name_bn} onClose={onClose}>
+      <Field label="কীসের টাকা">
+        <input className="input" value={b.name_bn} onChange={(e) => set({ name_bn: e.target.value })}
+          placeholder="যেমন — ঘরভাড়া" autoFocus />
+      </Field>
+      <div className="chips" style={{ margin: '-.5rem 0 .9rem' }}>
+        {MONEY_HEADS_PERSONAL.filter((h) => h !== 'অন্যান্য').map((h) => (
+          <Chip key={h} on={b.name_bn === h} onClick={() => set({ name_bn: h })}>{t(h)}</Chip>
+        ))}
+      </div>
+      <Field label="কাকে (ইচ্ছে হলে)">
+        <input className="input" value={b.to_bn} onChange={(e) => set({ to_bn: e.target.value })} />
+      </Field>
+      <Field label="কত টাকা"><NumField value={b.amount} onChange={(v) => set({ amount: v ?? 0 })} /></Field>
+      <Field label="কোন তারিখে">
+        <input className="input" type="date" value={b.due_date} onChange={(e) => set({ due_date: e.target.value })} />
+      </Field>
+      <div className="chips" style={{ margin: '-.5rem 0 .9rem' }}>
+        {[0, 1, 7, 30].map((d) => (
+          <Chip key={d} on={b.due_date === addDays(isoDate(), d)} onClick={() => set({ due_date: addDays(isoDate(), d) })}>
+            {d === 0 ? t('আজ') : d === 1 ? t('কাল') : tf('{0} দিন পরে', toBn(d))}
+          </Chip>
+        ))}
+      </div>
+      <Field label="কতবার">
+        <div className="chips">
+          <Chip on={b.repeat === 'once'} onClick={() => set({ repeat: 'once' })}>{t('একবারই')}</Chip>
+          <Chip on={b.repeat === 'monthly'} onClick={() => set({ repeat: 'monthly' })} sub={t('প্রতি মাসে এই তারিখে')}>{t('প্রতি মাসে')}</Chip>
+        </div>
+      </Field>
+      <button className="btn primary" disabled={!ok} style={{ marginTop: '.4rem', width: '100%' }} onClick={save}>
+        {t("সেভ করুন")}
+      </button>
+      {!fresh && (
+        <button className="btn" style={{ marginTop: '.6rem', width: '100%' }}
+          onClick={async () => { await payBill(b); onSaved('দেওয়া হয়েছে বলে লেখা হল') }}>
+          {t("দিয়ে দিয়েছি")}
+        </button>
+      )}
+      <p className="small muted" style={{ marginTop: '.8rem' }}>
+        {t("এটা শুধু মনে করিয়ে দেওয়ার জন্য। টাকা দেওয়ার দিন \"দিয়ে দিয়েছি\" চাপলে খরচটা নিজে থেকেই খাতায় উঠে যাবে।")}
+      </p>
+    </Sheet>
   )
 }
 

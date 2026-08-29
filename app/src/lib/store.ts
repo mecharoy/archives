@@ -4,7 +4,7 @@
 
 import { useSyncExternalStore } from 'react'
 import { dbAll, dbPut, dbPutMany, kvGet, kvSet, uid } from './db'
-import type { AnyMaster, Entry, Project, Worker, Item, Party, Stage, Coeff, ID } from './model'
+import type { AnyMaster, Entry, Project, Worker, Item, Party, Stage, Coeff, ID, Bill } from './model'
 import { rowForEntry, rowForMaster } from './model'
 import { isoDate } from './bn'
 import { setLang, t, type Lang } from './i18n'
@@ -144,6 +144,8 @@ export const allItems = (s: State) => s.masters.filter((m) => m.kind === 'item')
 export const parties = (s: State) => s.masters.filter((m) => m.kind === 'party') as Party[]
 export const stages = (s: State) => s.masters.filter((m) => m.kind === 'stage') as Stage[]
 export const coeffs = (s: State) => s.masters.filter((m) => m.kind === 'coeff') as Coeff[]
+/* Payments he knows are coming — rent, fees, a promise to a person. */
+export const allBills = (s: State) => s.masters.filter((m) => m.kind === 'bill') as Bill[]
 
 export function nameOf(s: State, id: ID): string {
   const m = s.masters.find((x) => x.id === id) as { name_bn?: string } | undefined

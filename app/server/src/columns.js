@@ -51,6 +51,18 @@ export const COLUMNS = {
     "per_sqft",
     "updated_at"
   ],
+  "Bills": [
+    "id",
+    "name_bn",
+    "to_bn",
+    "amount",
+    "due_date",
+    "repeat",
+    "personal",
+    "paid_on",
+    "note",
+    "updated_at"
+  ],
   "Day": [
     "id",
     "batch",

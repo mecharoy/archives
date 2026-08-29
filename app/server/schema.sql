@@ -91,6 +91,22 @@ CREATE TABLE IF NOT EXISTS coefficients (
   PRIMARY KEY (household_id, id)
 );
 
+CREATE TABLE IF NOT EXISTS bills (
+  household_id TEXT NOT NULL,
+  name_bn      TEXT,
+  to_bn        TEXT,
+  amount       REAL,
+  due_date     TEXT,
+  repeat       TEXT,
+  personal     INTEGER,
+  paid_on      TEXT,
+  note         TEXT,
+  updated_at   TEXT,
+  id           TEXT NOT NULL,
+  received_at  TEXT NOT NULL,
+  PRIMARY KEY (household_id, id)
+);
+
 CREATE TABLE IF NOT EXISTS day (
   household_id TEXT NOT NULL,
   batch        TEXT,

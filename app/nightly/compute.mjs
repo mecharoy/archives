@@ -33,7 +33,7 @@ export const money = (v) => '₹' + groupIndian(n(v))
 /* ---------- the cards ---------- */
 
 /* Six at most; the phone shows six. Order is deliberate: what he holds, what
-   is coming at him, what is coming to him, then the month. */
+   is coming at him, what is coming to him, then the week. */
 export function cards(sum) {
   const b = sum.business
   const out = []
@@ -83,12 +83,22 @@ export function cards(sum) {
     status: b.receivable_overdue > 0 ? 'crit' : b.receivable_this_week > 0 ? 'warn' : 'ok',
   })
 
+  /* A week, not a month. By the time a monthly figure looks wrong, three
+     weeks of it are already spent. The week before it sits underneath, so
+     "high" and "higher than usual" are visibly different questions. */
+  const change = b.spend_change_pct
   out.push({
-    label_bn: 'এ মাসের খরচ', label_en: 'Spent this month',
-    value: money(b.spend_this_month),
-    sub_bn: `মজুরি ${money(b.wages_this_month)}`,
-    sub_en: `${money(b.wages_this_month)} of it on wages`,
-    status: 'info',
+    label_bn: 'এ সপ্তাহের খরচ', label_en: 'Spent this week',
+    value: money(b.spend_this_week),
+    sub_bn: change == null ? `মজুরি ${money(b.wages_this_week)}`
+      : change > 0 ? `গত সপ্তাহের চেয়ে ${toBn(Math.abs(Math.round(change)))}% বেশি`
+      : change < 0 ? `গত সপ্তাহের চেয়ে ${toBn(Math.abs(Math.round(change)))}% কম`
+      : 'গত সপ্তাহের সমান',
+    sub_en: change == null ? `${money(b.wages_this_week)} of it on wages`
+      : change > 0 ? `${Math.abs(Math.round(change))}% more than the week before`
+      : change < 0 ? `${Math.abs(Math.round(change))}% less than the week before`
+      : 'level with the week before',
+    status: change != null && change > 60 ? 'warn' : 'info',
   })
 
   /* Stock below zero is not a small number — it means goods left the shop that
@@ -106,6 +116,19 @@ export function cards(sum) {
       label_bn: 'দোকানের মাল', label_en: 'Stock in the shop',
       value: money(b.shop_stock_value),
       sub_bn: 'বিক্রির জন্য পড়ে আছে', sub_en: 'sitting unsold', status: 'info',
+    })
+  }
+
+  /* Dates he set for himself — rent, a fee, a promise. Overdue first,
+     because that is the one that costs him a relationship, not just money. */
+  const bills = sum.bills && sum.bills.personal
+  if (bills && (bills.overdue > 0 || bills.this_week > 0)) {
+    out.push({
+      label_bn: 'নিজের দেওয়ার তারিখ', label_en: 'His own dates',
+      value: money(bills.overdue > 0 ? bills.overdue : bills.this_week),
+      sub_bn: bills.overdue > 0 ? 'তারিখ পেরিয়ে গেছে' : 'সাত দিনের মধ্যে দিতে হবে',
+      sub_en: bills.overdue > 0 ? 'past the date he set' : 'due within seven days',
+      status: bills.overdue > 0 ? 'crit' : 'warn',
     })
   }
 

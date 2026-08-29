@@ -10,10 +10,11 @@
    so a settled bill can never keep nagging. */
 
 import { openDues, openReceivables } from './calc'
+import { billReminders } from './bills'
 import { getState } from './store'
 import { isoDate, addDays, money, fromIso } from './bn'
 import { t, tf } from './i18n'
-import type { Entry } from './model'
+import type { Bill, Entry } from './model'
 
 export type RemindWhen = 'off' | 'same' | 'day' | 'three'
 
@@ -24,17 +25,25 @@ const ID_BASE = 71000
 
 interface Planned { id: number; at: Date; title: string; body: string }
 
-export function plan(entries: Entry[], when: RemindWhen, hour = 9): Planned[] {
+export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bill[] = []): Planned[] {
   if (when === 'off') return []
   const before = REMIND_DAYS[when]
   const today = isoDate()
   const out: Planned[] = []
   let n = 0
 
+  /* Three things can fall due on a morning: a shop bill, money a customer
+     owes him, and a payment he has written down himself — rent, a fee, a
+     promise to a person. All three go into one queue, sorted by date, so the
+     ceiling below is shared fairly rather than spent on shop bills alone. */
   const rows = [
-    ...openDues(entries).map((d) => ({ ...d, kind: 'pay' as const })),
-    ...openReceivables(entries).map((d) => ({ ...d, kind: 'get' as const })),
-  ]
+    ...openDues(entries).map((d) => ({ ...d, kind: 'pay' as const, what: '', who: '' })),
+    ...openReceivables(entries).map((d) => ({ ...d, kind: 'get' as const, what: '', who: '' })),
+    ...billReminders(billRows).map((b) => ({
+      due_date: b.due_date, amount: b.amount, party_id: '' as const,
+      kind: 'bill' as const, what: b.what, who: b.who,
+    })),
+  ].sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0))
   for (const d of rows) {
     const fire = addDays(d.due_date, -before)
     if (fire < today) continue                       // already gone by
@@ -46,10 +55,12 @@ export function plan(entries: Entry[], when: RemindWhen, hour = 9): Planned[] {
     out.push({
       id: ID_BASE + n++,
       at,
-      title: d.kind === 'pay' ? t('টাকা দেওয়ার দিন') : t('টাকা পাওয়ার দিন'),
-      body: d.kind === 'pay'
-        ? tf('{0} — {1} দিতে হবে', who || t('দোকান'), money(d.amount))
-        : tf('{0} — {1} পাওনা আছে', who || t('খদ্দের'), money(d.amount)),
+      title: d.kind === 'get' ? t('টাকা পাওয়ার দিন') : t('টাকা দেওয়ার দিন'),
+      body: d.kind === 'get'
+        ? tf('{0} — {1} পাওনা আছে', who || t('খদ্দের'), money(d.amount))
+        : d.kind === 'bill'
+          ? tf('{0} — {1} দিতে হবে {2}', d.what || t('খরচ'), money(d.amount), d.who ? tf('({0})', d.who) : '')
+          : tf('{0} — {1} দিতে হবে', who || t('দোকান'), money(d.amount)),
     })
     if (n >= 60) break                               // Android's own ceiling
   }
@@ -69,7 +80,7 @@ export async function reschedule(): Promise<{ ok: boolean; count: number; error:
     const mine = pending.notifications.filter((x) => x.id >= ID_BASE && x.id < ID_BASE + 1000)
     if (mine.length) await LocalNotifications.cancel({ notifications: mine.map((x) => ({ id: x.id })) })
 
-    const rows = plan(s.entries, when)
+    const rows = plan(s.entries, when, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[])
     if (rows.length) {
       await LocalNotifications.schedule({
         notifications: rows.map((r) => ({

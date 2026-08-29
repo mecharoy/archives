@@ -77,6 +77,24 @@ export function dashboardHtml() {
   .bar i.warn{background:var(--warn)} .bar i.crit{background:var(--crit)}
   .bar u { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--ink); opacity:.5; }
 
+  /* Two-up on a laptop, one-up on a narrow window. The breakdowns are meant
+     to be read side by side — "the week cost this much" next to "and it went
+     here" is the whole point of the page. */
+  .cols { display:grid; grid-template-columns:repeat(auto-fit,minmax(20rem,1fr)); gap:.7rem; align-items:start; }
+  .cols2 { display:grid; grid-template-columns:repeat(auto-fit,minmax(15rem,1fr)); gap:1.1rem; margin-top:.4rem; }
+  h3 { font-size:.9rem; font-weight:600; margin:0 0 .6rem; }
+
+  /* One line of a breakdown: name, bar, figure, and a quiet second line under
+     it. The bar is sized against the biggest row, so the eye finds the
+     problem before it reads a single number. */
+  .bdrow { display:grid; grid-template-columns:minmax(6rem,1fr) minmax(3rem,7rem) auto;
+           gap:.5rem .7rem; align-items:center; padding:.32rem 0; font-size:.85rem; }
+  .bdrow .nm { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .bdrow .amt { text-align:right; font-weight:600; }
+  .bdrow .sx { grid-column:1 / -1; font-size:.72rem; margin-top:-.25rem; }
+  .bdrow + .bdrow { border-top:1px solid var(--line); }
+  .lbl { display:block; margin-bottom:.3rem; }
+
   input, textarea, button { font:inherit; color:inherit; }
   input, textarea {
     background:var(--surface); border:1px solid var(--line); border-radius:6px;
@@ -123,8 +141,22 @@ export function dashboardHtml() {
 
     <p class="msg" id="msg"></p>
 
-    <h2>The business</h2>
+    <h2>The business <span class="sub" id="period"></span></h2>
     <div class="grid" id="stats"></div>
+
+    <h2>Where the week went</h2>
+    <div class="cols">
+      <div class="card"><h3>By head</h3><div id="bd-heads"></div></div>
+      <div class="card"><h3>By shop</h3><div id="bd-suppliers"></div></div>
+      <div class="card"><h3>By man</h3><div id="bd-workers"></div></div>
+      <div class="card"><h3>By material</h3><div id="bd-items"></div></div>
+    </div>
+
+    <h2>His own book</h2>
+    <div class="cols">
+      <div class="card"><h3>Household spending</h3><div id="pers"></div></div>
+      <div class="card"><h3>Dates he has set</h3><div id="bills"></div></div>
+    </div>
 
     <h2>Projects</h2>
     <div class="tablewrap"><table id="projects">
@@ -134,6 +166,9 @@ export function dashboardHtml() {
       </tr></thead>
       <tbody></tbody>
     </table></div>
+
+    <h2>Job by job</h2>
+    <div id="jobs"></div>
 
     <h2>Material against estimate</h2>
     <div class="card" id="burn"></div>
@@ -249,8 +284,13 @@ export function dashboardHtml() {
       ['Owed to suppliers', money(b.dues_total), b.dues_overdue > 0 ? money(b.dues_overdue) + ' overdue' : 'none overdue',
         b.dues_overdue > 0 ? 'crit' : b.dues_this_week > 0 ? 'warn' : 'ok'],
       ['Due this week', money(b.dues_this_week), 'next seven days', b.dues_this_week > 0 ? 'warn' : 'ok'],
-      ['Spent this month', money(b.spend_this_month), 'wages ' + money(b.wages_this_month), 'info'],
-      ['Received this month', money(b.received_this_month), 'drawings ' + money(b.drawings_this_month), 'info'],
+      ['Spent this week', money(b.spend_this_week), changeText(b.spend_change_pct, b.spend_prev_week),
+        b.spend_change_pct !== null && b.spend_change_pct > 40 ? 'warn' : 'info'],
+      ['Wages this week', money(b.wages_this_week), 'material ' + money(b.material_this_week), 'info'],
+      ['Received this week', money(b.received_this_week), 'drawings ' + money(b.drawings_this_week), 'info'],
+      ['Days entered', String(b.days_entered_this_week) + ' of 7',
+        'week before: ' + String(b.days_entered_prev_week) + ' of 7',
+        b.days_entered_this_week < 3 ? 'crit' : b.days_entered_this_week < 6 ? 'warn' : 'ok'],
       ['Shop stock', money(b.shop_stock_value), 'at cost', 'info'],
       ['Entries, last 3 days', String(b.entries_last_3_days), b.last_entry_date ? 'last ' + b.last_entry_date : 'nothing yet',
         b.entries_last_3_days === 0 ? 'crit' : 'ok']
@@ -291,6 +331,148 @@ export function dashboardHtml() {
     });
     $('burn').innerHTML = burns.join('') ||
       '<span class="sub">No coefficients set, or no material booked against a job yet.</span>';
+
+    if (d.period) {
+      $('period').textContent = d.period.from + ' to ' + d.period.to +
+        '  ·  compared with ' + d.period.prev_from + ' to ' + d.period.prev_to;
+    }
+    renderBreakdowns(d.breakdown || {});
+    renderPersonal(d.personal || {}, d.bills || {});
+    renderJobs(d.projects || []);
+    renderCoverage(d.coverage);
+  }
+
+  /* A row of a breakdown: a name, a bar as long as its share of the biggest,
+     and the figure. The bar is the point — a table of twelve numbers hides
+     which one is the problem, and the eye finds a long bar instantly. */
+  function bars(rows, name, value, sub, empty) {
+    if (!rows.length) return '<span class="sub">' + empty + '</span>';
+    var top = 0;
+    rows.forEach(function (r) { if (value(r) > top) top = value(r); });
+    if (top <= 0) return '<span class="sub">' + empty + '</span>';
+    return rows.filter(function (r) { return value(r) > 0; }).map(function (r) {
+      return '<div class="bdrow">' +
+        '<span class="bn nm">' + esc(name(r)) + '</span>' +
+        '<span class="bar"><i style="width:' + Math.max(2, (value(r) / top) * 100) + '%"></i></span>' +
+        '<span class="num amt">' + money(value(r)) + '</span>' +
+        '<span class="sub sx">' + esc(sub(r)) + '</span>' +
+        '</div>';
+    }).join('');
+  }
+
+  function renderBreakdowns(bd) {
+    $('bd-heads').innerHTML = bars(bd.heads || [],
+      function (r) { return r.head_bn; },
+      function (r) { return r.week; },
+      function (r) { return money(r.last_28_days) + ' in 4 wk'; },
+      'No site expenses booked this week.');
+
+    $('bd-suppliers').innerHTML = bars(bd.suppliers || [],
+      function (r) { return r.name_bn; },
+      function (r) { return r.week; },
+      function (r) { return r.unpaid > 0 ? money(r.unpaid) + ' still unpaid' : 'settled'; },
+      'No material bought this week.');
+
+    $('bd-workers').innerHTML = bars(bd.workers || [],
+      function (r) { return r.name_bn; },
+      function (r) { return r.paid_week; },
+      function (r) { return r.days_week + ' d' + (r.advance_week > 0 ? '  ·  ' + money(r.advance_week) + ' advance' : ''); },
+      'Nobody was marked present this week.');
+
+    $('bd-items').innerHTML = bars(bd.items || [],
+      function (r) { return r.name_bn; },
+      function (r) { return r.week; },
+      function (r) {
+        var q = r.qty_week + (r.unit_bn ? ' ' + r.unit_bn : '');
+        var moved = r.rate_high > r.rate_low ? '  ·  rate ' + money(r.rate_low) + '-' + money(r.rate_high) : '';
+        return q + moved;
+      },
+      'No material bought this week.');
+  }
+
+  function renderPersonal(p, bills) {
+    var head =
+      '<div class="row" style="gap:1.4rem;margin-bottom:.7rem">' +
+        '<span><span class="sub">this week</span><br><b class="num">' + money(p.spent_this_week) + '</b></span>' +
+        '<span><span class="sub">week before</span><br><b class="num">' + money(p.spent_prev_week) + '</b></span>' +
+        '<span><span class="sub">last 4 weeks</span><br><b class="num">' + money(p.spent_last_28_days) + '</b></span>' +
+        '<span><span class="sub">taken from the business, 4 wk</span><br><b class="num">' + money(p.drawn_last_28_days) + '</b></span>' +
+      '</div>';
+    $('pers').innerHTML = head + bars(p.heads || [],
+      function (r) { return r.head_bn; },
+      function (r) { return r.last_28_days; },
+      function (r) { return money(r.week) + ' this week  ·  ' + r.times + 'x'; },
+      'Nothing entered in his own book yet.');
+
+    var list = (bills.list || []);
+    if (!list.length) {
+      $('bills').innerHTML = '<span class="sub">No dates set. He can add rent, fees or a promise to a person in the app, under his own book.</span>';
+      return;
+    }
+    var pt = bills.personal || {}, bt = bills.business || {};
+    $('bills').innerHTML =
+      '<div class="row" style="gap:1.4rem;margin-bottom:.7rem">' +
+        '<span><span class="sub">his own, overdue</span><br><b class="num">' + money(pt.overdue) + '</b></span>' +
+        '<span><span class="sub">his own, next 7 days</span><br><b class="num">' + money(pt.this_week) + '</b></span>' +
+        '<span><span class="sub">business</span><br><b class="num">' + money(bt.total) + '</b></span>' +
+      '</div>' +
+      list.map(function (r) {
+        var when = r.overdue ? Math.abs(r.days_away) + ' d late'
+          : r.days_away === 0 ? 'today' : 'in ' + r.days_away + ' d';
+        return '<div class="bdrow">' +
+          '<span class="bn nm">' + esc(r.name_bn) + (r.to_bn ? ' <span class="sub">to ' + esc(r.to_bn) + '</span>' : '') + '</span>' +
+          '<span class="sx"><span class="pill ' + (r.overdue ? 'crit' : r.days_away <= 7 ? 'warn' : 'ok') + '">' + when + '</span></span>' +
+          '<span class="num amt">' + money(r.amount) + '</span>' +
+          '<span class="sub sx">' + r.due_date + (r.repeat === 'monthly' ? '  ·  every month' : '') +
+            (r.personal ? '' : '  ·  business') + '</span>' +
+          '</div>';
+      }).join('');
+  }
+
+  /* One card per live job: what it cost this week, what the money went on,
+     and what was bought. "Spending is ahead" is only useful with "on what". */
+  function renderJobs(list) {
+    var live = list.filter(function (p) { return p.status === 'active'; });
+    if (!live.length) { $('jobs').innerHTML = '<div class="card"><span class="sub">No job is running.</span></div>'; return; }
+    $('jobs').innerHTML = live.map(function (p) {
+      return '<div class="card" style="margin-bottom:.8rem">' +
+        '<h3 class="bn">' + esc(p.name_bn) + (p.client_bn ? ' <span class="sub">for ' + esc(p.client_bn) + '</span>' : '') + '</h3>' +
+        '<div class="row" style="gap:1.4rem;margin:.5rem 0 .8rem;flex-wrap:wrap">' +
+          '<span><span class="sub">this week</span><br><b class="num">' + money(p.week.spend) + '</b></span>' +
+          '<span><span class="sub">wages / material</span><br><b class="num">' + money(p.week.labour) + ' / ' + money(p.week.material) + '</b></span>' +
+          '<span><span class="sub">man-days</span><br><b class="num">' + p.week.mandays + '</b></span>' +
+          '<span><span class="sub">received</span><br><b class="num">' + money(p.week.received) + '</b></span>' +
+          '<span><span class="sub">stage now</span><br><b class="bn">' + esc(p.stage_now_bn || 'not set') + '</b></span>' +
+          '<span><span class="sub">per sq ft</span><br><b class="num">' + (p.cost_per_sqft === null ? '—' : money(p.cost_per_sqft)) + '</b></span>' +
+          '<span><span class="sub">earned but not received</span><br><b class="num">' + money(p.unbilled) + '</b></span>' +
+        '</div>' +
+        '<div class="cols2">' +
+          '<div><div class="sub lbl">money went on</div>' + bars(p.heads || [],
+            function (r) { return r.head_bn; }, function (r) { return r.amount; },
+            function (r) { return r.times + 'x'; }, 'Only wages and material so far.') + '</div>' +
+          '<div><div class="sub lbl">material bought</div>' + bars(p.items || [],
+            function (r) { return r.name_bn; }, function (r) { return r.amount; },
+            function (r) { return r.qty + (r.unit_bn ? ' ' + r.unit_bn : ''); }, 'Nothing booked yet.') + '</div>' +
+        '</div>' +
+      '</div>';
+    }).join('');
+  }
+
+  /* How much ledger there is. A confident reading off nine rows is worse
+     than no reading, and this is where that shows. */
+  function renderCoverage(c) {
+    if (!c) return;
+    var r = c.rows || {};
+    $('who').textContent = (summary.household || '') +
+      '  ·  ' + c.days_recorded + ' days recorded' +
+      (c.first_entry_date ? ' since ' + c.first_entry_date : '') +
+      '  ·  ' + (r.attendance + r.stock + r.money + r.progress) + ' rows';
+  }
+
+  function changeText(pct, prev) {
+    if (pct === null || pct === undefined) return 'nothing to compare with';
+    var dir = pct > 0 ? 'up' : pct < 0 ? 'down' : 'level with';
+    return dir + ' ' + Math.abs(Math.round(pct)) + '% on ' + money(prev);
   }
 
   $('enter').onclick = function () {
