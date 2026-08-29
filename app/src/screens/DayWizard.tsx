@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, PhoneField, useToast, Toast } from '../ui/kit'
 import { useStore, getState, activeProjects, workers, allWorkers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
@@ -282,7 +282,7 @@ function useHold(fn: (id: ID) => void) {
     onPointerDown: () => { t.current = setTimeout(() => { if (navigator.vibrate) navigator.vibrate(14); fn(id) }, 480) },
     onPointerUp: () => { if (t.current) clearTimeout(t.current) },
     onPointerLeave: () => { if (t.current) clearTimeout(t.current) },
-    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+    onContextMenu: (e: MouseEvent) => e.preventDefault(),
   })
 }
 
