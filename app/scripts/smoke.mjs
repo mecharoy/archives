@@ -26,6 +26,20 @@ const tap = async (text, opts = {}) => {
   await el.click()
 }
 
+/* The update check reaches out to the repository. Serve it here instead:
+   the suite must not depend on the network, and a stub lets the newer-version
+   path be exercised rather than only the 404 one. */
+await page.route('**/latest.json*', (route) => route.fulfill({
+  status: 200,
+  contentType: 'application/json',
+  body: JSON.stringify({
+    code: 999, name: '9.9.9',
+    url: 'https://example.invalid/SiteKhata-1.0.apk?build=999',
+    size: 7139772,
+    notes_bn: 'পরীক্ষার সংস্করণ', notes_en: 'A test build',
+  }),
+}))
+
 const pickItem = async (name) => {
   const shown = page.getByText(name, { exact: true }).first()
   if (!(await shown.count())) {
@@ -525,6 +539,28 @@ await step('and a man can be added without leaving the question', async () => {
   await page.waitForTimeout(500)
   const names = await page.locator('.pick').allInnerTexts()
   if (!names.some((n) => /হারু/.test(n))) throw new Error('the new man is not on the list: ' + names.join(' | '))
+})
+
+await step('the update page says so in a browser', async () => {
+  await home()
+  await page.locator('[data-tour="settings"]').click()
+  await page.locator('.pick', { hasText: 'অ্যাপ আপডেট' }).click()
+  await page.getByText('এখন আছে').waitFor({ timeout: 4000 })
+  await page.waitForTimeout(1200)
+  const body = await page.locator('.scroll').first().innerText()
+  if (!/ব্রাউজারে চলছে/.test(body)) throw new Error('it did not say updating needs the phone app: ' + body.slice(0, 200))
+  if (/নতুনটা নিন/.test(body)) throw new Error('it offered a download in a browser')
+})
+
+await step('and it names where it looks', async () => {
+  const body = await page.locator('.scroll').first().innerText()
+  if (!/latest\.json/.test(body)) throw new Error('the manifest address is not shown')
+  // The stub says 9.9.9 exists — the page must report it even though this
+  // browser has no version of its own to compare it against.
+  if (!/৯.৯.৯|9.9.9/.test(body)) throw new Error('it did not report the newest build: ' + body.slice(0, 240))
+  if (!/হিসাব থেকে যাবে/.test(body)) throw new Error('it does not say the ledger survives an update')
+  await pressBack()
+  await page.waitForTimeout(400)
 })
 
 await step('backup writes a file', async () => {

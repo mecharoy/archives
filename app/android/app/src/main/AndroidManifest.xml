@@ -49,4 +49,8 @@
     <!-- Payment reminders on a due date. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Updating itself from the repository. This only lets the app HAND a
+         downloaded file to Android's own installer — the install screen and
+         the final tap are still his, and nothing can be replaced silently. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 </manifest>

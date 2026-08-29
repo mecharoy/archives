@@ -762,4 +762,28 @@ export const EN: Record<string, string> = {
 
   'যেমন — সাইকেল সারানো': 'e.g. bicycle repair',
 
+  /* ---- keeping the app current ---- */
+  'অ্যাপ আপডেট': 'App update',
+  'নতুন সংস্করণ এসেছে কিনা দেখুন': 'check whether a newer version is out',
+  'নতুন সংস্করণ এসেছে — {0}': 'A newer version is out — {0}',
+  'নতুনটা নিন': 'Get the new one',
+  'পরে': 'Later',
+  'আবার চেষ্টা করুন': 'Try again',
+  'অনুমতি দিন': 'Give permission',
+  'বসানোর পাতা খুলছে…': 'Opening the install screen…',
+  'ফোনের নিজের পাতায় "Install" চাপুন।': 'Press Install on the phone’s own screen.',
+  'নামানো গেল না। পরে আবার দেখুন।': 'It would not download. Try again later.',
+  'ফাইলটা নামানো গেল না': 'the file would not download',
+  'এই অ্যাপকে নতুন সংস্করণ বসানোর অনুমতি দেওয়া নেই। একবার অনুমতি দিলে পরের বার থেকে আর লাগবে না।': 'This app is not allowed to install a new version. Allow it once and it will not ask again.',
+  'নতুন সংস্করণ এলে অ্যাপ নিজেই জানিয়ে দেবে। এখান থেকে যখন খুশি নিজে দেখে নেওয়া যায়।': 'The app tells you when a newer version is out. You can also look whenever you like from here.',
+  'এখন আছে': 'Installed now',
+  'সবচেয়ে নতুন': 'Newest there is',
+  'এটা ব্রাউজারে চলছে — আপডেট শুধু ফোনের অ্যাপে কাজ করে।': 'This is running in a browser — updating only works in the phone app.',
+  'খবর আনা গেল না। নেট এলে আবার দেখুন।': 'Could not reach the update. Try again when there is a signal.',
+  'আপনার কাছে সবচেয়ে নতুনটাই আছে।': 'You already have the newest one.',
+  'নতুন কী আছে': 'What is new',
+  'আবার দেখুন': 'Look again',
+  'কোথা থেকে': 'Where from',
+  'নতুন সংস্করণ বসালেও আপনার লেখা হিসাব থেকে যাবে — কিছু মুছবে না।': 'Installing a new version keeps everything you have written — nothing is erased.',
+
 }

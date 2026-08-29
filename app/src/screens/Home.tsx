@@ -9,6 +9,7 @@ import { lastAttendance, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
 import { flush } from '../lib/sync'
 import { t, pick } from '../lib/i18n'
+import { UpdateCard } from '../ui/UpdateCard'
 
 /* The home screen is three books on one shelf: কাজ (the sites), মজুত (the
    shop) and হিসাব (the money). He is only ever in one of them at a time, and
@@ -93,6 +94,11 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
             {t('কালকের মতোই')} · {toBn(Object.keys(sameDraft.att).length)} {t('জন')}, {money(Object.values(sameDraft.att).reduce((a, x) => a + x.amount, 0))}
           </button>
         )}
+
+        {/* Only ever drawn when the repository actually has something newer.
+            It sits under the day button rather than above it, because nothing
+            outranks writing the day down. */}
+        <UpdateCard />
 
         {gap && (
           <div className="alert warn" style={{ marginTop: '.8rem' }}>

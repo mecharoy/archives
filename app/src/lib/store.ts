@@ -21,6 +21,8 @@ export interface Settings {
   auto_sync: boolean
   onboarded: boolean
   toured: boolean
+  update_url: string
+  update_checked_at: string
   chips_taken: number
   chips_expanded: number
   theme: 'system' | 'light' | 'dark'
@@ -42,7 +44,8 @@ const BUILT_IN_TOKEN = (import.meta.env.VITE_SYNC_TOKEN as string | undefined)?.
 export const DEFAULT_SETTINGS: Settings = {
   endpoint: BUILT_IN_ENDPOINT, token: BUILT_IN_TOKEN, briefUrl: '', briefToken: '',
   opening_cash: 0, opening_date: isoDate(), pin_hash: '',
-  auto_sync: true, onboarded: false, toured: false, chips_taken: 0, chips_expanded: 0,
+  auto_sync: true, onboarded: false, toured: false, update_url: '', update_checked_at: '',
+  chips_taken: 0, chips_expanded: 0,
   theme: 'system', text_scale: 1,
   lang: 'bn', remind: 'day', owner_bn: '', runs_shop: true, runs_sites: true,
 }

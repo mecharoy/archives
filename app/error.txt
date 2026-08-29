@@ -74,3 +74,17 @@ Location: app/src/lib/store.ts (items/allItems/workers/parties selectors)
 Action: running the suite after adding the first-run tour.
 Cause: not the test. Masters come back from IndexedDB in id order and ids are uid() — random. With no purchase history the ranking has nothing to sort by, so the three chips offered on a fresh install were three arbitrary materials, different on every install. The intermittent test was the symptom of a real first-week defect.
 Fix: sort items by COMMON_ITEM_ORDER (cement, steel, brick, sand, chips) then by name, and sort workers and parties by name. Ranking by what he actually buys still takes over as soon as there is history. Suite now runs clean three times in a row.
+
+2026-08-29
+Problem: the release script failed at the Gradle step with "'gradlew.bat' is not recognized", then with EINVAL, then with an interactive cmd prompt — three different failures for one cause.
+Location: app/scripts/release.mjs
+Action: cutting the first release through the script.
+Cause: on Windows, Node refuses to spawn a .bat without a shell at all, and cmd.exe will not resolve one by bare name from the working directory. Passing `cmd /c "<path> <args>"` from Git Bash was mangled again by the Git Bash argument translation.
+Fix: execFileSync(<absolute path to gradlew.bat>, args, { shell: true }) on win32, and the POSIX wrapper directly elsewhere. Absolute path AND shell — either alone fails.
+
+2026-08-29
+Problem: the smoke suite failed with PAGEERROR: "Updater" plugin is not implemented on web.
+Location: app/src/lib/update.ts
+Action: adding the in-app update check.
+Cause: Capacitor's web shim throws when a native-only plugin method is called, and the throw escaped the try/catch around the await — it surfaces as an uncaught page error rather than a rejected promise.
+Fix: ask Capacitor.isNativePlatform() first and return a no-op off a phone, rather than catching after the fact. Also stubbed latest.json with page.route in the smoke suite so the tests never touch the network and the newer-version path is actually exercised.

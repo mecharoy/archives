@@ -466,3 +466,19 @@ textarea.input { min-height: 5rem; resize: none; }
 .tour-skip {
   background: none; color: var(--muted); font-size: .92rem; padding: .6rem .2rem; min-height: var(--tap);
 }
+
+/* ---------- the update prompt ----------
+   Only ever drawn when the repository has something newer, so it can afford
+   to be a card rather than a discreet line. */
+.updatecard {
+  display: flex; gap: .9rem; align-items: flex-start;
+  background: var(--accent-bg); border-radius: var(--radius);
+  padding: .95rem 1.05rem; margin-top: .8rem; color: var(--ink);
+}
+.updatecard > svg { color: var(--accent); flex: none; margin-top: .1rem; }
+.updatecard .body { flex: 1; min-width: 0; }
+.updatecard .t { font-weight: 600; font-size: 1.02rem; }
+.updatecard .s { font-size: .86rem; color: var(--ink-2); margin-top: .25rem; }
+.updatecard .s.warn { color: var(--warn); }
+.updatecard .acts { display: flex; gap: .6rem; margin-top: .8rem; }
+.updatecard .acts .btn { flex: 1; min-height: 3rem; }

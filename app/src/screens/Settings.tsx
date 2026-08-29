@@ -19,10 +19,14 @@ import { readContacts, pickOneContact, type PhoneContact } from '../lib/contacts
 import { plan, reschedule, type RemindWhen } from '../lib/remind'
 import { factoryReset } from '../lib/reset'
 import { cashState } from '../lib/calc'
-import { t, tf } from '../lib/i18n'
+import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
+import {
+  installed, fetchRelease, downloadAndInstall, canInstall, openInstallSettings,
+  sizeText, DEFAULT_MANIFEST, type Installed, type Release, type Stage as UpdateStage,
+} from '../lib/update'
 
-type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset'
+type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update'
 
 export function Settings({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -44,6 +48,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
   if (page === 'lang') return <LangPage s={s} onBack={() => setPage(null)} />
   if (page === 'remind') return <RemindPage s={s} onBack={() => setPage(null)} />
   if (page === 'reset') return <ResetPage onBack={() => setPage(null)} />
+  if (page === 'update') return <UpdatePage s={s} onBack={() => setPage(null)} />
 
   const miss = chipMissRate({ taken: s.settings.chips_taken, expanded: s.settings.chips_expanded })
 
@@ -82,6 +87,8 @@ export function Settings({ onBack }: { onBack: () => void }) {
           <Pick title="অ্যাপটা ঘুরে দেখুন" sub="প্রথম দিনের মতো আবার দেখিয়ে দেবে"
             right={<Icon name="fwd" size={18} />}
             onClick={async () => { await saveSettings({ toured: false }); onBack() }} />
+          <Pick title="অ্যাপ আপডেট" sub="নতুন সংস্করণ এসেছে কিনা দেখুন"
+            right={<Icon name="fwd" size={18} />} onClick={() => setPage('update')} />
         </div>
 
         {miss != null && (
@@ -109,6 +116,109 @@ export function Settings({ onBack }: { onBack: () => void }) {
       </div>
       {pin && <PinSheet onClose={() => setPin(false)} onSaved={() => { setPin(false); toast.show('পাসকোড সেভ হয়েছে') }} />}
       {toast.msg && <Toast text={toast.msg} />}
+    </>
+  )
+}
+
+/* ---------- keeping the app current ---------- */
+
+/* The home screen only speaks up when there is genuinely something newer.
+   This page is where he can ask on purpose and always get an answer —
+   including "you already have the newest one", which is the answer he wants
+   most of the time and the one an alert can never give him. */
+function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
+  const [here, setHere] = useState<Installed | null>(null)
+  const [there, setThere] = useState<Release | null>(null)
+  const [looking, setLooking] = useState(true)
+  const [stage, setStage] = useState<UpdateStage | null>(null)
+  const [why, setWhy] = useState('')
+  const [allowed, setAllowed] = useState(true)
+
+  const look = async () => {
+    setLooking(true); setWhy(''); setStage(null)
+    const [a, b, c] = await Promise.all([installed(), fetchRelease(), canInstall()])
+    setHere(a); setThere(b); setAllowed(c); setLooking(false)
+    await saveSettings({ update_checked_at: new Date().toISOString() })
+  }
+  useEffect(() => { void look() }, []) // eslint-disable-line
+
+  const newer = here && there && there.code > here.code
+  const phone = here !== null
+
+  return (
+    <>
+      <TopBar title="অ্যাপ আপডেট" onBack={onBack} />
+      <div className="scroll">
+        <p className="hint" style={{ marginTop: '1rem' }}>
+          {t('নতুন সংস্করণ এলে অ্যাপ নিজেই জানিয়ে দেবে। এখান থেকে যখন খুশি নিজে দেখে নেওয়া যায়।')}
+        </p>
+
+        <div className="card" style={{ marginTop: '1rem' }}>
+          <div className="spread">
+            <span>{t('এখন আছে')}</span>
+            <strong className="num">{phone ? here!.name : '—'}</strong>
+          </div>
+          <div className="spread" style={{ marginTop: '.5rem' }}>
+            <span>{t('সবচেয়ে নতুন')}</span>
+            <strong className="num">{looking ? t('দেখছি…') : there ? there.name : '—'}</strong>
+          </div>
+        </div>
+
+        {!looking && !phone && (
+          <p className="hint" style={{ marginTop: '.9rem' }}>
+            {t('এটা ব্রাউজারে চলছে — আপডেট শুধু ফোনের অ্যাপে কাজ করে।')}
+          </p>
+        )}
+        {!looking && phone && !there && (
+          <p className="hint" style={{ marginTop: '.9rem' }}>
+            {t('খবর আনা গেল না। নেট এলে আবার দেখুন।')}
+          </p>
+        )}
+        {!looking && phone && there && !newer && (
+          <p className="hint" style={{ marginTop: '.9rem' }}>{t('আপনার কাছে সবচেয়ে নতুনটাই আছে।')}</p>
+        )}
+
+        {newer && (
+          <>
+            {there!.notes_bn && (
+              <>
+                <p className="sectionlabel">{t('নতুন কী আছে')}</p>
+                <div className="card">{pick(there!.notes_bn, there!.notes_en)}</div>
+              </>
+            )}
+            {!allowed && (
+              <div className="alert warn" style={{ marginTop: '.9rem' }}>
+                <span className="dot" />
+                <span>{t('এই অ্যাপকে নতুন সংস্করণ বসানোর অনুমতি দেওয়া নেই। একবার অনুমতি দিলে পরের বার থেকে আর লাগবে না।')}</span>
+              </div>
+            )}
+            {stage === 'downloading' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('নামছে…')}</p>}
+            {stage === 'opening' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('বসানোর পাতা খুলছে…')}</p>}
+            {stage === 'done' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
+            {stage === 'failed' && <p className="hint warn" style={{ marginTop: '.9rem' }}>{why}</p>}
+            <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+              disabled={stage === 'downloading' || stage === 'opening'}
+              onClick={() => {
+                if (!allowed) { void openInstallSettings(); return }
+                void downloadAndInstall(there!, (st, d) => { setStage(st); if (d) setWhy(d); if (st === 'blocked') setAllowed(false) })
+              }}>
+              {t(allowed ? 'নতুনটা নিন' : 'অনুমতি দিন')}
+              {allowed && there!.size ? ' · ' + sizeText(there!.size) : ''}
+            </button>
+          </>
+        )}
+
+        <button className="btn quiet" style={{ width: '100%', marginTop: '.7rem' }}
+          disabled={looking} onClick={() => void look()}>{t('আবার দেখুন')}</button>
+
+        <p className="sectionlabel">{t('কোথা থেকে')}</p>
+        <p className="small muted" style={{ wordBreak: 'break-all' }}>
+          {s.settings.update_url || DEFAULT_MANIFEST}
+        </p>
+        <p className="small muted" style={{ marginTop: '.6rem' }}>
+          {t('নতুন সংস্করণ বসালেও আপনার লেখা হিসাব থেকে যাবে — কিছু মুছবে না।')}
+        </p>
+      </div>
     </>
   )
 }
