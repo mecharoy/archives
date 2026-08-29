@@ -1,0 +1,90 @@
+2026-08-28
+Problem: bash heredoc (cat > file <<'EOF') aborted with "unexpected EOF while looking for matching `''" when the content contained Bengali text and inch marks.
+Location: writing app/src/lib/catalog.ts
+Action: creating a new source file from the shell.
+Cause: the Git Bash wrapper mangled the quoted heredoc; no file was created.
+Fix: use the Write tool for multi-line non-ASCII files; use python heredocs only for small ASCII patches.
+
+2026-08-28
+Problem: npm test failed — "Failed to launch chromium because executable doesn't exist at /opt/pw-browsers/chromium".
+Location: app/scripts/smoke.mjs, smoke-sync.mjs, shots.mjs, shot-dash.mjs, t-pct.mjs
+Action: running the smoke suite after editing NewItemSheet.
+Cause: the scripts hardcoded the Linux container path the app was originally built in.
+Fix: launch with process.env.PW_CHROMIUM when set, otherwise Playwright's own default; then `npx playwright install chromium` once. 23/23 flows pass.
+
+2026-08-28
+Problem: playwright clicked the wrong element / timed out on getByText('বাংলা', {exact:true}) in the new language step.
+Location: app/scripts/smoke.mjs
+Action: driving the new onboarding language screen in the smoke test.
+Cause: the Pick component nests the sub-label inside the same span as the title, so an exact text match lands on an element that is not the button.
+Fix: click .pick by index (.pick nth(0)/nth(1)) for two-option rows instead of matching their text.
+
+2026-08-28
+Problem: a codemod wrapped module-level constant maps (QUESTION, TITLES) in t(), which would have frozen the language at import time.
+Location: app/src/screens/DayWizard.tsx, app/src/screens/Shop.tsx
+Action: bulk-wrapping Bengali strings for the English switch.
+Cause: t() called where a module constant is defined runs once, before settings are loaded.
+Fix: keep constant maps in Bengali and call t() at the render site; never at module scope.
+
+2026-08-28
+Problem: `cat > file <<'EOF'` in Bash aborted again on a large Bengali block with apostrophes in the English text.
+Location: app/src/lib/en.ts (dictionary additions)
+Action: appending ~150 translations.
+Cause: the Git Bash wrapper mangles quoted heredocs containing non-ASCII plus apostrophes.
+Fix: write the block with the Write tool to a scratchpad file, then splice it in with a small node script.
+
+2026-08-28
+Problem: playwright timed out clicking a chip inside a Field ('.chips' nth(1)).
+Location: app/scripts/smoke.mjs — estimator floors step.
+Action: choosing "2 floors" in the new estimator.
+Cause: MoneyPad renders its own .chips container, so the index pointed at the wrong group.
+Fix: scope to '.field .chips .chip' rather than counting .chips containers.
+
+2026-08-29
+Problem: the admin dashboard loaded but did nothing — the token box appeared and the button was dead.
+Location: app/server/src/dashboard.js
+Action: pasting the admin token to open the ledger.
+Cause: the whole page is one JS template literal, so a `\n` written inside it becomes a REAL newline in the emitted inline script — `].join('\n')` and `PROMPT + '\n'` each ended a string mid-line and killed the entire script. An escaped apostrophe (`supplier\'s`) collapsed the same way.
+Fix: write `\n` in the source so the browser receives `\n`, avoid apostrophes inside the inline script, and add `npm run dashboard:check` (now part of `npm test`) which builds the page, extracts the script and runs `node --check` on it.
+
+2026-08-29
+Problem: contacts import asked for permission but produced no names.
+Location: app/src/lib/contacts.ts
+Action: adding a supplier from the phone book.
+Cause: could not be reproduced without the device; reading the whole book is the fragile path and the failure was swallowed by a generic message.
+Fix: use the plugin's native `pickContact()` first (the system's own picker — one tap, nothing else read), fall back to the full-list reader, and show the real error text so the next report names the actual cause.
+
+2026-08-29
+Problem: the contacts picker reported "missing the following permission in AndroidManifest.xml: android.permission.WRITE_CONTACTS" — the Android permission prompt appeared but no names ever came back.
+Location: app/android/app/src/main/AndroidManifest.xml
+Action: tapping "from the phone book" while adding a supplier.
+Cause: @capacitor-community/contacts declares READ_CONTACTS and WRITE_CONTACTS together under one alias ("contacts"), and Capacitor refuses the whole request — pickContact included — if any permission in the alias group is missing from the app manifest. The plugin ships an empty manifest, so the app must declare both. Only READ was declared.
+Fix: declare WRITE_CONTACTS as well. Nothing in the app writes to the phone book; the declaration exists only to satisfy the alias group. Verified inside the built APK by reading its binary manifest.
+
+2026-08-29
+Problem: two edit scripts reported "MISS" on strings that were visibly present in the target file.
+Location: app/README.md, app/server/src/dashboard.js
+Action: splicing new sections in with a node script.
+Cause: those files are stored with CRLF line endings, so a multi-line search string written with LF never matches.
+Fix: every splice script now normalises CRLF to LF before matching and restores the original ending on write. Single-line seds were unaffected, which is why this only showed up on multi-line blocks.
+
+2026-08-29
+Problem: the smoke suite failed at "material: add a purchase" on some runs and passed on others — সিমেন্ট was not among the three item chips.
+Location: app/src/lib/store.ts (items/allItems/workers/parties selectors)
+Action: running the suite after adding the first-run tour.
+Cause: not the test. Masters come back from IndexedDB in id order and ids are uid() — random. With no purchase history the ranking has nothing to sort by, so the three chips offered on a fresh install were three arbitrary materials, different on every install. The intermittent test was the symptom of a real first-week defect.
+Fix: sort items by COMMON_ITEM_ORDER (cement, steel, brick, sand, chips) then by name, and sort workers and parties by name. Ranking by what he actually buys still takes over as soon as there is history. Suite now runs clean three times in a row.
+
+2026-08-29
+Problem: the release script failed at the Gradle step with "'gradlew.bat' is not recognized", then with EINVAL, then with an interactive cmd prompt — three different failures for one cause.
+Location: app/scripts/release.mjs
+Action: cutting the first release through the script.
+Cause: on Windows, Node refuses to spawn a .bat without a shell at all, and cmd.exe will not resolve one by bare name from the working directory. Passing `cmd /c "<path> <args>"` from Git Bash was mangled again by the Git Bash argument translation.
+Fix: execFileSync(<absolute path to gradlew.bat>, args, { shell: true }) on win32, and the POSIX wrapper directly elsewhere. Absolute path AND shell — either alone fails.
+
+2026-08-29
+Problem: the smoke suite failed with PAGEERROR: "Updater" plugin is not implemented on web.
+Location: app/src/lib/update.ts
+Action: adding the in-app update check.
+Cause: Capacitor's web shim throws when a native-only plugin method is called, and the throw escaped the try/catch around the await — it surfaces as an uncaught page error rather than a rejected promise.
+Fix: ask Capacitor.isNativePlatform() first and return a no-op off a phone, rather than catching after the fact. Also stubbed latest.json with page.route in the smoke suite so the tests never touch the network and the newer-version path is actually exercised.
