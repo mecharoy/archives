@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, PhoneField, useToast, Toast } from '../ui/kit'
-import { useStore, getState, activeProjects, workers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
+import { useStore, getState, activeProjects, workers, allWorkers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
-import { MONEY_HEADS_SITE, PAY_MODES, type ID, type Presence, type Item, type Party, type Project } from '../lib/model'
+import { MONEY_HEADS_SITE, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
 import { DAYS_FOR, newDraft, loadDraft, saveDraft, clearDraft, buildEntries, wageTotal, matTotal, expTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, screenDemoted, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
@@ -13,6 +13,7 @@ import { ContactPicker } from './Settings'
 import { HOUSE } from '../lib/seed'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
+import { useBackHandler } from '../lib/back'
 
 type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'expense' | 'progress' | 'cash' | 'review'
 
@@ -72,13 +73,22 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
   const steps = useMemo<StepId[]>(() => {
     const list: StepId[] = []
     if (activeProjects(s).length > 1) list.push('project')
-    list.push('attendance', 'wages')
+    /* No men on the books means "who came today?" has no possible answer —
+       an empty screen and a hint pointing at Settings is a dead end, not a
+       question. A man who only runs a shop never sees these two at all; the
+       moment he puts one name in, they come back on their own. */
+    if (allWorkers(s).length > 0) list.push('attendance', 'wages')
     if (!demoted.material || showExtras || (draft?.mats.length ?? 0) > 0) list.push('material')
     if (!demoted.expense || showExtras || (draft?.exps.length ?? 0) > 0) list.push('expense')
     if (!demoted.progress || showExtras || draft?.progress) list.push('progress')
     list.push('cash', 'review')
     return list
   }, [s, demoted, showExtras, draft?.mats.length, draft?.exps.length, draft?.progress])
+
+  /* Back is one step, not out of the whole day. Registered above the early
+     return, because hooks cannot be conditional — it does the same thing the
+     arrow in the corner does. */
+  useBackHandler(() => (i > 0 ? setI(i - 1) : onExit(false)))
 
   useEffect(() => { if (draft && draft.step !== i) patch({ step: i }) }, [i]) // eslint-disable-line
   useEffect(() => { if (i > steps.length - 1) setI(steps.length - 1) }, [steps.length]) // eslint-disable-line
@@ -184,6 +194,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
   const suggested = useMemo(() => lastAttendance(s.entries, draft.project_id), [s.entries, draft.project_id])
   const [seeded, setSeeded] = useState(false)
   const [longPress, setLongPress] = useState<ID | null>(null)
+  const [newMan, setNewMan] = useState(false)
 
   useEffect(() => {
     if (seeded || Object.keys(draft.att).length || !suggested.size) { setSeeded(true); return }
@@ -225,7 +236,6 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
           {suggested.size ? t('গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।') : t('যারা এসেছে তাদের টিক দিন।')}
           {' '}{t('আধা দিন বা ওভারটাইম দিতে নামের উপর চেপে ধরুন।')}
         </p>
-        {men.length === 0 && <p className="hint">{t("কোনো লোক যোগ করা নেই। সেটিংস থেকে লোক যোগ করুন।")}</p>}
         <div className="rowlist">
           {men.map((w) => {
             const a = draft.att[w.id]
@@ -241,6 +251,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
               </div>
             )
           })}
+          <Pick title="+ নতুন লোক" onClick={() => setNewMan(true)} />
         </div>
       </div>
       <div className="actionbar">
@@ -249,6 +260,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
         </div>
         <button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button>
       </div>
+      {newMan && <NewWorkerSheet onClose={() => setNewMan(false)} onCreated={() => setNewMan(false)} />}
       {longPress && (
         <Sheet title={nameOf(s, longPress)} onClose={() => setLongPress(null)}>
           <div className="rowlist">
@@ -962,6 +974,27 @@ export function NewProjectSheet({ onClose, onCreated }: { onClose: () => void; o
       <Field label="কার কাজ (ইচ্ছে হলে)"><input className="input" value={client} onChange={(e) => setClient(e.target.value)} /></Field>
       <Field label="চুক্তির টাকা (জানা থাকলে)"><NumField value={budget} onChange={setBudget} /></Field>
       <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem' }}>{t("যোগ করুন")}</button>
+    </Sheet>
+  )
+}
+
+export function NewWorkerSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (w: Worker) => void }) {
+  const [name, setName] = useState('')
+  const [rate, setRate] = useState<number | null>(null)
+  const create = async () => {
+    const w: Worker = {
+      id: uid(), kind: 'worker', name_bn: name.trim(), rate: rate ?? 0,
+      phone: '', active: true, updated_at: new Date().toISOString(),
+    }
+    await saveMaster(w)
+    onCreated(w)
+  }
+  return (
+    <Sheet title="নতুন লোক" onClose={onClose}>
+      <Field label="নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
+      <Field label="একদিনের মজুরি (টাকা)"><NumField value={rate} onChange={setRate} /></Field>
+      <button className="btn primary" disabled={!name.trim() || !rate} onClick={create}
+        style={{ marginTop: '.6rem', width: '100%' }}>{t("যোগ করুন")}</button>
     </Sheet>
   )
 }

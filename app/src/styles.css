@@ -441,3 +441,28 @@ textarea.input { min-height: 5rem; resize: none; }
 .footbar .foot .v.warn { color: var(--warn); }
 .footbar .foot .v.crit { color: var(--crit); }
 .footbar button.foot:active { background: var(--sunk); }
+
+/* ---------- the first-run walk round ----------
+   One element does the dimming: a transparent box the size of the control,
+   with a huge spread shadow. Nothing to keep in register, and the control
+   underneath stays perfectly legible because nothing is drawn over it. */
+.tour { position: fixed; inset: 0; z-index: 60; }
+.tour-hole {
+  position: fixed; border-radius: 12px; pointer-events: none;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, .62);
+  outline: 2px solid var(--accent); outline-offset: 0;
+  transition: top .18s ease, left .18s ease, width .18s ease, height .18s ease;
+}
+.tour-card {
+  position: fixed; left: 1rem; right: 1rem;
+  background: var(--surface); border-radius: 14px; padding: 1rem 1.1rem 1.1rem;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, .3);
+}
+.tour-card h3 { font-size: 1.12rem; font-weight: 600; margin: .1rem 0 .35rem; letter-spacing: -.01em; }
+.tour-card p { color: var(--ink-2); line-height: 1.5; margin: 0; }
+.tour-step { font-size: .74rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tour-btns { display: flex; align-items: center; gap: .8rem; margin-top: 1rem; }
+.tour-btns .btn { flex: 1; }
+.tour-skip {
+  background: none; color: var(--muted); font-size: .92rem; padding: .6rem .2rem; min-height: var(--tap);
+}

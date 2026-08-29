@@ -20,6 +20,7 @@ import { plan, reschedule, type RemindWhen } from '../lib/remind'
 import { factoryReset } from '../lib/reset'
 import { cashState } from '../lib/calc'
 import { t, tf } from '../lib/i18n'
+import { useBackHandler } from '../lib/back'
 
 type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset'
 
@@ -28,6 +29,8 @@ export function Settings({ onBack }: { onBack: () => void }) {
   const [page, setPage] = useState<Page>(null)
   const [pin, setPin] = useState(false)
   const toast = useToast()
+  // Back out of লোকজন and you land on সেটিংস, not on the home screen.
+  useBackHandler(() => setPage(null), page !== null)
 
   if (page === 'sync') return <SyncPage s={s} onBack={() => setPage(null)} />
   if (page === 'projects') return <ProjectsPage s={s} onBack={() => setPage(null)} />
@@ -74,6 +77,11 @@ export function Settings({ onBack }: { onBack: () => void }) {
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('lang')} />
           <Pick title="লেখার আকার ও রং" sub={s.settings.theme === 'system' ? t('ফোনের মতো') : s.settings.theme === 'dark' ? t('অন্ধকার') : t('আলো')}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('display')} />
+          {/* Clearing the flag is all it takes — the app shell watches it and
+              takes him home, where every stop on the walk round lives. */}
+          <Pick title="অ্যাপটা ঘুরে দেখুন" sub="প্রথম দিনের মতো আবার দেখিয়ে দেবে"
+            right={<Icon name="fwd" size={18} />}
+            onClick={async () => { await saveSettings({ toured: false }); onBack() }} />
         </div>
 
         {miss != null && (

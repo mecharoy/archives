@@ -10,6 +10,7 @@ import { openBills, billTotals, blankBill, payBill, daysAway, isOverdue } from '
 import { hashPin, checkPin } from '../lib/pin'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
+import { useBackHandler } from '../lib/back'
 
 export function Personal({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -19,6 +20,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
   const [setting, setSetting] = useState(false)
   const [adding, setAdding] = useState<null | 'expense' | 'drawing'>(null)
   const [bill, setBill] = useState<Bill | null>(null)
+  useBackHandler(() => setAdding(null), adding !== null)
   const toast = useToast()
 
   const rows = useMemo(() => {
@@ -223,6 +225,8 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
   const [head, setHead] = useState(kind === 'drawing' ? DRAWING_HEAD : '')
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState(PAY_MODES[0])
+  const [writing, setWriting] = useState(false)
+  const [own, setOwn] = useState('')
   const ranked = rankHeads(s.entries, true).filter((h) => h !== DRAWING_HEAD)
   const ordered = [...ranked, ...MONEY_HEADS_PERSONAL.filter((h) => !ranked.includes(h))]
   const chips = amountChips(s.entries, head, true)
@@ -246,8 +250,23 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
         <div className="scroll">
           <h2 className="question">{t("কীসের খরচ?")}</h2>
           <div className="chips">
-            {ordered.slice(0, 6).map((h) => <Chip key={h} onClick={() => { noteChip(true); setHead(h) }}>{h}</Chip>)}
+            {ordered.slice(0, 8).map((h) => <Chip key={h} onClick={() => { noteChip(true); setHead(h) }}>{h}</Chip>)}
+            {/* The list can never be complete — a wedding gift, a bike
+                repair, a hospital trip. Whatever he types here becomes a
+                chip of its own next time, because the list is ranked from
+                what he has actually written. */}
+            <Chip onClick={() => setWriting(true)}>{t('+ নিজে লিখুন')}</Chip>
           </div>
+          {writing && (
+            <div style={{ marginTop: '1rem' }}>
+              <Field label="কীসের খরচ">
+                <input className="input" value={own} onChange={(e) => setOwn(e.target.value)}
+                  placeholder="যেমন — সাইকেল সারানো" autoFocus />
+              </Field>
+              <button className="btn primary" style={{ width: '100%' }} disabled={!own.trim()}
+                onClick={() => { noteChip(true); setHead(own.trim()) }}>{t('এগিয়ে যান')}</button>
+            </div>
+          )}
         </div>
       </>
     )

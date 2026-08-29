@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from 'react'
 import { dbAll, dbPut, dbPutMany, kvGet, kvSet, uid } from './db'
 import type { AnyMaster, Entry, Project, Worker, Item, Party, Stage, Coeff, ID, Bill } from './model'
-import { rowForEntry, rowForMaster } from './model'
+import { rowForEntry, rowForMaster, COMMON_ITEM_ORDER } from './model'
 import { isoDate } from './bn'
 import { setLang, t, type Lang } from './i18n'
 import type { RemindWhen } from './remind'
@@ -20,6 +20,7 @@ export interface Settings {
   pin_hash: string
   auto_sync: boolean
   onboarded: boolean
+  toured: boolean
   chips_taken: number
   chips_expanded: number
   theme: 'system' | 'light' | 'dark'
@@ -41,7 +42,7 @@ const BUILT_IN_TOKEN = (import.meta.env.VITE_SYNC_TOKEN as string | undefined)?.
 export const DEFAULT_SETTINGS: Settings = {
   endpoint: BUILT_IN_ENDPOINT, token: BUILT_IN_TOKEN, briefUrl: '', briefToken: '',
   opening_cash: 0, opening_date: isoDate(), pin_hash: '',
-  auto_sync: true, onboarded: false, chips_taken: 0, chips_expanded: 0,
+  auto_sync: true, onboarded: false, toured: false, chips_taken: 0, chips_expanded: 0,
   theme: 'system', text_scale: 1,
   lang: 'bn', remind: 'day', owner_bn: '', runs_shop: true, runs_sites: true,
 }
@@ -135,13 +136,22 @@ export async function boot() {
 
 /* ---- selectors ---- */
 
+/* Masters come back from IndexedDB in id order, and ids are random — so
+   without a sort, the three chips he is offered on a fresh install are three
+   arbitrary names. These orders decide nothing once he has history; they only
+   make the first week sensible instead of a lottery. */
+const COMMON = new Map(COMMON_ITEM_ORDER.map((n, i) => [n, i]))
+const byName = (a: { name_bn: string }, b: { name_bn: string }) => a.name_bn.localeCompare(b.name_bn, 'bn')
+const byCommon = (a: Item, b: Item) =>
+  ((COMMON.get(a.name_bn) ?? 99) - (COMMON.get(b.name_bn) ?? 99)) || byName(a, b)
+
 export const projects = (s: State) => s.masters.filter((m) => m.kind === 'project') as Project[]
 export const activeProjects = (s: State) => projects(s).filter((p) => p.status === 'active')
-export const workers = (s: State) => (s.masters.filter((m) => m.kind === 'worker') as Worker[]).filter((w) => w.active)
-export const allWorkers = (s: State) => s.masters.filter((m) => m.kind === 'worker') as Worker[]
-export const items = (s: State) => (s.masters.filter((m) => m.kind === 'item') as Item[]).filter((i) => i.active)
-export const allItems = (s: State) => s.masters.filter((m) => m.kind === 'item') as Item[]
-export const parties = (s: State) => s.masters.filter((m) => m.kind === 'party') as Party[]
+export const workers = (s: State) => (s.masters.filter((m) => m.kind === 'worker') as Worker[]).filter((w) => w.active).sort(byName)
+export const allWorkers = (s: State) => (s.masters.filter((m) => m.kind === 'worker') as Worker[]).sort(byName)
+export const items = (s: State) => (s.masters.filter((m) => m.kind === 'item') as Item[]).filter((i) => i.active).sort(byCommon)
+export const allItems = (s: State) => (s.masters.filter((m) => m.kind === 'item') as Item[]).sort(byCommon)
+export const parties = (s: State) => (s.masters.filter((m) => m.kind === 'party') as Party[]).sort(byName)
 export const stages = (s: State) => s.masters.filter((m) => m.kind === 'stage') as Stage[]
 export const coeffs = (s: State) => s.masters.filter((m) => m.kind === 'coeff') as Coeff[]
 /* Payments he knows are coming — rent, fees, a promise to a person. */

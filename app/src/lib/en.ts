@@ -738,4 +738,28 @@ export const EN: Record<string, string> = {
   'ফোনে কোনো নাম পাওয়া গেল না': 'No names found on this phone',
   'ওই নামের সঙ্গে কোনো নম্বর পাওয়া গেল না': 'That contact has no phone number',
   'কারণ জানা গেল না': 'no reason given',
+  /* ---- the first-run walk round ---- */
+  'অ্যাপ ঘুরে দেখা': 'A quick look round',
+  'অ্যাপটা ঘুরে দেখুন': 'Show me round the app',
+  'প্রথম দিনের মতো আবার দেখিয়ে দেবে': 'runs the first-day walk round again',
+  'পরেরটা': 'Next',
+  'বুঝেছি, শুরু করি': 'Got it',
+  'রোজ শুধু এইটুকু': 'This is the whole daily job',
+  'দিনের শেষে এখানে চাপুন। কে এসেছিল, কত মজুরি, কী মাল এল — কয়েকটা প্রশ্ন, তারপর শেষ। বাকি সব হিসাব এখান থেকেই নিজে থেকে তৈরি হয়।':
+    'Tap here at the end of the day. Who turned up, what you paid them, what material came — a few questions and you are done. Every other figure in the app is built from this.',
+  'রাতে হিসাব দেখে নেওয়া হয়': 'It reads the books overnight',
+  'আপনি ঘুমোলে রাতে সব হিসাব মিলিয়ে দেখা হয়, আর সকালে এখানে এক লাইনে লেখা থাকে কোনটায় আজ নজর দেওয়া দরকার। নিচে সেই কথাগুলোই বড় করে থাকে।':
+    'While you sleep the numbers are gone through, and by morning one line here says what needs your attention today. The notes just below say the same thing in more detail.',
+  'তিনটে খাতা': 'Three books',
+  'কাজ — সাইটের হিসাব। মজুত — দোকানের মাল। হিসাব — টাকা, বাকি, পাওনা আর নিজের খরচ। যেটা দরকার সেটায় চাপুন।':
+    'Work — the sites. Stock — what the shop holds. Money — cash, what you owe, what is owed to you, and your own spending. Tap whichever you need.',
+  'নিচে সব সময় তিনটে সংখ্যা': 'Three numbers, always at the bottom',
+  'হাতে কত আছে, কত পাবেন, কত দেবেন — যে পাতাতেই থাকুন, নিচে এই তিনটে দেখা যাবে। চাপলে কে কত, তার তালিকা খুলবে।':
+    'What you hold, what is owed to you, what you owe — on every screen. Tap one to see who, and how much.',
+  'এখানে সব কিছু বদলানো যায়': 'Everything is changed from here',
+  'ভাষা (বাংলা বা English), লেখার আকার, টাকার তাগাদা, লোকজন আর দোকানের নাম — সব এই চাকাটার ভিতরে।':
+    'Language, text size, payment reminders, your men and your shops — all behind this wheel.',
+
+  'যেমন — সাইকেল সারানো': 'e.g. bicycle repair',
+
 }

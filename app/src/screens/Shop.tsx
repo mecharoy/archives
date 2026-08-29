@@ -10,6 +10,7 @@ import { rankItems, rankParties, lastPurchase, qtyChips } from '../lib/suggest'
 import { scheduleSync } from '../lib/sync'
 import { capture } from '../lib/photo'
 import { t, tf } from '../lib/i18n'
+import { useBackHandler } from '../lib/back'
 
 type Flow = null | 'in' | 'sale' | 'count' | 'transfer'
 
@@ -99,6 +100,8 @@ const TITLES: Record<Exclude<Flow, null>, string> = {
 
 function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; onDone: (msg?: string) => void }) {
   const [step, setStep] = useState<'item' | 'qty' | 'rate' | 'who'>('item')
+  // One step back, not out of the whole flow with the entry lost.
+  useBackHandler(() => setStep(step === 'who' ? 'rate' : step === 'rate' ? 'qty' : 'item'), step !== 'item')
   const [item, setItem] = useState<Item | null>(null)
   const [qty, setQty] = useState('')
   const [rate, setRate] = useState('')

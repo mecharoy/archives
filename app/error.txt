@@ -67,3 +67,10 @@ Location: app/README.md, app/server/src/dashboard.js
 Action: splicing new sections in with a node script.
 Cause: those files are stored with CRLF line endings, so a multi-line search string written with LF never matches.
 Fix: every splice script now normalises CRLF to LF before matching and restores the original ending on write. Single-line seds were unaffected, which is why this only showed up on multi-line blocks.
+
+2026-08-29
+Problem: the smoke suite failed at "material: add a purchase" on some runs and passed on others — সিমেন্ট was not among the three item chips.
+Location: app/src/lib/store.ts (items/allItems/workers/parties selectors)
+Action: running the suite after adding the first-run tour.
+Cause: not the test. Masters come back from IndexedDB in id order and ids are uid() — random. With no purchase history the ranking has nothing to sort by, so the three chips offered on a fresh install were three arbitrary materials, different on every install. The intermittent test was the symptom of a real first-week defect.
+Fix: sort items by COMMON_ITEM_ORDER (cement, steel, brick, sand, chips) then by name, and sort workers and parties by name. Ranking by what he actually buys still takes over as soon as there is history. Suite now runs clean three times in a row.

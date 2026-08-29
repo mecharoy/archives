@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { toBn, parseNum, groupIndian } from '../lib/bn'
 import { t } from '../lib/i18n'
+import { useBackHandler } from '../lib/back'
 
 /* Every word that reaches the screen through this kit is translated here, at
    the last moment before it is drawn. That is deliberate: the ledger keeps
@@ -96,6 +97,8 @@ export function Chip({ on, children, onClick, sub }: { on?: boolean; children: R
 }
 
 export function Sheet({ title, onClose, children }: { title?: string; onClose: () => void; children: ReactNode }) {
+  // Back closes the sheet rather than the screen underneath it.
+  useBackHandler(onClose)
   useEffect(() => {
     const prev = document.body.style.overflow
     document.body.style.overflow = 'hidden'

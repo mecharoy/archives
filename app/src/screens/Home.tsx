@@ -59,11 +59,11 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
         <h1>{t('সাইট খাতা')}<span className="sub">{dayLabelBn(isoDate())}, {t(partOfDay)}</span></h1>
         <button className="iconbtn" onClick={refresh} aria-label={t('নতুন করে আনুন')}
           style={{ opacity: refreshing ? .5 : 1 }}><Icon name="refresh" /></button>
-        <button className="iconbtn" onClick={() => onGo('settings')} aria-label={t('সেটিংস')}><Icon name="gear" /></button>
+        <button className="iconbtn" data-tour="settings" onClick={() => onGo('settings')} aria-label={t('সেটিংস')}><Icon name="gear" /></button>
       </div>
 
       <div className="scroll">
-        <div className="hero">
+        <div className="hero" data-tour="brief">
           <p className="greet">
             {who ? `${who} · ` : ''}
             {usingLocal ? t('ফোনের নিজের হিসাব') : `${t('রাতের হিসাব')} · ${agoBn(brief.generated_at)}`}
@@ -78,7 +78,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </div>
         )}
 
-        <button className="bigbtn" onClick={onDay}>
+        <button className="bigbtn" data-tour="today" onClick={onDay}>
           <Icon name="book" size={30} stroke={1.6} />
           <span style={{ flex: 1 }}>
             <span className="t" style={{ display: 'block' }}>{t('আজকের হিসাব')}</span>
@@ -110,7 +110,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </>
         )}
 
-        <div className="tabs">
+        <div className="tabs" data-tour="tabs">
           <button className={'tab' + (tab === 'work' ? ' on' : '')} onClick={() => setTab('work')}>{t('কাজ')}</button>
           <button className={'tab' + (tab === 'stock' ? ' on' : '')} onClick={() => setTab('stock')}>{t('মজুত')}</button>
           <button className={'tab' + (tab === 'money' ? ' on' : '')} onClick={() => setTab('money')}>{t('হিসাব')}</button>
@@ -369,7 +369,7 @@ function StandingTotals({ s, onGo }: { s: State; onGo: (x: 'payments') => void }
   const owe = useMemo(() => duesSplit(s.entries), [s.entries])
   const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
   return (
-    <div className="footbar">
+    <div className="footbar" data-tour="standing">
       <div className="foot">
         <span className="k">{t('হাতে')}</span>
         <span className="v num">{counted ? money(cash.computed) : '—'}</span>

@@ -6,6 +6,7 @@ import { money, moneyExact, toBn, num, dateBn, isoDate } from '../lib/bn'
 import { projectTotals } from '../lib/calc'
 import { lastPurchase } from '../lib/suggest'
 import { t, tf } from '../lib/i18n'
+import { useBackHandler } from '../lib/back'
 
 /* Quoting a job, one question at a time.
 
@@ -57,6 +58,11 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   const [extras, setExtras] = useState<Extra[]>([])
   const [client, setClient] = useState('')
   const toast = useToast()
+
+  /* Seven questions in; back has to mean the previous question, or he loses
+     the lot and stops trusting the estimator. */
+  const ORDER: Step[] = ['type', 'size', 'material', 'labour', 'extras', 'margin', 'quote']
+  useBackHandler(() => setStep(ORDER[Math.max(0, ORDER.indexOf(step) - 1)]), step !== 'type')
 
   useEffect(() => { void kvGet<Prefs>('estimate_prefs', DEFAULT_PREFS).then((p) => setPrefs({ ...DEFAULT_PREFS, ...p })) }, [])
   const savePrefs = (p: Prefs) => { setPrefs(p); void kvSet('estimate_prefs', p) }

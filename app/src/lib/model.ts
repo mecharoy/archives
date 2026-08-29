@@ -161,6 +161,12 @@ export const MONEY_HEADS_SITE = [
 export const MONEY_HEADS_PERSONAL = [
   'বাজার', 'ওষুধ', 'পড়াশোনা', 'যাতায়াত', 'বিদ্যুৎ বিল', 'ফোন', 'অনুষ্ঠান', 'অন্যান্য',
 ]
+/* The order a contractor names his materials in. It decides which three
+   chips he sees on a fresh install, and nothing more: the moment he has
+   bought anything, ranking by what he actually buys takes over. Without it
+   the three chips are whichever ids sorted first, which is to say random. */
+export const COMMON_ITEM_ORDER = ['সিমেন্ট', 'রড', 'ইট', 'বালি', 'স্টোন চিপস']
+
 export const PAY_MODES = ['নগদ', 'ব্যাংক', 'UPI', 'চেক']
 
 /* The one place a row's shape is decided. Column order here must match the

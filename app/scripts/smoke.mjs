@@ -26,6 +26,15 @@ const tap = async (text, opts = {}) => {
   await el.click()
 }
 
+const pickItem = async (name) => {
+  const shown = page.getByText(name, { exact: true }).first()
+  if (!(await shown.count())) {
+    const more = page.getByText('আরও…').first()
+    if (await more.count()) { await more.click(); await page.waitForTimeout(300) }
+  }
+  await page.getByText(name, { exact: true }).first().click()
+}
+
 await page.goto('http://localhost:5199/')
 await page.waitForTimeout(700)
 
@@ -62,6 +71,44 @@ await step('onboarding: cash in hand', async () => {
   await page.getByText('আজকের হিসাব').first().waitFor({ timeout: 5000 })
 })
 
+await step('the tour opens by itself, first time', async () => {
+  await page.locator('.tour').waitFor({ timeout: 5000 })
+  const step1 = await page.locator('.tour-step').innerText()
+  if (!/1 \/ 5/.test(step1)) throw new Error('expected 5 stops, got ' + step1)
+})
+
+await step('the spotlight sits over the thing it names', async () => {
+  const wanted = ['today', 'brief', 'tabs', 'standing', 'settings']
+  for (let i = 0; i < wanted.length; i++) {
+    const hole = await page.locator('.tour-hole').boundingBox()
+    const el = await page.locator('[data-tour="' + wanted[i] + '"]').boundingBox()
+    if (!hole || !el) throw new Error('stop ' + (i + 1) + ' (' + wanted[i] + ') has nothing to point at')
+    /* The cut-out is the control plus 8px of padding on each side. */
+    const off = Math.abs(hole.x + hole.width / 2 - (el.x + el.width / 2)) +
+                Math.abs(hole.y + hole.height / 2 - (el.y + el.height / 2))
+    if (off > 6) throw new Error('stop ' + (i + 1) + ' (' + wanted[i] + ') is ' + Math.round(off) + 'px off centre')
+    if (i < wanted.length - 1) {
+      await page.locator('.tour-card .btn.primary').click()
+      await page.waitForTimeout(650)
+    }
+  }
+})
+
+await step('the card never runs off the screen', async () => {
+  const card = await page.locator('.tour-card').boundingBox()
+  const h = page.viewportSize().height
+  if (card.y < 0 || card.y + card.height > h) throw new Error('the card is off screen at ' + JSON.stringify(card))
+})
+
+await step('the last stop closes it for good', async () => {
+  await page.locator('.tour-card .btn.primary').click()
+  await page.waitForTimeout(600)
+  if (await page.locator('.tour').count()) throw new Error('the tour did not close')
+  await page.reload()
+  await page.waitForTimeout(1800)
+  if (await page.locator('.tour').count()) throw new Error('the tour came back after a reload')
+})
+
 await step('home renders headline', async () => { await page.locator('.headline').waitFor({ timeout: 3000 }) })
 await step('open wizard', async () => { await tap('আজকের হিসাব'); await page.getByText('আজ কে কে এসেছে?').waitFor({ timeout: 4000 }) })
 await step('tick both men', async () => {
@@ -77,7 +124,7 @@ await step('wages screen totals', async () => {
 })
 await step('material: add a purchase', async () => {
   await page.getByText('কী মাল?').waitFor({ timeout: 3000 })
-  await page.getByText('সিমেন্ট', { exact: true }).first().click()
+  await pickItem('সিমেন্ট')
   await page.getByText('সিমেন্ট কত বস্তা?').waitFor({ timeout: 3000 })
   for (const d of ['১', '০']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('এগিয়ে যান')
@@ -160,7 +207,7 @@ await step('shop flow: goods in', async () => {
   await page.locator('.tabs .tab', { hasText: 'মজুত' }).click()
   await page.locator('.tile', { hasText: 'দোকানের মজুত' }).click()
   await tap('মাল এসেছে')
-  await page.getByText('সিমেন্ট', { exact: true }).first().click()
+  await pickItem('সিমেন্ট')
   for (const d of ['২', '০']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('এগিয়ে যান')
   for (const d of ['৪', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
@@ -277,12 +324,71 @@ await step('and it stops asking', async () => {
   if (/আজই/.test(txt)) throw new Error('the paid reminder is still asking for today')
 })
 
+const pressBack = () => page.evaluate(() => import('/src/lib/back.ts').then((m) => m.goBack()))
+
+await step('back closes a sheet, not the screen under it', async () => {
+  await home()
+  await page.locator('[data-tour="settings"]').click()
+  await page.locator('.pick', { hasText: 'দোকান ও খদ্দের' }).click()
+  await page.locator('.topbar .iconbtn').last().click()   // the + for a new name
+  await page.locator('.sheet').waitFor({ timeout: 3000 })
+  const claimed = await pressBack()
+  if (!claimed) throw new Error('the sheet did not claim the back press')
+  await page.waitForTimeout(400)
+  if (await page.locator('.sheet').count()) throw new Error('the sheet is still open')
+  const title = await page.locator('.topbar h1').innerText()
+  if (!/দোকান ও খদ্দের/.test(title)) throw new Error('back left the page, not the sheet: ' + title)
+})
+
+await step('back leaves a settings page for settings, not for home', async () => {
+  const claimed = await pressBack()
+  if (!claimed) throw new Error('the settings page did not claim the back press')
+  await page.waitForTimeout(400)
+  const title = await page.locator('.topbar h1').innerText()
+  if (!/সেটিংস/.test(title)) throw new Error('expected to land on সেটিংস, got ' + title)
+})
+
+await step('and from settings itself nothing claims it', async () => {
+  const claimed = await pressBack()
+  if (claimed) throw new Error('something claimed the press that should have gone to the shell')
+})
+
+/* The list of household heads can never be complete. */
+await step('personal spending takes a name of his own', async () => {
+  await home()
+  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
+  await page.getByText('খরচ লিখুন').waitFor({ timeout: 3000 })
+  await tap('খরচ লিখুন')
+  await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 })
+  await page.locator('.chip', { hasText: 'নিজে লিখুন' }).click()
+  await page.locator('input.input').first().fill('সাইকেল সারানো')
+  await tap('এগিয়ে যান')
+  for (const d of ['২', '৫', '০']) await page.locator('.pad button', { hasText: d }).first().click()
+  await tap('সেভ করুন')
+  await page.waitForTimeout(700)
+})
+
+await step('and it is written under that name', async () => {
+  const body = await page.locator('.scroll').first().innerText()
+  if (!/সাইকেল সারানো/.test(body)) throw new Error('his own head is not in the month: ' + body.slice(0, 200))
+})
+
+await step('which then offers itself as a chip', async () => {
+  await tap('খরচ লিখুন')
+  await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 })
+  const chips = await page.locator('.chips .chip').allInnerTexts()
+  if (!chips.some((c) => /সাইকেল সারানো/.test(c))) throw new Error('his own head did not come back as a chip: ' + chips.join(', '))
+  await pressBack()
+  await page.waitForTimeout(400)
+})
+
 await step('a credit sale becomes a receivable', async () => {
   await home()
   await page.locator('.tabs .tab', { hasText: 'মজুত' }).click()
   await page.locator('.tile', { hasText: 'দোকানের মজুত' }).click()
   await tap('বিক্রি হয়েছে')
-  await page.getByText('সিমেন্ট', { exact: true }).first().click()
+  await pickItem('সিমেন্ট')
   for (const d of ['৫']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('এগিয়ে যান')
   for (const d of ['৫', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
@@ -363,6 +469,64 @@ await step('back to Bengali', async () => {
   await page.locator('.topbar .iconbtn').first().click()
   await page.getByText('আজকের হিসাব').first().waitFor({ timeout: 4000 })
 })
+/* A man who only runs a shop has nobody on the books. Asking him who came
+   today is a screen he cannot answer and cannot leave usefully. */
+await step('with nobody on the books the wizard does not ask who came', async () => {
+  await page.evaluate(() => new Promise((res) => {
+    const r = indexedDB.open('sitekhata')
+    r.onsuccess = () => {
+      const db = r.result
+      const tx = db.transaction('masters', 'readwrite')
+      const os = tx.objectStore('masters')
+      const all = os.getAll()
+      all.onsuccess = () => {
+        for (const m of all.result) if (m.kind === 'worker') os.delete(m.id)
+        tx.oncomplete = () => res(null)
+      }
+    }
+  }))
+  await page.reload()
+  await page.waitForTimeout(1200)
+  await tap('আজকের হিসাব')
+  await page.waitForTimeout(800)
+  const body = await page.locator('.scroll').first().innerText()
+  if (/আজ কে কে এসেছে/.test(body)) throw new Error('it still asked who came today')
+  if (/মজুরি কত দিলেন/.test(body)) throw new Error('it still asked about wages')
+})
+
+await step('and it opens on a question he can answer', async () => {
+  const q = await page.locator('.question').first().innerText()
+  if (!/মাল এসেছে|আর কোনো খরচ|কাজ কতদূর|হাতে কত|কী মাল/.test(q)) {
+    throw new Error('unexpected first question with no men: ' + q)
+  }
+})
+
+await step('putting one man back brings the question back', async () => {
+  await page.locator('.wizhead .iconbtn').last().click()   // close the wizard
+  await page.waitForTimeout(500)
+  await page.locator('[data-tour="settings"]').click()
+  await page.locator('.pick', { hasText: 'লোকজন' }).click()
+  await page.locator('.topbar .iconbtn').last().click()
+  await page.locator('.sheet input.input').first().fill('নতুন মিস্ত্রি')
+  await page.locator('.sheet input.num').first().fill('600')
+  await page.locator('.sheet .btn.primary').click()
+  await page.waitForTimeout(500)
+  await home()
+  await tap('আজকের হিসাব')
+  await page.getByText('আজ কে কে এসেছে?').waitFor({ timeout: 4000 })
+})
+
+await step('and a man can be added without leaving the question', async () => {
+  await page.locator('.pick', { hasText: 'নতুন লোক' }).click()
+  await page.locator('.sheet').waitFor({ timeout: 3000 })
+  await page.locator('.sheet input.input').first().fill('হারু')
+  await page.locator('.sheet input.num').first().fill('500')
+  await page.locator('.sheet .btn.primary').click()
+  await page.waitForTimeout(500)
+  const names = await page.locator('.pick').allInnerTexts()
+  if (!names.some((n) => /হারু/.test(n))) throw new Error('the new man is not on the list: ' + names.join(' | '))
+})
+
 await step('backup writes a file', async () => {
   await home()
   await page.locator('.topbar .iconbtn').nth(1).click()
