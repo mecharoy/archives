@@ -53,3 +53,10 @@ Location: app/src/lib/contacts.ts
 Action: adding a supplier from the phone book.
 Cause: could not be reproduced without the device; reading the whole book is the fragile path and the failure was swallowed by a generic message.
 Fix: use the plugin's native `pickContact()` first (the system's own picker — one tap, nothing else read), fall back to the full-list reader, and show the real error text so the next report names the actual cause.
+
+2026-08-29
+Problem: the contacts picker reported "missing the following permission in AndroidManifest.xml: android.permission.WRITE_CONTACTS" — the Android permission prompt appeared but no names ever came back.
+Location: app/android/app/src/main/AndroidManifest.xml
+Action: tapping "from the phone book" while adding a supplier.
+Cause: @capacitor-community/contacts declares READ_CONTACTS and WRITE_CONTACTS together under one alias ("contacts"), and Capacitor refuses the whole request — pickContact included — if any permission in the alias group is missing from the app manifest. The plugin ships an empty manifest, so the app must declare both. Only READ was declared.
+Fix: declare WRITE_CONTACTS as well. Nothing in the app writes to the phone book; the declaration exists only to satisfy the alias group. Verified inside the built APK by reading its binary manifest.

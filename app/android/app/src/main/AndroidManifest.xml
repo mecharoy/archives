@@ -38,9 +38,14 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- Only ever read, only when he taps "from the phone book", and only the
-         one name he then picks is written to the ledger. -->
+    <!-- Only ever read, only when he taps the phone-book mark, and only the
+         one name he then picks is written to the ledger.
+         WRITE_CONTACTS is declared but never used: the contacts plugin asks
+         for READ and WRITE together under one name, and Android refuses the
+         whole request — the picker included — if either is missing from this
+         file. The app calls no method that writes to the phone book. -->
     <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <uses-permission android:name="android.permission.WRITE_CONTACTS" />
     <!-- Payment reminders on a due date. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />

@@ -284,6 +284,18 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
   background: var(--surface); padding: .7rem .9rem; font-size: 1.06rem;
 }
 .input:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
+
+/* A mark inside the right edge of a box — the phone book on the phone field.
+   The box keeps its own padding clear of it so a long number never slides
+   underneath the mark. */
+.inputwrap { position: relative; }
+.inputwrap > .input { padding-right: 3.1rem; }
+.inputwrap > .inmark {
+  position: absolute; right: .25rem; top: 50%; transform: translateY(-50%);
+  width: 2.6rem; height: 2.6rem; border-radius: 9px;
+  display: grid; place-items: center; color: var(--muted); background: none;
+}
+.inputwrap > .inmark:active { background: var(--sunk); color: var(--accent); }
 textarea.input { min-height: 5rem; resize: none; }
 
 .amountline {

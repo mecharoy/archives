@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, useToast, Toast } from '../ui/kit'
+import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, PhoneField, useToast, Toast } from '../ui/kit'
 import { useStore, getState, activeProjects, workers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
@@ -976,16 +976,13 @@ export function NewPartySheet({ onClose, onCreated, kind = 'supplier' }: { onClo
     await saveMaster(p)
     onCreated(p)
   }
-  if (book) return <ContactPicker onClose={() => setBook(false)} onPicked={(c) => { setName(c.name); setPhone(c.phone); setBook(false) }} />
+  if (book) return <ContactPicker onClose={() => setBook(false)} onPicked={(c) => { setName(name.trim() || c.name); setPhone(c.phone); setBook(false) }} />
   return (
     <Sheet title={kind === 'supplier' ? t('নতুন দোকান') : t('নতুন খদ্দের')} onClose={onClose}>
-      {/* He already has these people saved. Typing the name again on a phone
-          keyboard is the slowest thing in the app. */}
-      <div className="chips" style={{ marginBottom: '.7rem' }}>
-        <Chip onClick={() => setBook(true)}>{t('ফোনের তালিকা থেকে')}</Chip>
-      </div>
       <Field label="নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
-      <Field label="ফোন (ইচ্ছে হলে)"><input className="input" value={phone} inputMode="tel" onChange={(e) => setPhone(e.target.value)} /></Field>
+      {/* The person is almost certainly already in his phone. The mark inside
+          the box fills both this and the name above in one tap. */}
+      <Field label="ফোন (ইচ্ছে হলে)"><PhoneField value={phone} onChange={setPhone} onBook={() => setBook(true)} /></Field>
       {kind === 'supplier' && (
         <Field label="কত দিনের বাকিতে দেয় (না জানলে ০)"><NumField value={terms} onChange={setTerms} /></Field>
       )}

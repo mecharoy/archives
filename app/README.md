@@ -81,38 +81,82 @@ reads, 100k writes, 5 GB. A busy day here is about fifty writes.
 
 ## The nightly brief
 
-Open your dashboard and press **Copy summary for the model**. That copies the
-instructions *and* the computed summary together — paste the lot into the
-model, paste its `brief.json` back into the box, and press **Publish to his
-phone**.
+It runs itself. A scheduled task on the Windows machine wakes at 22:30, reads
+his figures off the Worker, works out every number, asks Claude for the
+sentences that go around them, checks the answer, and publishes. The brief is
+on his phone before he wakes.
 
-Every line comes back in both languages: `headline_bn` and `headline_en`,
-`text_bn` and `text_en`, and so on. The phone shows whichever its language
-setting asks for, and falls back to Bengali when a brief has no English in it —
-so a brief written before this existed still renders. The prompt the button
-copies is kept in `server/src/dashboard.js`; it reads:
+It signs in with the Claude Code subscription already on that machine —
+`claude -p` is the same login as the terminal — so there is no API key
+anywhere in this repository and nothing to top up. The cost of a night is
+whatever the subscription already covers.
 
-```
-Here is the Site Khata summary. Use these numbers exactly as given.
-Do not add, average or re-derive anything — if a figure is not in the
-summary, leave it out.
+### Setting it up
 
-Write brief.json in the schema below. Bengali for anything my father
-reads; keep it short, plain, and specific. No greetings, no summary
-sentence at the end. Lead with whatever needs attention today.
+One config file, deliberately outside this repository because the repository
+is public:
 
-Flag, in this order of priority:
-  - entries_last_3_days is 0        -> he has stopped entering; say so first
-  - cash_variance beyond +/- 2000   -> entries are being missed
-  - any project with cpi below 1    -> losing on the work done so far
-  - dues_overdue above 0            -> already past a supplier's date
-  - a burn item ahead of pct_done   -> waste, theft, or a wrong estimate
-Say which of those three you think the material gap is, and why.
+    %USERPROFILE%\.site-khata\nightly.json
 
-```
+    {
+      "endpoint": "https://site-khata.<you>.workers.dev",
+      "admin_token": "<the admin token>"
+    }
 
-Paste the result into the dashboard's box and press **Publish to his phone**.
-It is on his dashboard at the next refresh.
+`household` and `model` are optional — the household is discovered when the
+server has exactly one, and the model defaults to `opus`. Then, once:
+
+    cd app\nightly
+    .\install.ps1                 # 22:30 nightly; -At 21:00 for another hour
+
+The task runs as you, needs no administrator rights, and wakes the machine if
+it is asleep. A night the machine is fully off is simply skipped — the phone
+then falls back to its own arithmetic and says on screen that it is doing so.
+
+    node nightly/run.mjs --dry    # print tonight's brief, publish nothing
+    node nightly/run.mjs          # run it now, for real
+    .\install.ps1 -Remove         # take it off the schedule
+
+Every run appends a line to `%USERPROFILE%\.site-khata\nightly.log`, and the
+brief that was actually sent is kept at `last-brief.json` beside it. When
+something looks wrong on his phone in the morning, those two files say what
+happened.
+
+### Why it is accurate
+
+The model is never asked to do arithmetic. **Every number in the brief is
+computed in `nightly/compute.mjs`** from the summary the server built out of
+his own rows — the cards, the percentages, the status colours, the material
+burn, and both lines of the S-curve. The model is handed those finished
+numbers and asked for one thing: the sentences.
+
+That leaves exactly one way a wrong figure could reach his phone — the model
+quoting a number inside a sentence. So `nightly/check.mjs` refuses any prose
+containing a figure of a thousand or more that does not appear in the summary,
+in Bengali digits or ASCII. Counts and percentages pass; invented rupees do
+not. The prompt itself tells the model not to put money in sentences at all:
+the amounts are already on the cards directly above the text.
+
+The checker also drops any line written in one language but not the other, any
+note attached to a job that does not exist, and to-do lists whose two
+languages have drifted out of step. A dropped piece is logged by name and the
+rest is published — a brief missing one alert is still a true brief. If the
+model is unreachable or its whole answer fails, the run publishes the computed
+half under a plain headline chosen by rule. A silent brief is better than a
+confident wrong one.
+
+A note from the model may sharpen a job's status but never soften it. The
+arithmetic decides whether a job is in trouble.
+
+`npm run nightly:check` exercises all of this against a fabricated ledger, with
+no network and no model — including the invented-figure case. It is part of
+`npm test`.
+
+### Doing it by hand
+
+The dashboard still has the manual path, unchanged, for a night the machine
+was off: open it, press **Copy summary for the model**, paste the lot into
+Claude, paste the `brief.json` back, and press **Publish to his phone**.
 
 The app renders exactly these keys and ignores everything else, so adding a
 field never breaks it:
@@ -297,10 +341,10 @@ his hand keeps working and simply starts again from empty.
 - **No PDF.** The estimator produces a formatted quotation you can share or
   copy into WhatsApp. Android's WebView has no print pipeline worth shipping,
   and a bad PDF is worse than a good message.
-- **The nightly run is still a person.** You copy the summary, ask the model
-  for the brief, and paste it back. Until it is on a schedule (a Worker cron
-  calling the API is the obvious next step) a missed night is a real defect —
-  four in a row and he stops opening the app.
+- **The nightly run needs one machine awake.** It is on a scheduled task now,
+  signing in with the Claude Code subscription rather than an API key, so a
+  night costs nothing extra — but a night that machine is off is a night with
+  no brief. Four in a row and he stops opening the app.
 - **Photos stay on the phone.** They are captured, shrunk to ~1400px JPEG and
   stored locally against the row. Pushing them to Drive is the obvious next
   step and the row already carries the `photo_id` for it.
@@ -317,7 +361,9 @@ his hand keeps working and simply starts again from empty.
                    History · Settings · Onboarding
     src/ui/        kit (icons, keypad, sheets) · charts
     server/        the Worker: routes, summary SQL, dashboard, schema, test.sh
+    nightly/       run · compute (every number) · check (the guard) · prompt
     scripts/       make-icons · gen-schema · smoke · smoke-sync
+                   check-dashboard · nightly-check · server-check
 
 `npm test` drives a real browser through onboarding, a full day's entry,
 same-as-yesterday, the shop, a credit sale and its settlement, the estimator
@@ -352,6 +398,6 @@ would. Start `npm run server:dev` first for both of those.
    has a contract; his real ones replace them in `src/lib/seed.ts`.
 2. Roughly how many distinct items the shop carries. Under about fifty, the
    stock flows can get simpler than they are.
-3. The nightly run is still a person. A Worker cron calling the model API is
-   the obvious next step, and the prompt it would send already exists in
-   `server/src/dashboard.js`.
+3. Whether one machine being awake at 22:30 is dependable enough. If a week of
+   missed nights ever piles up, the same job moves to a Worker cron calling
+   the API — a different bill, but nothing to keep switched on.

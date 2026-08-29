@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, useToast, Toast, Empty } from '../ui/kit'
+import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast, Toast, Empty } from '../ui/kit'
 import { PinSheet } from './Personal'
 import { NewItemSheet } from './DayWizard'
 import {
@@ -257,6 +257,7 @@ function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
 
 function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Worker | null>(null)
+  const [book, setBook] = useState(false)
   const list = allWorkers(s)
   const blank = (): Worker => ({ id: uid(), kind: 'worker', name_bn: '', rate: 0, phone: '', active: true, updated_at: '' })
   return (
@@ -275,7 +276,11 @@ function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
         <Sheet title={edit.name_bn || 'নতুন লোক'} onClose={() => setEdit(null)}>
           <Field label="নাম"><input className="input" value={edit.name_bn} onChange={(e) => setEdit({ ...edit, name_bn: e.target.value })} autoFocus /></Field>
           <Field label="একদিনের মজুরি (টাকা)"><NumField value={edit.rate} onChange={(v) => setEdit({ ...edit, rate: v ?? 0 })} /></Field>
-          <Field label="ফোন"><input className="input" value={edit.phone} inputMode="tel" onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
+          {/* The mark inside the box opens the phone's own list and fills the
+              name above along with the number. */}
+          <Field label="ফোন">
+            <PhoneField value={edit.phone} onChange={(v) => setEdit({ ...edit, phone: v })} onBook={() => setBook(true)} />
+          </Field>
           <Field label="অবস্থা">
             <div className="chips">
               <Chip on={edit.active} onClick={() => setEdit({ ...edit, active: true })}>{t("কাজ করছে")}</Chip>
@@ -285,6 +290,12 @@ function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
           <button className="btn primary" disabled={!edit.name_bn.trim() || !edit.rate} style={{ marginTop: '.5rem' }}
             onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>
+      )}
+      {book && edit && (
+        <ContactPicker onClose={() => setBook(false)} onPicked={(c) => {
+          setBook(false)
+          setEdit({ ...edit, name_bn: edit.name_bn.trim() || c.name, phone: c.phone })
+        }} />
       )}
     </>
   )
@@ -393,7 +404,6 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
           <Chip on={filter === 'all'} onClick={() => setFilter('all')}>{t('সব')}</Chip>
           <Chip on={filter === 'supplier'} onClick={() => setFilter('supplier')}>{t('দোকান')}</Chip>
           <Chip on={filter === 'client'} onClick={() => setFilter('client')}>{t('খদ্দের')}</Chip>
-          <Chip onClick={() => setBook(true)}>{t('ফোনের তালিকা থেকে')}</Chip>
         </div>
         {all.length === 0 && <Empty>{t("মাল কেনার সময় দোকানের নাম যোগ করা যায়।")}</Empty>}
         {all.length > 0 && list.length === 0 && <Empty>{t('এই নামে কিছু পাওয়া গেল না।')}</Empty>}
@@ -405,10 +415,12 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
           ))}
         </div>
       </div>
+      {/* Reached from the mark inside the phone box, so a sheet is already
+          open: keep whatever he has typed, and only fill a name he has not. */}
       {book && (
         <ContactPicker onClose={() => setBook(false)} onPicked={(c) => {
           setBook(false)
-          setEdit({ ...blank(), name_bn: c.name, phone: c.phone })
+          setEdit((e) => ({ ...(e || blank()), name_bn: (e?.name_bn || '').trim() || c.name, phone: c.phone }))
         }} />
       )}
       {edit && (
@@ -423,7 +435,11 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
           {edit.ptype === 'supplier' && (
             <Field label="কত দিনের বাকিতে দেয়"><NumField value={edit.terms_days} onChange={(v) => setEdit({ ...edit, terms_days: v ?? 0 })} /></Field>
           )}
-          <Field label="ফোন"><input className="input" value={edit.phone} inputMode="tel" onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></Field>
+          {/* The mark inside the box opens the phone's own list and fills the
+              name above along with the number. */}
+          <Field label="ফোন">
+            <PhoneField value={edit.phone} onChange={(v) => setEdit({ ...edit, phone: v })} onBook={() => setBook(true)} />
+          </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
             onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>

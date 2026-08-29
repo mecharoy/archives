@@ -116,6 +116,10 @@ export async function buildSummary(db, hid) {
       id: p.id,
       name_bn: p.name_bn,
       status: p.status,
+      // The planned line is drawn from these two and nothing else.
+      start_date: p.start_date || null,
+      plan_days: n(p.plan_days) || null,
+      area_sqft: n(p.area_sqft) || null,
       budget: round(budget),
       labour: round(t.labour),
       material: round(t.material),
@@ -133,6 +137,9 @@ export async function buildSummary(db, hid) {
         : gap > 6 ? 'খরচ কাজের থেকে এগিয়ে'
         : 'ঠিক আছে',
       burn: await burn(db, hid, p, pct_done),
+      // The spend curve, so the chart on his phone is drawn from rows rather
+      // than guessed by a model that has only totals to work from.
+      spend: await spendCurve(db, hid, p),
     })
   }
 
@@ -191,6 +198,51 @@ function stagePercent(project, stages, progress) {
     else if (state === 'half') done += n(s.weight) / 2
   }
   return Math.min(100, (done / total) * 100)
+}
+
+/* Money actually spent on one job, day by day, added up as it goes.
+
+   Wages, material and site expenses are three tables; they are summed per
+   date, merged, then accumulated. What comes back is at most thirty points —
+   enough to draw the line, small enough to hand to a model — each one a real
+   day with a real running total. Nothing here is estimated.
+
+   `plan` is deliberately NOT computed: it depends only on the budget and the
+   planned days, both of which the caller already has, and a straight line
+   drawn twice in two places is a straight line that will one day disagree. */
+async function spendCurve(db, hid, project) {
+  const rows = await all(db, `
+    SELECT date, SUM(amount) AS amount FROM (
+      SELECT date, amount FROM attendance WHERE household_id = ?1 AND project_id = ?2
+      UNION ALL
+      SELECT date, amount FROM stock WHERE household_id = ?1 AND project_id = ?2 AND dir IN ('in','transfer')
+      UNION ALL
+      SELECT date, amount FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0
+    ) GROUP BY date ORDER BY date`, hid, project.id)
+  if (!rows.length) return { days: [], cum: [] }
+
+  const start = project.start_date || rows[0].date
+  const day = (d) => Math.max(0, Math.round((Date.parse(d + 'T00:00:00Z') - Date.parse(start + 'T00:00:00Z')) / 86400000))
+
+  const days = []
+  const cum = []
+  let running = 0
+  for (const r of rows) {
+    running += n(r.amount)
+    const d = day(r.date)
+    // Two entries on one day are one point, not two.
+    if (days.length && days[days.length - 1] === d) cum[cum.length - 1] = round(running)
+    else { days.push(d); cum.push(round(running)) }
+  }
+
+  // Thin it to about thirty points, always keeping the first and the last.
+  const MAX = 30
+  if (days.length <= MAX) return { days, cum }
+  const keep = new Set([0, days.length - 1])
+  const step = (days.length - 1) / (MAX - 1)
+  for (let i = 0; i < MAX; i++) keep.add(Math.round(i * step))
+  const idx = [...keep].sort((a, b) => a - b)
+  return { days: idx.map((i) => days[i]), cum: idx.map((i) => cum[i]) }
 }
 
 /** Material consumed against the coefficient estimate — the theft-or-waste signal. */

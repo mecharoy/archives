@@ -10,12 +10,16 @@
     "icons": "node scripts/make-icons.mjs",
     "schema": "node scripts/gen-schema.mjs",
     "apk": "npm run build && npx cap sync android && cd android && ./gradlew assembleRelease",
-    "test": "node scripts/smoke.mjs",
+    "test": "node scripts/check-dashboard.mjs && node scripts/nightly-check.mjs && node scripts/smoke.mjs",
     "test:sync": "node scripts/smoke-sync.mjs",
     "server:dev": "cd server && npx wrangler dev --local --port 8799",
     "server:test": "cd server && ./test.sh",
     "server:deploy": "cd server && npx wrangler deploy",
-    "server:check": "node scripts/server-check.mjs"
+    "server:check": "node scripts/server-check.mjs",
+    "dashboard:check": "node scripts/check-dashboard.mjs",
+    "nightly:check": "node scripts/nightly-check.mjs",
+    "nightly": "node nightly/run.mjs",
+    "nightly:dry": "node nightly/run.mjs --dry"
   },
   "dependencies": {
     "@capacitor-community/contacts": "^8.0.0",

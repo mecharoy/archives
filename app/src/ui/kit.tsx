@@ -35,6 +35,9 @@ const paths: Record<string, string> = {
   chart: 'M4 20V4M4 20h16M8 16.5v-5M12.5 16.5v-9M17 16.5v-3',
   people: 'M9 11.5a3.4 3.4 0 1 0 0-6.8 3.4 3.4 0 0 0 0 6.8z M2.5 20a6.5 6.5 0 0 1 13 0 M16.2 5.2a3.2 3.2 0 0 1 0 6.2M18 14.4a6.2 6.2 0 0 1 3.5 5.6',
   clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7.5V12l3 2',
+  /* An address book: the same book with a person on the cover and the tab
+     down its spine, so it reads as "the names in the phone" at 20px. */
+  contactbook: 'M6.5 3H18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3z M3 8h2M3 12h2M3 16h2 M12 11.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M9 16.6a3 3 0 0 1 6 0',
 }
 
 export function Icon({ name, size = 22, stroke = 1.8 }: { name: keyof typeof paths | string; size?: number; stroke?: number }) {
@@ -188,6 +191,22 @@ export function NumField({ value, onChange, placeholder, decimal }: {
         onChange(n)
       }}
     />
+  )
+}
+
+/** The phone box, with the phone book sitting inside its right edge.
+    Tapping the mark is the only way in — there is no separate button on the
+    screen, because the number is exactly what he is being asked for. */
+export function PhoneField({ value, onChange, onBook }: {
+  value: string; onChange: (v: string) => void; onBook: () => void
+}) {
+  return (
+    <div className="inputwrap">
+      <input className="input" value={value} inputMode="tel" onChange={(e) => onChange(e.target.value)} />
+      <button type="button" className="inmark" onClick={onBook} aria-label={t('ফোনের তালিকা থেকে')}>
+        <Icon name="contactbook" size={21} />
+      </button>
+    </div>
   )
 }
 
