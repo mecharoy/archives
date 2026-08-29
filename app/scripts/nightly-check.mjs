@@ -69,6 +69,13 @@ ck('an empty ledger still makes cards', bare.cards.length > 0, 'true')
 ck('an uncounted till says so', bare.cards[0].sub_en, 'not counted yet')
 ck('no entries in 3 days is shouted', bare.cards.some((c) => c.status === 'crit'), 'true')
 ck('no jobs means no s-curve', bare.series.scurve, 'undefined')
+/* Stock below zero means goods left that were never entered as bought. */
+const NEG = { ...EMPTY, business: { ...EMPTY.business, shop_stock_value: -500 } }
+const neg = skeleton(NEG).cards.find((c) => c.label_en === 'Stock in the shop')
+ck('negative stock reaches the cards', Boolean(neg), 'true')
+ck('and it is shouted, not filed away', neg.status, 'crit')
+ck('positive stock stays quiet', skeleton({ ...EMPTY, business: { ...EMPTY.business, shop_stock_value: 500 } }).cards.find((c) => c.label_en === 'Stock in the shop').status, 'info')
+
 ck('the plain headline leads with the silence', plainHeadline(EMPTY).en, 'No day has been entered for three days.')
 
 /* ---------- the checker ---------- */

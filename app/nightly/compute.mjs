@@ -91,7 +91,17 @@ export function cards(sum) {
     status: 'info',
   })
 
-  if (n(b.shop_stock_value) > 0) {
+  /* Stock below zero is not a small number — it means goods left the shop that
+     were never recorded coming in, so it has to be on screen, not buried. */
+  if (n(b.shop_stock_value) < 0) {
+    out.push({
+      label_bn: 'দোকানের মাল', label_en: 'Stock in the shop',
+      value: money(b.shop_stock_value),
+      sub_bn: 'যা বেরিয়েছে তার কেনা লেখা হয়নি',
+      sub_en: 'goods went out that were never entered as bought',
+      status: 'crit',
+    })
+  } else if (n(b.shop_stock_value) > 0) {
     out.push({
       label_bn: 'দোকানের মাল', label_en: 'Stock in the shop',
       value: money(b.shop_stock_value),
