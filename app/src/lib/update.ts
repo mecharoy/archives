@@ -40,6 +40,8 @@ const str = (v: unknown, max = 400): string => (typeof v === 'string' ? v.slice(
    plugin in a browser does not return an error — it throws where nothing is
    waiting to catch it, which surfaces as a page error in an app that should
    simply have said nothing. So the question is asked once, first. */
+export async function nativePlatform(): Promise<boolean> { return isNative() }
+
 async function isNative(): Promise<boolean> {
   try {
     const { Capacitor } = await import('@capacitor/core')

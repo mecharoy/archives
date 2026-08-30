@@ -23,7 +23,7 @@ import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import {
   installed, fetchRelease, downloadAndInstall, canInstall, openInstallSettings,
-  sizeText, DEFAULT_MANIFEST, type Installed, type Release, type Stage as UpdateStage,
+  nativePlatform, sizeText, DEFAULT_MANIFEST, type Installed, type Release, type Stage as UpdateStage,
 } from '../lib/update'
 
 type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update'
@@ -131,12 +131,13 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
   const [stage, setStage] = useState<UpdateStage | null>(null)
   const [why, setWhy] = useState('')
   const [allowed, setAllowed] = useState(true)
+  const [native, setNative] = useState(false)
 
   const look = async () => {
     setLooking(true); setWhy(''); setStage(null)
     try {
-      const [a, b, c] = await Promise.all([installed(), fetchRelease(), canInstall()])
-      setHere(a); setThere(b); setAllowed(c)
+      const [n, a, b, c] = await Promise.all([nativePlatform(), installed(), fetchRelease(), canInstall()])
+      setNative(n); setHere(a); setThere(b); setAllowed(c)
       await saveSettings({ update_checked_at: new Date().toISOString() })
     } finally {
       // Whatever failed or timed out, the spinner always stops — never a
@@ -146,8 +147,13 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
   }
   useEffect(() => { void look() }, []) // eslint-disable-line
 
-  const newer = here && there && there.code > here.code
-  const phone = here !== null
+  /* Offer the latest whenever the server has one and it is not older than
+     what we can see. Crucially this does NOT require reading the installed
+     version: if that native call fails (here === null) on a real phone, the
+     manual update must still work — reinstalling the same build is harmless,
+     and being unable to read a version must never trap him on an old one. */
+  const offer = native && !!there && (!here || there.code > here.code)
+  const phone = native
 
   return (
     <>
@@ -160,7 +166,7 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
         <div className="card" style={{ marginTop: '1rem' }}>
           <div className="spread">
             <span>{t('এখন আছে')}</span>
-            <strong className="num">{phone ? here!.name : '—'}</strong>
+            <strong className="num">{here ? here.name : phone ? t('জানা যায়নি') : '—'}</strong>
           </div>
           <div className="spread" style={{ marginTop: '.5rem' }}>
             <span>{t('সবচেয়ে নতুন')}</span>
@@ -178,11 +184,11 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
             {t('খবর আনা গেল না। নেট এলে আবার দেখুন।')}
           </p>
         )}
-        {!looking && phone && there && !newer && (
+        {!looking && phone && there && !offer && (
           <p className="hint" style={{ marginTop: '.9rem' }}>{t('আপনার কাছে সবচেয়ে নতুনটাই আছে।')}</p>
         )}
 
-        {newer && (
+        {offer && (
           <>
             {there!.notes_bn && (
               <>

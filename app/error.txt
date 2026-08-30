@@ -102,3 +102,10 @@ Location: app/src/screens/Settings.tsx (RemindPage)
 Action: previewing what reminders are queued.
 Cause: the preview computed its list with plan(s.entries, s.settings.remind) — omitting the 4th arg billRows, which defaults to []. So personal bills were excluded from the PREVIEW even though reschedule() passes them and the notification was actually queued. The preview disagreed with reality.
 Fix: pass the bills to plan() in the preview exactly as reschedule() does: plan(s.entries, when, 9, s.masters.filter(m => m.kind === 'bill')). Imported the Bill type. Note the separate, correct behaviour: with 'on the day' (same, 0 days) a bill dated today after 9AM is intentionally skipped as already past.
+
+2026-08-31
+Problem: the অ্যাপ আপডেট page stayed on "checking" (দেখা হচ্ছে) forever; the Settings footer always showed "1.0" regardless of the installed build.
+Location: app/src/lib/update.ts (installed/canInstall/fetchRelease), app/src/screens/Settings.tsx (UpdatePage.look, footer)
+Action: opening the update page and reading the version on the phone.
+Cause: (1) look() awaited Promise.all of three calls with no timeout and no finally — if a native bridge call or the manifest fetch never settled on the device, `looking` never cleared. (2) The footer printed a hard-coded toBn('1.0'), never the real versionName.
+Fix: (1) added withTimeout() and wrapped installed()/canInstall()/fetchRelease(); look() now clears the spinner in a finally, so it always ends. (2) footer now reads installed()?.name (falls back to '—' off a phone). Note: a phone already on the broken build must sideload the fixed APK once — the fix cannot arrive through the checker it fixes.
