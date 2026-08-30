@@ -1,9 +1,9 @@
 {
-  "code": 4,
-  "name": "1.0.4",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=4",
-  "size": 7142536,
-  "notes_bn": "হোম পাতা নতুন করে সাজানো — কাজ, মজুত, হিসাব সব এক পাতায়, বিশদ এক চাপ দূরে, আর ‘সব কিছু’ বোতামে অ্যাপের প্রতিটা কাজ। লোক-মাল-দোকান এখন যে খাতার, সেই খাতাতেই বদলানো যায়।",
-  "notes_en": "Home reworked — work, inventory and accounts all on one page, detail one tap away, and a ‘Everything’ button for every task. Men, items and shops are now edited inside the book they belong to.",
-  "released_at": "2026-08-30T18:56:11.058Z"
+  "code": 5,
+  "name": "1.0.5",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=5",
+  "size": 7142936,
+  "notes_bn": "রঙিন হোম পাতা — কাজ, মজুত, হিসাব আলাদা রঙে চেনা যায়। ‘নজর দেওয়ার মতো’ এখন তিন খাতার নিচে। অন্ধকার মোডে সব লেখা এখন পরিষ্কার দেখা যায়। অ্যাপ খুললেই নতুন সংস্করণ এসেছে কিনা দেখে নেয়।",
+  "notes_en": "A colour-coded home — work, inventory and accounts each in their own hue. 'Worth a look' now sits below the three books. Everything is legible in dark mode. And the app checks for a new version every time you open it.",
+  "released_at": "2026-08-30T19:28:28.061Z"
 }

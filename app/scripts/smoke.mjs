@@ -342,9 +342,9 @@ const pressBack = () => page.evaluate(() => import('/src/lib/back.ts').then((m) 
 
 await step('back closes a sheet, not the screen under it', async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()
-  await page.locator('.pick', { hasText: 'দোকান ও খদ্দের' }).click()
-  await page.locator('.topbar .iconbtn').last().click()   // the + for a new name
+  await page.locator('.bookhead', { hasText: 'মজুত' }).click()          // the মজুত book → Shop
+  await page.locator('.tile', { hasText: 'দোকান ও খদ্দের' }).click()     // the names page
+  await page.locator('.topbar .iconbtn').last().click()                 // the + for a new name
   await page.locator('.sheet').waitFor({ timeout: 3000 })
   const claimed = await pressBack()
   if (!claimed) throw new Error('the sheet did not claim the back press')
@@ -355,6 +355,10 @@ await step('back closes a sheet, not the screen under it', async () => {
 })
 
 await step('back leaves a settings page for settings, not for home', async () => {
+  await home()
+  await page.locator('.topbar .iconbtn').nth(1).click()          // gear → Settings
+  await page.locator('.pick', { hasText: 'ভাষা' }).click()        // into a settings sub-page
+  await page.waitForTimeout(300)
   const claimed = await pressBack()
   if (!claimed) throw new Error('the settings page did not claim the back press')
   await page.waitForTimeout(400)
@@ -517,8 +521,8 @@ await step('and it opens on a question he can answer', async () => {
 await step('putting one man back brings the question back', async () => {
   await page.locator('.wizhead .iconbtn').last().click()   // close the wizard
   await page.waitForTimeout(500)
-  await page.locator('.topbar .iconbtn').nth(1).click()
-  await page.locator('.pick', { hasText: 'লোকজন' }).click()
+  await page.locator('.bookhead', { hasText: 'কাজ' }).click()          // the কাজ book
+  await page.locator('.tile', { hasText: 'লোকজন' }).click()             // its men page
   await page.locator('.topbar .iconbtn').last().click()
   await page.locator('.sheet input.input').first().fill('নতুন মিস্ত্রি')
   await page.locator('.sheet input.num').first().fill('600')

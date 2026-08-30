@@ -12,7 +12,7 @@
    simply not mentioning an update, because a man entering his day's wages must
    never be interrupted by our infrastructure having a bad morning. */
 
-import { getState, saveSettings } from './store'
+import { getState, saveSettings, setState } from './store'
 import { t } from './i18n'
 
 /** Where the repository publishes the build. Overridable in settings. */
@@ -173,4 +173,18 @@ export async function downloadAndInstall(
 export function sizeText(bytes?: number): string {
   if (!bytes) return ''
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+/* Ask on every app open (and every resume), not twice a day. He wanted the
+   phone to look for a new build each time he opens it, so this forces the
+   check past the throttle and parks the answer in the store; the card on the
+   home screen reads it from there. Off a phone, or when nothing is newer,
+   the store simply holds null and the card draws nothing. */
+export async function refreshUpdate(force = true): Promise<void> {
+  try {
+    const found = await checkForUpdate(force)
+    setState({ update: found })
+  } catch {
+    /* a failed look is a look that never happened — never a visible error */
+  }
 }

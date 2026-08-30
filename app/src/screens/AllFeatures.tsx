@@ -10,9 +10,9 @@ import type { Screen } from '../App'
 
 type Item = { icon: string; title: string; sub: string; to: Screen }
 
-const SECTIONS: { label: string; items: Item[] }[] = [
+const SECTIONS: { label: string; tone: string; items: Item[] }[] = [
   {
-    label: 'কাজ',
+    label: 'কাজ', tone: 'work',
     items: [
       { icon: 'book', title: 'আজকের হিসাব', sub: 'রোজকার এন্ট্রি', to: 'day' },
       { icon: 'chart', title: 'কাজ ও অগ্রগতি', sub: 'সব সাইটের অবস্থা', to: 'work' },
@@ -23,7 +23,7 @@ const SECTIONS: { label: string; items: Item[] }[] = [
     ],
   },
   {
-    label: 'মজুত',
+    label: 'মজুত', tone: 'stock',
     items: [
       { icon: 'shop', title: 'দোকানের মজুত', sub: 'মাল ঢোকা, বিক্রি, গোনা', to: 'shop' },
       { icon: 'book', title: 'মালের তালিকা', sub: 'নাম, একক, শেষ দর', to: 'items' },
@@ -31,7 +31,7 @@ const SECTIONS: { label: string; items: Item[] }[] = [
     ],
   },
   {
-    label: 'হিসাব',
+    label: 'হিসাব', tone: 'money',
     items: [
       { icon: 'wallet', title: 'টাকা দেওয়া-নেওয়া', sub: 'বাকি মেটানো, পাওনা তোলা', to: 'payments' },
       { icon: 'lock', title: 'নিজের খরচ', sub: 'আলাদা খাতা', to: 'personal' },
@@ -40,7 +40,7 @@ const SECTIONS: { label: string; items: Item[] }[] = [
     ],
   },
   {
-    label: 'অন্যান্য',
+    label: 'অন্যান্য', tone: '',
     items: [
       { icon: 'gear', title: 'সেটিংস', sub: 'ভাষা, আকার, ব্যাকআপ, তাগাদা', to: 'settings' },
     ],
@@ -57,7 +57,7 @@ export function AllFeatures({ onBack, onGo }: { onBack: () => void; onGo: (s: Sc
             <p className="sectionlabel">{t(sec.label)}</p>
             <div className="tilegrid">
               {sec.items.map((it) => (
-                <button className="tile" key={it.title} onClick={() => onGo(it.to)}>
+                <button className={'tile ' + sec.tone} key={it.title} onClick={() => onGo(it.to)}>
                   <Icon name={it.icon} size={24} stroke={1.6} />
                   <span>
                     <span className="t" style={{ display: 'block' }}>{t(it.title)}</span>

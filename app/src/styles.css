@@ -26,6 +26,9 @@
   --warn-bg:   #FAF0DC;
   --crit:      #A32233;
   --crit-bg:   #FBE9EA;
+  --c-work:  #2563EB; --c-work-bg:  #E7EEFD;
+  --c-stock: #B45309; --c-stock-bg: #FBEDDC;
+  --c-money: #7C3AED; --c-money-bg: #EFE7FD;
   --shadow:    0 1px 0 rgba(20,24,27,.04), 0 10px 24px -20px rgba(20,24,27,.5);
   --radius:    12px;
   --tap:       56px;
@@ -39,6 +42,7 @@
     --ink-2: #B7C1C5; --muted: #859299; --line: #262E32; --line-soft: #1E2528;
     --accent: #57BFA0; --accent-bg: #12302A; --ok: #57BFA0; --warn: #DCA854;
     --warn-bg: #2C2413; --crit: #E8788A; --crit-bg: #331A1E;
+    --c-work: #7DA9FF; --c-work-bg: #16233B; --c-stock: #E0A44E; --c-stock-bg: #2C2413; --c-money: #B794F6; --c-money-bg: #241B36;
     --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -22px rgba(0,0,0,.9);
     color-scheme: dark;
   }
@@ -48,6 +52,7 @@
   --ink-2: #B7C1C5; --muted: #859299; --line: #262E32; --line-soft: #1E2528;
   --accent: #57BFA0; --accent-bg: #12302A; --ok: #57BFA0; --warn: #DCA854;
   --warn-bg: #2C2413; --crit: #E8788A; --crit-bg: #331A1E;
+    --c-work: #7DA9FF; --c-work-bg: #16233B; --c-stock: #E0A44E; --c-stock-bg: #2C2413; --c-money: #B794F6; --c-money-bg: #241B36;
   --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -22px rgba(0,0,0,.9);
   color-scheme: dark;
 }
@@ -148,6 +153,13 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
 .tile:active { background: var(--sunk); }
 .tile .t { font-size: 1.02rem; font-weight: 600; }
 .tile .s { font-size: .78rem; color: var(--muted); }
+/* A tile's icon carries colour so a grid of them is legible at a glance and
+   never a wall of grey marks in dark mode. By default the app's green; in the
+   exploded view each section takes its own book colour. */
+.tile > svg { color: var(--accent); }
+.tile.work  > svg { color: var(--c-work); }
+.tile.stock > svg { color: var(--c-stock); }
+.tile.money > svg { color: var(--c-money); }
 
 /* ---------- cards ---------- */
 
@@ -412,18 +424,37 @@ textarea.input { min-height: 5rem; resize: none; }
    remember — all three are in view at once, which is the whole point. */
 
 .bookcard {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line);
+  border-left: 4px solid var(--line); border-radius: var(--radius);
   box-shadow: var(--shadow); overflow: hidden; margin-bottom: .8rem;
 }
+/* Each book wears its own colour on the spine, the header icon and the
+   ‘দেখুন’ link, so the eye lands on কাজ / মজুত / হিসাব by hue. */
+.bookcard.work  { border-left-color: var(--c-work); }
+.bookcard.stock { border-left-color: var(--c-stock); }
+.bookcard.money { border-left-color: var(--c-money); }
 .bookhead {
   width: 100%; display: flex; align-items: center; justify-content: space-between;
-  padding: .85rem 1.05rem .55rem; text-align: left;
+  padding: .8rem 1.05rem .55rem; text-align: left;
 }
-.bookhead .name { font-size: 1.16rem; font-weight: 650; letter-spacing: -.01em; }
+.bookhead .name {
+  display: flex; align-items: center; gap: .55rem;
+  font-size: 1.16rem; font-weight: 650; letter-spacing: -.01em;
+}
+.bookicon {
+  display: inline-grid; place-items: center; width: 2rem; height: 2rem;
+  border-radius: 9px; flex: none;
+}
+.bookcard.work  .bookicon { color: var(--c-work);  background: var(--c-work-bg); }
+.bookcard.stock .bookicon { color: var(--c-stock); background: var(--c-stock-bg); }
+.bookcard.money .bookicon { color: var(--c-money); background: var(--c-money-bg); }
 .bookhead .see {
   display: inline-flex; align-items: center; gap: .15rem;
   font-size: .86rem; font-weight: 600; color: var(--accent);
 }
+.bookcard.work  .see { color: var(--c-work); }
+.bookcard.stock .see { color: var(--c-stock); }
+.bookcard.money .see { color: var(--c-money); }
 .bookbody { width: 100%; text-align: left; padding: 0 1.05rem 1rem; display: block; }
 .bookbody:active, .bookhead:active { background: var(--sunk); }
 .booknote { font-size: .82rem; color: var(--muted); margin: .45rem 0 0; line-height: 1.45; }
@@ -441,6 +472,14 @@ textarea.input { min-height: 5rem; resize: none; }
   background: var(--surface); color: var(--ink); border: 1px solid var(--line);
   min-height: 4.4rem;
 }
+/* The green bigbtn flips its text colour per theme (dark ink on the light
+   green, white on the dark green). This one sits on the surface, not the
+   green, so it must keep ink text in BOTH themes — and it has to say so at the
+   same specificity as those theme rules, or it inherits the wrong colour and
+   the title goes invisible (dark-on-dark, or white-on-white). */
+:root[data-theme='dark'] .bigbtn.allbtn,
+:root:not([data-theme='light']) .bigbtn.allbtn { color: var(--ink); }
+@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .bigbtn.allbtn { color: var(--ink); } }
 .bigbtn.allbtn > svg { color: var(--accent); }
 .bigbtn.allbtn .s { color: var(--muted); opacity: 1; }
 

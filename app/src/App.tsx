@@ -15,6 +15,7 @@ import { Tour, type Stop } from './ui/Tour'
 import { goBack } from './lib/back'
 import { useStore, activeProjects, allWorkers, saveSettings } from './lib/store'
 import { startSyncLoop } from './lib/sync'
+import { refreshUpdate } from './lib/update'
 import { reschedule } from './lib/remind'
 import { useToast, Toast } from './ui/kit'
 import type { Draft } from './lib/draft'
@@ -102,6 +103,23 @@ export function App() {
   }, [settings.toured]) // eslint-disable-line
 
   useEffect(() => { startSyncLoop() }, [])
+
+  /* Look for a newer build every time the app is opened, and again whenever it
+     comes back to the foreground — he asked for this rather than the quiet
+     twice-a-day check. The answer is parked in the store; the card on the home
+     screen renders it. Off a phone it finds nothing and shows nothing. */
+  useEffect(() => {
+    void refreshUpdate()
+    let remove: (() => void) | undefined
+    void (async () => {
+      try {
+        const { App: CapApp } = await import('@capacitor/app')
+        const h = await CapApp.addListener('resume', () => { void refreshUpdate() })
+        remove = () => void h.remove()
+      } catch { /* browser */ }
+    })()
+    return () => remove?.()
+  }, [])
 
   /* Reminders are rebuilt whenever the ledger changes — a bill paid this
      evening must not nag him tomorrow morning. Cheap: it cancels ours and

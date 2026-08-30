@@ -10,27 +10,22 @@
    remove that last screen — an app that can replace itself unattended is a
    different and much worse thing than this one. */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { Icon } from './kit'
 import {
-  checkForUpdate, downloadAndInstall, openInstallSettings, sizeText,
-  type Stage, type UpdateState,
+  downloadAndInstall, openInstallSettings, sizeText, type Stage,
 } from '../lib/update'
+import { useStore, setState } from '../lib/store'
 import { t, tf, pick } from '../lib/i18n'
 
 export function UpdateCard() {
-  const [found, setFound] = useState<UpdateState | null>(null)
+  /* The answer is looked up once per app open (and on every resume) in the
+     shell, and parked in the store; this card just renders whatever is there.
+     So a newer build shows up the moment he opens the app, not up to twelve
+     hours later. */
+  const found = useStore((s) => s.update)
   const [stage, setStage] = useState<Stage | null>(null)
   const [why, setWhy] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    // Not on the first paint — the day button matters more than this does.
-    const timer = setTimeout(() => {
-      void checkForUpdate().then((u) => { if (alive) setFound(u) })
-    }, 2500)
-    return () => { alive = false; clearTimeout(timer) }
-  }, [])
 
   if (!found) return null
 
@@ -72,7 +67,7 @@ export function UpdateCard() {
               {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}
             </button>
           )}
-          <button className="btn quiet" disabled={busy} onClick={() => setFound(null)}>{t('পরে')}</button>
+          <button className="btn quiet" disabled={busy} onClick={() => setState({ update: null })}>{t('পরে')}</button>
         </div>
       </div>
     </div>

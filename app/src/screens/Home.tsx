@@ -103,6 +103,20 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </div>
         )}
 
+        {/* The three books, each with its headline figures in view and a way
+            into the whole book. Order follows what he runs, but all are shown
+            — he told us he uses all three, and hiding one behind a tap is the
+            scattering we are undoing. Each carries its own colour so the eye
+            finds কাজ, মজুত and হিসাব by hue before it reads a word. */}
+        <div data-tour="books" style={{ marginTop: '1.2rem' }}>
+          <WorkSummary s={s} brief={brief} onGo={onGo} />
+          <StockSummary s={s} onGo={onGo} />
+          <MoneySummary s={s} onGo={onGo} />
+        </div>
+
+        {/* What to look at today, kept under the books rather than above them —
+            he asked for it here, and it reads better as a footnote to the
+            three summaries than as a banner over them. */}
         {brief.alerts && brief.alerts.length > 0 && (
           <>
             <p className="sectionlabel">{t('নজর দেওয়ার মতো')}</p>
@@ -111,16 +125,6 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
             ))}
           </>
         )}
-
-        {/* The three books, each with its headline figures in view and a way
-            into the whole book. Order follows what he runs, but all are shown
-            — he told us he uses all three, and hiding one behind a tap is the
-            scattering we are undoing. */}
-        <div data-tour="books" style={{ marginTop: '1.2rem' }}>
-          <WorkSummary s={s} brief={brief} onGo={onGo} />
-          <StockSummary s={s} onGo={onGo} />
-          <MoneySummary s={s} onGo={onGo} />
-        </div>
 
         <button className="bigbtn allbtn" data-tour="all" onClick={() => onGo('all')} style={{ marginTop: '1.1rem' }}>
           <Icon name="grid" size={28} stroke={1.7} />
@@ -141,11 +145,13 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
 
 /* A book on the shelf: its name, a ‘দেখুন’ into the whole thing, and its
    headline figures underneath. Tapping anywhere on it opens the book. */
-function BookCard({ title, onOpen, children }: { title: string; onOpen: () => void; children: ReactNode }) {
+function BookCard({ tone, icon, title, onOpen, children }: {
+  tone: 'work' | 'stock' | 'money'; icon: string; title: string; onOpen: () => void; children: ReactNode
+}) {
   return (
-    <div className="bookcard">
+    <div className={'bookcard ' + tone}>
       <button className="bookhead" onClick={onOpen}>
-        <span className="name">{t(title)}</span>
+        <span className="name"><span className="bookicon"><Icon name={icon} size={20} stroke={1.7} /></span>{t(title)}</span>
         <span className="see">{t('দেখুন')} <Icon name="fwd" size={16} /></span>
       </button>
       <button className="bookbody" onClick={onOpen}>{children}</button>
@@ -160,7 +166,7 @@ function WorkSummary({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: Scr
   const rows = brief.projects ?? []
   const top = rows[0]
   return (
-    <BookCard title="কাজ" onOpen={() => onGo('work')}>
+    <BookCard tone="work" icon="chart" title="কাজ" onOpen={() => onGo('work')}>
       {act.length === 0 ? (
         <p className="booknote">{t('এখনও কোনো কাজ যোগ করা হয়নি। ভিতরে গিয়ে কাজ যোগ করুন।')}</p>
       ) : top ? (
@@ -197,7 +203,7 @@ function StockSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const value = levels.reduce((a, l) => a + l.value, 0)
   const low = levels.filter((l) => l.qty <= 0)
   return (
-    <BookCard title="মজুত" onOpen={() => onGo('shop')}>
+    <BookCard tone="stock" icon="shop" title="মজুত" onOpen={() => onGo('shop')}>
       {levels.length === 0 ? (
         <p className="booknote">{t('এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।')}</p>
       ) : (
@@ -225,7 +231,7 @@ function MoneySummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const spend = useMemo(() => monthSpend(s.entries), [s.entries])
   const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
   return (
-    <BookCard title="হিসাব" onOpen={() => onGo('money')}>
+    <BookCard tone="money" icon="wallet" title="হিসাব" onOpen={() => onGo('money')}>
       <div className="miniline">
         <span><span className="k">{t('হাতে টাকা')}</span><span className={'v num' + (cash.computed < 0 ? ' crit' : '')}>{counted ? money(cash.computed) : '—'}</span></span>
         <span><span className="k">{t('এ মাসের খরচ')}</span><span className="v num">{money(spend)}</span></span>

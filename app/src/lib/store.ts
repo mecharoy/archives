@@ -9,6 +9,7 @@ import { rowForEntry, rowForMaster, COMMON_ITEM_ORDER } from './model'
 import { isoDate } from './bn'
 import { setLang, t, type Lang } from './i18n'
 import type { RemindWhen } from './remind'
+import type { UpdateState } from './update'
 
 export interface Settings {
   endpoint: string
@@ -82,12 +83,13 @@ export interface State {
   syncing: boolean
   sync_error: string
   online: boolean
+  update: UpdateState | null
 }
 
 let state: State = {
   ready: false, masters: [], entries: [], outbox: [], settings: DEFAULT_SETTINGS,
   brief: null, brief_fetched_at: null, syncing: false, sync_error: '',
-  online: typeof navigator === 'undefined' ? true : navigator.onLine,
+  online: typeof navigator === 'undefined' ? true : navigator.onLine, update: null,
 }
 
 const listeners = new Set<() => void>()
