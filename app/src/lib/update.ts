@@ -60,10 +60,23 @@ async function plugin() {
 }
 
 /** What is installed. Null off a phone — the browser has no version. */
+/* No call in the update check may hang the screen. A native bridge that never
+   answers, or a fetch that never returns on a bad network, would otherwise
+   leave the page saying "checking" for ever. So every await here is bounded:
+   whatever has not answered in a few seconds is treated as "could not find
+   out", which the page can show, rather than a spinner with no end. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms)
+    p.then((v) => { clearTimeout(timer); resolve(v) },
+           (e) => { clearTimeout(timer); reject(e) })
+  })
+}
+
 export async function installed(): Promise<Installed | null> {
   if (!(await isNative())) return null
   try {
-    const res = await (await plugin()).current()
+    const res = await withTimeout((await plugin()).current(), 6000)
     if (!res?.ok || res.code == null) return null
     return { code: num(res.code), name: str(res.name, 20) || '—' }
   } catch {
@@ -78,9 +91,9 @@ export async function fetchRelease(url = ''): Promise<Release | null> {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 15_000)
-    const res = await fetch(where + (where.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
+    const res = await withTimeout(fetch(where + (where.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
       cache: 'no-store', signal: ctrl.signal,
-    })
+    }), 16_000)
     clearTimeout(timer)
     if (!res.ok) return null
     const raw = (await res.json()) as Record<string, unknown>
@@ -124,7 +137,7 @@ export async function checkForUpdate(force = false): Promise<UpdateState | null>
 /** Whether Android will let this app hand a file to the installer. */
 export async function canInstall(): Promise<boolean> {
   if (!(await isNative())) return false
-  try { return Boolean((await (await plugin()).canInstall()).value) } catch { return false }
+  try { return Boolean((await withTimeout((await plugin()).canInstall(), 6000)).value) } catch { return false }
 }
 
 export async function openInstallSettings(): Promise<void> {

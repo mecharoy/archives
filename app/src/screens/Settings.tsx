@@ -33,6 +33,10 @@ export function Settings({ onBack }: { onBack: () => void }) {
   const [page, setPage] = useState<Page>(null)
   const [pin, setPin] = useState(false)
   const toast = useToast()
+  // The real installed version, read from the phone itself — the footer used
+  // to print a hard-coded "1.0", which told him nothing about what he had.
+  const [ver, setVer] = useState('')
+  useEffect(() => { void installed().then((i) => { if (i?.name) setVer(i.name) }) }, [])
   // Back out of লোকজন and you land on সেটিংস, not on the home screen.
   useBackHandler(() => setPage(null), page !== null)
 
@@ -106,7 +110,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
             right={<Icon name="trash" size={18} />} onClick={() => setPage('reset')} />
         </div>
 
-        <p className="small muted" style={{ marginTop: '1.6rem' }}>{tf('Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।', toBn('1.0'))}</p>
+        <p className="small muted" style={{ marginTop: '1.6rem' }}>{tf('Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।', ver ? toBn(ver) : '—')}</p>
       </div>
       {pin && <PinSheet onClose={() => setPin(false)} onSaved={() => { setPin(false); toast.show('পাসকোড সেভ হয়েছে') }} />}
       {toast.msg && <Toast text={toast.msg} />}
@@ -130,9 +134,15 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
 
   const look = async () => {
     setLooking(true); setWhy(''); setStage(null)
-    const [a, b, c] = await Promise.all([installed(), fetchRelease(), canInstall()])
-    setHere(a); setThere(b); setAllowed(c); setLooking(false)
-    await saveSettings({ update_checked_at: new Date().toISOString() })
+    try {
+      const [a, b, c] = await Promise.all([installed(), fetchRelease(), canInstall()])
+      setHere(a); setThere(b); setAllowed(c)
+      await saveSettings({ update_checked_at: new Date().toISOString() })
+    } finally {
+      // Whatever failed or timed out, the spinner always stops — never a
+      // page stuck on "checking".
+      setLooking(false)
+    }
   }
   useEffect(() => { void look() }, []) // eslint-disable-line
 

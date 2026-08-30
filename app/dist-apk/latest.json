@@ -1,9 +1,9 @@
 {
-  "code": 6,
-  "name": "1.0.6",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=6",
-  "size": 7142940,
-  "notes_bn": "টাকার তাগাদায় ‘এখন যা যা মনে করানো হবে’ তালিকায় নিজের দেওয়া তারিখগুলোও (দিতে হবে) এখন দেখা যায়।",
-  "notes_en": "The reminder settings now list the dates you set for yourself (দিতে হবে) under what is queued, not just shop and customer dues.",
-  "released_at": "2026-08-30T19:45:55.430Z"
+  "code": 7,
+  "name": "1.0.7",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=7",
+  "size": 7143052,
+  "notes_bn": "আপডেট দেখা আর ‘দেখা হচ্ছে’-তে আটকে থাকবে না — সময়ে উত্তর না এলে থেমে যাবে। সেটিংসের নিচে এখন আসল সংস্করণ নম্বর দেখা যায়।",
+  "notes_en": "The update check no longer hangs on 'checking' — it stops if nothing answers in time. Settings now shows the real installed version at the bottom.",
+  "released_at": "2026-08-30T19:55:20.925Z"
 }
