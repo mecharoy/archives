@@ -22,8 +22,8 @@ import { cashState } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import {
-  installed, fetchRelease, downloadAndInstall, canInstall, openInstallSettings,
-  nativePlatform, sizeText, DEFAULT_MANIFEST, type Installed, type Release, type Stage as UpdateStage,
+  installed, fetchRelease, canInstall,
+  nativePlatform, openLatestDownload, sizeText, DEFAULT_MANIFEST, type Installed, type Release,
 } from '../lib/update'
 
 type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update'
@@ -128,13 +128,11 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
   const [here, setHere] = useState<Installed | null>(null)
   const [there, setThere] = useState<Release | null>(null)
   const [looking, setLooking] = useState(true)
-  const [stage, setStage] = useState<UpdateStage | null>(null)
-  const [why, setWhy] = useState('')
   const [allowed, setAllowed] = useState(true)
   const [native, setNative] = useState(false)
 
   const look = async () => {
-    setLooking(true); setWhy(''); setStage(null)
+    setLooking(true)
     try {
       const [n, a, b, c] = await Promise.all([nativePlatform(), installed(), fetchRelease(), canInstall()])
       setNative(n); setHere(a); setThere(b); setAllowed(c)
@@ -202,18 +200,12 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
                 <span>{t('এই অ্যাপকে নতুন সংস্করণ বসানোর অনুমতি দেওয়া নেই। একবার অনুমতি দিলে পরের বার থেকে আর লাগবে না।')}</span>
               </div>
             )}
-            {stage === 'downloading' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('নামছে…')}</p>}
-            {stage === 'opening' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('বসানোর পাতা খুলছে…')}</p>}
-            {stage === 'done' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
-            {stage === 'failed' && <p className="hint warn" style={{ marginTop: '.9rem' }}>{why}</p>}
+            <p className="hint" style={{ marginTop: '.9rem' }}>
+              {t('“নতুনটা নিন” চাপলে ফোনের ব্রাউজারে নতুন ফাইলটা নামবে, তারপর Install চাপুন।')}
+            </p>
             <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
-              disabled={stage === 'downloading' || stage === 'opening'}
-              onClick={() => {
-                if (!allowed) { void openInstallSettings(); return }
-                void downloadAndInstall(there!, (st, d) => { setStage(st); if (d) setWhy(d); if (st === 'blocked') setAllowed(false) })
-              }}>
-              {t(allowed ? 'নতুনটা নিন' : 'অনুমতি দিন')}
-              {allowed && there!.size ? ' · ' + sizeText(there!.size) : ''}
+              onClick={() => openLatestDownload(there!.url)}>
+              {t('নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
             </button>
           </>
         )}

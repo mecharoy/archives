@@ -9,7 +9,7 @@ import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
 import { allItems } from '../lib/store'
 import { flush } from '../lib/sync'
 import { t, pick } from '../lib/i18n'
-import { UpdateCard } from '../ui/UpdateCard'
+import { UpdateCard, UpdateModal } from '../ui/UpdateCard'
 import type { Screen } from '../App'
 
 /* The home screen is one calm page, not a set of tabs. The thing he does
@@ -139,6 +139,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
       </div>
 
       <StandingTotals s={s} onGo={onGo} />
+      <UpdateModal />
     </>
   )
 }

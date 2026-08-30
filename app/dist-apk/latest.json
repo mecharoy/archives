@@ -1,9 +1,9 @@
 {
-  "code": 8,
-  "name": "1.0.8",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=8",
-  "size": 7143084,
-  "notes_bn": "আপডেটের পাতা এখন সব সময় সবচেয়ে নতুনটা বসাতে দেয় — নিজের সংস্করণ পড়তে না পারলেও আটকায় না।",
-  "notes_en": "The update page can now always install the latest build, even when it cannot read the current version.",
-  "released_at": "2026-08-30T20:16:30.774Z"
+  "code": 10,
+  "name": "1.0.10",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=10",
+  "size": 7142800,
+  "notes_bn": "আপডেট আরও নির্ভরযোগ্য — অ্যাপ নিজের সংস্করণ ঠিকঠাক চেনে, আর অ্যাপ খুললেই নতুন থাকলে পপ-আপে জানায়।",
+  "notes_en": "Updates are more reliable — the app knows its own version correctly, and a pop-up tells you on open when a new build is out.",
+  "released_at": "2026-08-30T20:29:23.082Z"
 }

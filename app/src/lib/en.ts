@@ -817,4 +817,8 @@ export const EN: Record<string, string> = {
   'সব কিছু এক জায়গায়': 'Everything in one place',
   'অ্যাপের প্রতিটা কাজ — মাল, লোক, দোকান, দর, ব্যাকআপ, ভাষা — এই একটা বোতামের ভিতরে সাজানো আছে। যা খুঁজছেন, এখানে চাপলেই পাবেন।':
     'Every task the app has — items, men, shop, quotes, backup, language — is laid out inside this one button. Whatever you are after, press here and you will find it.',
+  'এখনই নিন': 'Get it now',
+  'জানা যায়নি': 'Not known',
+  '“এখনই নিন” চাপলে ফোনের ব্রাউজারে নতুন ফাইলটা নামবে, তারপর Install চাপুন। আপনার লেখা হিসাব থেকে যাবে।': 'Tap “Get it now” to download the new file in the phone browser, then press Install. Everything you have written stays.',
+  '“নতুনটা নিন” চাপলে ফোনের ব্রাউজারে নতুন ফাইলটা নামবে, তারপর Install চাপুন।': 'Tap “Get the new one” to download the new file in the phone browser, then press Install.',
 }

@@ -13,6 +13,7 @@
    never be interrupted by our infrastructure having a bad morning. */
 
 import { getState, saveSettings, setState } from './store'
+import { BUILD_CODE } from './buildinfo'
 import { t } from './i18n'
 
 /** Where the repository publishes the build. Overridable in settings. */
@@ -33,8 +34,29 @@ export interface Release {
 
 export interface Installed { code: number; name: string }
 
+/* BUILD_CODE (from ./buildinfo, written at release time) is what lets the app
+   know its own version WITHOUT the native bridge — the one call that was
+   failing on his phone and dragging the whole updater down with it. The
+   manifest is compared against this, so a broken native read can never hide a
+   real update again. */
+const BUILT_CODE = BUILD_CODE
+
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const str = (v: unknown, max = 400): string => (typeof v === 'string' ? v.slice(0, max) : '')
+
+/** The installed build number: the phone's own answer if it gives one, else
+    the number baked into this bundle. Never depends on the native bridge. */
+export async function currentCode(): Promise<number> {
+  const nat = await installed()
+  return nat?.code || BUILT_CODE
+}
+
+/** Hand the APK link to the phone's browser — it downloads and offers to
+    install, exactly like the manual sideload, with no dependence on the
+    custom native plugin. This is the install path that always works. */
+export function openLatestDownload(url: string): void {
+  try { window.open(url, '_system') } catch { /* nothing else to try */ }
+}
 
 /* Everything below is a no-op off a phone. Asking the bridge for a native
    plugin in a browser does not return an error — it throws where nothing is
@@ -123,16 +145,19 @@ export interface UpdateState { release: Release; from: Installed }
  * row in Settings where he asked on purpose and deserves an answer.
  */
 export async function checkForUpdate(force = false): Promise<UpdateState | null> {
+  if (!(await nativePlatform())) return null   // the browser has nothing to update
   const s = getState()
   if (!force) {
     const last = s.settings.update_checked_at
     if (last && Date.now() - Date.parse(last) < EVERY_HOURS * 3600_000) return null
   }
-  const here = await installed()
-  if (!here) return null                       // not on a phone; nothing to update
   const there = await fetchRelease()
   await saveSettings({ update_checked_at: new Date().toISOString() })
-  if (!there || there.code <= here.code) return null
+  // Compare against the build baked into this bundle, not the native read —
+  // so an unresponsive native bridge can never mask a genuine update.
+  const code = await currentCode()
+  if (!there || there.code <= code) return null
+  const here = (await installed()) || { code, name: '' }
   return { release: there, from: here }
 }
 
