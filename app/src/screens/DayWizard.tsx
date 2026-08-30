@@ -5,7 +5,7 @@ import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
 import { MONEY_HEADS_SITE, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
 import { DAYS_FOR, newDraft, loadDraft, saveDraft, clearDraft, buildEntries, wageTotal, matTotal, expTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
-import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, screenDemoted, rankProjects } from '../lib/suggest'
+import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
 import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
@@ -32,7 +32,6 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
   const s = useStore((x) => x)
   const [draft, setDraft] = useState<Draft | null>(start)
   const [i, setI] = useState(start?.step ?? 0)
-  const [showExtras, setShowExtras] = useState(false)
   const toast = useToast()
 
   useEffect(() => {
@@ -60,30 +59,23 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
     })
   }
 
-  const demoted = useMemo(() => {
-    if (!draft?.project_id) return { material: false, expense: false, progress: false }
-    return {
-      material: screenDemoted(s.entries, 'material', draft.project_id),
-      expense: screenDemoted(s.entries, 'expense', draft.project_id),
-      progress: screenDemoted(s.entries, 'progress', draft.project_id),
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draft?.project_id])
-
   const steps = useMemo<StepId[]>(() => {
     const list: StepId[] = []
+    const hasWork = activeProjects(s).length > 0
     if (activeProjects(s).length > 1) list.push('project')
     /* No men on the books means "who came today?" has no possible answer —
        an empty screen and a hint pointing at Settings is a dead end, not a
        question. A man who only runs a shop never sees these two at all; the
        moment he puts one name in, they come back on their own. */
     if (allWorkers(s).length > 0) list.push('attendance', 'wages')
-    if (!demoted.material || showExtras || (draft?.mats.length ?? 0) > 0) list.push('material')
-    if (!demoted.expense || showExtras || (draft?.exps.length ?? 0) > 0) list.push('expense')
-    if (!demoted.progress || showExtras || draft?.progress) list.push('progress')
+    /* When there is a live job, the day walks through every part of it — what
+       came in, what else was spent, and how far the work got. He asked for the
+       whole round every evening, so nothing demotes itself out of the way any
+       more; a screen with nothing to add is one extra tap, not a lost record. */
+    if (hasWork) list.push('material', 'expense', 'progress')
     list.push('cash', 'review')
     return list
-  }, [s, demoted, showExtras, draft?.mats.length, draft?.exps.length, draft?.progress])
+  }, [s])
 
   /* Back is one step, not out of the whole day. Registered above the early
      return, because hooks cannot be conditional — it does the same thing the
@@ -137,8 +129,8 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       {step === 'review' && (
         <StepReview
           s={s} draft={draft} project_bn={project?.name_bn || ''} onJump={jumpTo} onSave={save}
-          extrasAvailable={!showExtras && (demoted.material || demoted.expense || demoted.progress)}
-          onExtras={() => { setShowExtras(true); toast.show('বাকি প্রশ্নগুলো যোগ করা হল') }}
+          extrasAvailable={false}
+          onExtras={() => {}}
           patch={patch}
         />
       )}

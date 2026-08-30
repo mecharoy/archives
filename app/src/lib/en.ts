@@ -821,4 +821,6 @@ export const EN: Record<string, string> = {
   'জানা যায়নি': 'Not known',
   '“এখনই নিন” চাপলে ফোনের ব্রাউজারে নতুন ফাইলটা নামবে, তারপর Install চাপুন। আপনার লেখা হিসাব থেকে যাবে।': 'Tap “Get it now” to download the new file in the phone browser, then press Install. Everything you have written stays.',
   '“নতুনটা নিন” চাপলে ফোনের ব্রাউজারে নতুন ফাইলটা নামবে, তারপর Install চাপুন।': 'Tap “Get the new one” to download the new file in the phone browser, then press Install.',
+  'কাজটা মুছে ফেলুন': 'Delete this job',
+  'হ্যাঁ, কাজটা মুছে ফেলুন': 'Yes, delete this job',
 }

@@ -1,9 +1,9 @@
 {
-  "code": 10,
-  "name": "1.0.10",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=10",
-  "size": 7142800,
-  "notes_bn": "আপডেট আরও নির্ভরযোগ্য — অ্যাপ নিজের সংস্করণ ঠিকঠাক চেনে, আর অ্যাপ খুললেই নতুন থাকলে পপ-আপে জানায়।",
-  "notes_en": "Updates are more reliable — the app knows its own version correctly, and a pop-up tells you on open when a new build is out.",
-  "released_at": "2026-08-30T20:29:23.082Z"
+  "code": 11,
+  "name": "1.0.11",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=11",
+  "size": 7142676,
+  "notes_bn": "আজকের হিসাব এখন কাজ থাকলে সব ধাপ ঘুরে যায় — মাল, খরচ, অগ্রগতি কিছুই আর নিজে থেকে বাদ পড়ে না। আর ‘কাজ’ থেকে কোনো কাজ মুছে ফেলা যায়।",
+  "notes_en": "Today's entry now walks through every step when a job is live — nothing skips itself — and a job can be deleted from the Work book.",
+  "released_at": "2026-08-30T20:35:57.603Z"
 }
