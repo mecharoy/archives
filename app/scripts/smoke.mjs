@@ -156,6 +156,10 @@ await step('material total is 4100', async () => {
   if (!t.includes('৪,১০০')) throw new Error('expected ৪,১০০ got ' + t)
   await tap('এগিয়ে যান')
 })
+await step('returned: nothing came back', async () => {
+  await page.getByText('কোনো মাল ফেরত এল?').waitFor({ timeout: 3000 })
+  await tap('কিছু ফেরত আসেনি')
+})
 await step('expenses: none today', async () => {
   await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 })
   await tap('আর কোনো খরচ নেই')
@@ -163,6 +167,14 @@ await step('expenses: none today', async () => {
 await step('progress: mark half', async () => {
   await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 })
   await page.getByText('অর্ধেক হয়েছে').first().click()
+})
+await step('personal spending in the day: none', async () => {
+  await page.getByText('নিজের কোনো খরচ?').waitFor({ timeout: 3000 })
+  await page.getByText('না', { exact: true }).first().click()
+})
+await step('inventory in the day: nothing (if a shop)', async () => {
+  const q = page.getByText('দোকানে মাল তুললেন?').first()
+  try { await q.waitFor({ timeout: 2500 }); await page.getByText('না', { exact: true }).first().click() } catch {}
 })
 await step('cash: first count', async () => {
   await page.getByText('দিনের শেষে হাতে কত?').waitFor({ timeout: 3000 })

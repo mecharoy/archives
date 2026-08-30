@@ -3,8 +3,8 @@ import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, PhoneFie
 import { useStore, getState, activeProjects, workers, allWorkers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
-import { MONEY_HEADS_SITE, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
-import { DAYS_FOR, newDraft, loadDraft, saveDraft, clearDraft, buildEntries, wageTotal, matTotal, expTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
+import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
+import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
 import { capture } from '../lib/photo'
@@ -15,22 +15,25 @@ import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 
-type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'expense' | 'progress' | 'cash' | 'review'
+type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'returned' | 'expense' | 'progress' | 'personal' | 'inventory' | 'cash' | 'review'
 
 const QUESTION: Record<StepId, string> = {
   project: 'কোন কাজ?',
   attendance: 'আজ কে কে এসেছে?',
   wages: 'মজুরি কত দিলেন?',
   material: 'মাল এসেছে?',
+  returned: 'কোনো মাল ফেরত এল?',
   expense: 'আর কোনো খরচ?',
   progress: 'কাজ কতদূর?',
+  personal: 'নিজের কোনো খরচ?',
+  inventory: 'দোকানে মাল তুললেন?',
   cash: 'দিনের শেষে হাতে কত?',
   review: 'একবার দেখে নিন',
 }
 
 export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (saved: boolean) => void }) {
   const s = useStore((x) => x)
-  const [draft, setDraft] = useState<Draft | null>(start)
+  const [draft, setDraft] = useState<Draft | null>(start ? normalizeDraft(start) : null)
   const [i, setI] = useState(start?.step ?? 0)
   const toast = useToast()
 
@@ -40,7 +43,8 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       // A half-finished day is resumed whatever date it carries — he may be
       // finishing yesterday's entry this morning, and dropping it would be the
       // one bug that loses work he already typed.
-      const saved = await loadDraft()
+      const savedRaw = await loadDraft()
+      const saved = savedRaw ? normalizeDraft(savedRaw) : null
       const resume = saved && (saved.date === isoDate() || !draftIsEmpty(saved))
       const d = resume ? saved : newDraft()
       const act = activeProjects(getState())
@@ -69,10 +73,14 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
        moment he puts one name in, they come back on their own. */
     if (allWorkers(s).length > 0) list.push('attendance', 'wages')
     /* When there is a live job, the day walks through every part of it — what
-       came in, what else was spent, and how far the work got. He asked for the
-       whole round every evening, so nothing demotes itself out of the way any
-       more; a screen with nothing to add is one extra tap, not a lost record. */
-    if (hasWork) list.push('material', 'expense', 'progress')
+       came in, what came back, what else was spent, and how far the work got.
+       He asked for the whole round every evening, so nothing demotes itself out
+       of the way; a screen with nothing to add is one extra tap, not a lost
+       record. Personal spending is asked of everyone; putting goods into the
+       shop only of a man who runs one. */
+    if (hasWork) list.push('material', 'returned', 'expense', 'progress')
+    list.push('personal')
+    if (s.settings.runs_shop) list.push('inventory')
     list.push('cash', 'review')
     return list
   }, [s])
@@ -97,7 +105,7 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
     await saveEntries(buildEntries(withComputed))
     // Keep the item master's rate current, so the estimator and the shop see
     // the same price he just paid on site.
-    for (const m of draft.mats) {
+    for (const m of [...draft.mats, ...draft.invs]) {
       const it = items(s).find((x) => x.id === m.item_id)
       if (it && m.rate > 0 && it.last_rate !== m.rate) await saveMaster({ ...it, last_rate: m.rate })
     }
@@ -123,8 +131,11 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       {step === 'attendance' && <StepAttendance s={s} draft={draft} patch={patch} next={next} />}
       {step === 'wages' && <StepWages s={s} draft={draft} patch={patch} next={next} />}
       {step === 'material' && <StepMaterial s={s} draft={draft} patch={patch} next={next} />}
+      {step === 'returned' && <StepReturned s={s} draft={draft} patch={patch} next={next} />}
       {step === 'expense' && <StepExpense s={s} draft={draft} patch={patch} next={next} />}
       {step === 'progress' && <StepProgress s={s} draft={draft} patch={patch} next={next} />}
+      {step === 'personal' && <StepExpense s={s} draft={draft} patch={patch} next={next} field="pexps" personal startAsk question={QUESTION.personal} hint="ঘরের বা নিজের খরচ — কাজের হিসাবে ধরা হবে না।" />}
+      {step === 'inventory' && <StepMaterial s={s} draft={draft} patch={patch} next={next} field="invs" toShop startAsk question={QUESTION.inventory} hint="দোকানের জন্য মাল তুললে এখানে লিখুন — সাইটের হিসাবে যাবে না।" />}
       {step === 'cash' && <StepCash s={s} draft={draft} patch={patch} next={next} />}
       {step === 'review' && (
         <StepReview
@@ -347,17 +358,25 @@ function StepWages({ s, draft, patch, next }: StepProps) {
 
 /* ---------- 4. material ---------- */
 
-function StepMaterial({ s, draft, patch, next }: StepProps) {
+/* Serves both the site's material (field 'mats') and goods put into the shop
+   (field 'invs', toShop). Same screen — pick an item, a quantity, a rate,
+   optionally a supplier and whether it is paid — differing only in which list
+   it fills and, at save time, whether the row carries the job or the shop. */
+function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, startAsk = false, question = QUESTION.material, hint = 'আজ কোনো মাল এলে এখানে লিখুন।' }:
+  StepProps & { field?: 'mats' | 'invs'; toShop?: boolean; startAsk?: boolean; question?: string; hint?: string }) {
   // Straight to the chips. The old yes/no screen asked a question the next
   // screen answered anyway; the way past it is now a button on the same screen.
-  const [sub, setSub] = useState<'ask' | 'item' | 'qty' | 'rate'>(draft.mats.length ? 'ask' : 'item')
+  const [sub, setSub] = useState<'ask' | 'item' | 'qty' | 'rate'>((draft[field].length || startAsk) ? 'ask' : 'item')
   const [cur, setCur] = useState<DraftMat | null>(null)
   const [showAll, setShowAll] = useState(false)
   const [qty, setQty] = useState('')
   const [rate, setRate] = useState('')
   const [newItem, setNewItem] = useState(false)
+  const total = draft[field].reduce((a, m) => a + m.qty * m.rate, 0)
 
-  const ranked = useMemo(() => rankItems(s.entries, draft.project_id), [s.entries, draft.project_id])
+  // Rank by the history of the place it is going: the shop for inventory, this
+  // job for site material.
+  const ranked = useMemo(() => rankItems(s.entries, toShop ? '' : draft.project_id), [s.entries, toShop, draft.project_id])
   const all = items(s)
   // Ranked first; before he has any history the list is simply his own items,
   // so the screen is never a single "আরও…" chip on day one.
@@ -382,7 +401,7 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
       ...cur, qty: Number(qty) || 0, rate: Number(rate) || 0, paid, party_id,
       due_date: paid ? '' : addDays(draft.date, terms), photo_id,
     }
-    patch({ mats: [...draft.mats, line] })
+    patch({ [field]: [...draft[field], line] })
     setCur(null); setSub('ask')
   }
 
@@ -390,31 +409,31 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{t(QUESTION.material)}</h2>
-          <p className="hint">{t("আজ কোনো মাল এলে এখানে লিখুন।")}</p>
-          {draft.mats.length > 0 && (
+          <h2 className="question">{t(question)}</h2>
+          <p className="hint">{t(hint)}</p>
+          {draft[field].length > 0 && (
             <div className="card" style={{ marginBottom: '.9rem' }}>
-              {draft.mats.map((m) => (
+              {draft[field].map((m) => (
                 <div key={m.key} className="review-row">
                   <span>
                     <span className="t">{nameOf(s, m.item_id)}</span>
                     <span className="k">{num(m.qty, m.qty % 1 ? 2 : 0)} {t(itemOf(m.item_id)?.unit_bn || '')} × {money(m.rate)}{m.paid ? '' : t(' · বাকি')}</span>
                   </span>
                   <span className="v num">{money(m.qty * m.rate)}</span>
-                  <button className="iconbtn" onClick={() => patch({ mats: draft.mats.filter((x) => x.key !== m.key) })} aria-label="বাদ দিন">
+                  <button className="iconbtn" onClick={() => patch({ [field]: draft[field].filter((x) => x.key !== m.key) })} aria-label="বাদ দিন">
                     <Icon name="trash" size={18} />
                   </button>
                 </div>
               ))}
-              <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(matTotal(draft))}</span></div>
+              <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(total)}</span></div>
             </div>
           )}
           <div className="yesno">
             <button onClick={next}>{t("না")}</button>
-            <button className="on" onClick={() => setSub('item')}>{draft.mats.length ? t('আরও মাল') : t('হ্যাঁ')}</button>
+            <button className="on" onClick={() => setSub('item')}>{draft[field].length ? t('আরও মাল') : t('হ্যাঁ')}</button>
           </div>
         </div>
-        {draft.mats.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>}
+        {draft[field].length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>}
       </>
     )
   }
@@ -432,7 +451,7 @@ function StepMaterial({ s, draft, patch, next }: StepProps) {
           </div>
         </div>
         <div className="actionbar">
-          {draft.mats.length > 0
+          {draft[field].length > 0
             ? <button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button>
             : <button className="btn ghost" style={{ flex: 1 }} onClick={next}>{t("আজ মাল আসেনি")}</button>}
         </div>
@@ -560,22 +579,125 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
 
 /* ---------- 5. other expenses ---------- */
 
-function StepExpense({ s, draft, patch, next }: StepProps) {
-  const [sub, setSub] = useState<'ask' | 'head' | 'amount'>(draft.exps.length ? 'ask' : 'head')
+/* ---------- material returned from the site ---------- */
+
+/* Leftover material coming back off the site. Pick the item, say how much, and
+   the rate it was sent at (its last price, ready to correct). It re-enters the
+   shop and comes off this job's material cost — the reverse of sending it. */
+function StepReturned({ s, draft, patch, next }: StepProps) {
+  const rets = draft.rets ?? []
+  const [sub, setSub] = useState<'ask' | 'item' | 'qty'>(rets.length ? 'ask' : 'item')
+  const [cur, setCur] = useState<{ item_id: ID; rate: number } | null>(null)
+  const [qty, setQty] = useState('')
+  const [showAll, setShowAll] = useState(false)
+  const all = items(s)
+  const ranked = useMemo(() => rankItems(s.entries, draft.project_id), [s.entries, draft.project_id])
+  const top = pad(ranked.map((id) => all.find((x) => x.id === id)!).filter(Boolean), all, 3)
+  const itemOf = (id: ID) => all.find((x) => x.id === id)
+
+  const start = (it: Item) => { setCur({ item_id: it.id, rate: it.last_rate ?? 0 }); setQty(''); setSub('qty') }
+  const add = () => {
+    if (!cur) return
+    patch({ rets: [...rets, { key: uid(), item_id: cur.item_id, qty: Number(qty) || 0, rate: cur.rate }] })
+    setCur(null); setSub('ask')
+  }
+
+  if (sub === 'item') {
+    return (
+      <>
+        <div className="scroll">
+          <h2 className="question">{t(QUESTION.returned)}</h2>
+          <p className="hint">{t("সাইট থেকে যে মাল ফেরত এল — দোকানে ফিরে যাবে, কাজের খরচ থেকে বাদ যাবে।")}</p>
+          <div className="chips">
+            {top.map((it) => <Chip key={it.id} onClick={() => start(it)}>{it.name_bn}</Chip>)}
+            {all.length > top.length && <Chip onClick={() => setShowAll(true)}>{t("আরও…")}</Chip>}
+          </div>
+        </div>
+        <div className="actionbar">
+          {rets.length > 0
+            ? <button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button>
+            : <button className="btn ghost" style={{ flex: 1 }} onClick={next}>{t("কিছু ফেরত আসেনি")}</button>}
+        </div>
+        {showAll && (
+          <Sheet title="সব মাল" onClose={() => setShowAll(false)}>
+            <div className="rowlist">
+              {all.map((it) => <Pick key={it.id} title={it.name_bn} sub={it.unit_bn} onClick={() => { setShowAll(false); start(it) }} />)}
+            </div>
+          </Sheet>
+        )}
+      </>
+    )
+  }
+
+  if (sub === 'qty' && cur) {
+    const it = itemOf(cur.item_id)
+    return (
+      <>
+        <div className="scroll">
+          <h2 className="question">{tf('{0} কত {1} ফেরত?', t(it?.name_bn || ''), t(it?.unit_bn || ''))}</h2>
+          <MoneyPad value={qty} onChange={setQty} prefix="" allowDecimal />
+          <Field label="কোন দরে (ফেরত)"><NumField value={cur.rate || null} onChange={(v) => setCur({ ...cur, rate: v ?? 0 })} decimal /></Field>
+        </div>
+        <div className="actionbar">
+          <button className="btn ghost" onClick={() => setSub('item')}>{t("ফিরে")}</button>
+          <button className="btn primary" disabled={!Number(qty)} onClick={add}>{t("যোগ করুন")}</button>
+        </div>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <div className="scroll">
+        <h2 className="question">{t(QUESTION.returned)}</h2>
+        {rets.length > 0 && (
+          <div className="card" style={{ marginBottom: '.9rem' }}>
+            {rets.map((r) => (
+              <div key={r.key} className="review-row">
+                <span>
+                  <span className="t">{nameOf(s, r.item_id)}</span>
+                  <span className="k">{num(r.qty, r.qty % 1 ? 2 : 0)} {t(itemOf(r.item_id)?.unit_bn || '')} × {money(r.rate)}</span>
+                </span>
+                <span className="v num">−{money(r.qty * r.rate)}</span>
+                <button className="iconbtn" onClick={() => patch({ rets: rets.filter((x) => x.key !== r.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
+              </div>
+            ))}
+            <div className="total"><span className="k">{t("মোট ফেরত")}</span><span className="v num">−{money(retTotal(draft))}</span></div>
+          </div>
+        )}
+        <div className="yesno">
+          <button onClick={next}>{t("না")}</button>
+          <button className="on" onClick={() => setSub('item')}>{rets.length ? t('আরও ফেরত') : t('হ্যাঁ')}</button>
+        </div>
+      </div>
+      {rets.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>}
+    </>
+  )
+}
+
+/* Serves both site's other spending (field 'exps') and his own household
+   spending (field 'pexps', personal) — the same head/amount/mode screen, its
+   heads and suggestions drawn from whichever book it writes to, and personal
+   rows kept off every job's cost at save time. */
+function StepExpense({ s, draft, patch, next, field = 'exps', personal = false, startAsk = false, question = QUESTION.expense, hint = 'গাড়ি ভাড়া, মেশিন, চা — মজুরি আর মাল ছাড়া বাকি সব।' }:
+  StepProps & { field?: 'exps' | 'pexps'; personal?: boolean; startAsk?: boolean; question?: string; hint?: string }) {
+  const [sub, setSub] = useState<'ask' | 'head' | 'amount'>((draft[field].length || startAsk) ? 'ask' : 'head')
   const [head, setHead] = useState('')
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState(PAY_MODES[0])
   const [photo, setPhoto] = useState<ID | ''>('')
   const [showAll, setShowAll] = useState(false)
+  const total = draft[field].reduce((a, e) => a + e.amount, 0)
 
-  const ranked = useMemo(() => rankHeads(s.entries, false), [s.entries])
-  const ordered = [...ranked, ...MONEY_HEADS_SITE.filter((h) => !ranked.includes(h))]
+  const heads = personal ? MONEY_HEADS_PERSONAL : MONEY_HEADS_SITE
+  const ranked = useMemo(() => rankHeads(s.entries, personal), [s.entries, personal])
+  const ordered = [...ranked, ...heads.filter((h) => !ranked.includes(h))]
   const top = ordered.slice(0, 3)
-  const chips = useMemo(() => amountChips(s.entries, head, false), [s.entries, head])
+  const chips = useMemo(() => amountChips(s.entries, head, personal), [s.entries, head, personal])
 
   const add = () => {
     const line: DraftExp = { key: uid(), head_bn: head, amount: Number(amount) || 0, mode, note: '', photo_id: photo }
-    patch({ exps: [...draft.exps, line] })
+    patch({ [field]: [...draft[field], line] })
     setHead(''); setAmount(''); setPhoto(''); setSub('ask')
   }
 
@@ -583,26 +705,26 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{t(QUESTION.expense)}</h2>
-          <p className="hint">{t("গাড়ি ভাড়া, মেশিন, চা — মজুরি আর মাল ছাড়া বাকি সব।")}</p>
-          {draft.exps.length > 0 && (
+          <h2 className="question">{t(question)}</h2>
+          <p className="hint">{t(hint)}</p>
+          {draft[field].length > 0 && (
             <div className="card" style={{ marginBottom: '.9rem' }}>
-              {draft.exps.map((e) => (
+              {draft[field].map((e) => (
                 <div key={e.key} className="review-row">
                   <span><span className="t">{t(e.head_bn)}</span><span className="k">{t(e.mode)}</span></span>
                   <span className="v num">{money(e.amount)}</span>
-                  <button className="iconbtn" onClick={() => patch({ exps: draft.exps.filter((x) => x.key !== e.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
+                  <button className="iconbtn" onClick={() => patch({ [field]: draft[field].filter((x) => x.key !== e.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
                 </div>
               ))}
-              <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(expTotal(draft))}</span></div>
+              <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(total)}</span></div>
             </div>
           )}
           <div className="yesno">
             <button onClick={next}>{t("না")}</button>
-            <button className="on" onClick={() => setSub('head')}>{draft.exps.length ? t('আরও খরচ') : t('হ্যাঁ')}</button>
+            <button className="on" onClick={() => setSub('head')}>{draft[field].length ? t('আরও খরচ') : t('হ্যাঁ')}</button>
           </div>
         </div>
-        {draft.exps.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>}
+        {draft[field].length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>}
       </>
     )
   }
@@ -619,7 +741,7 @@ function StepExpense({ s, draft, patch, next }: StepProps) {
           <p className="hint" style={{ marginTop: '1.1rem' }}>{t("মজুরি এখানে লিখবেন না — সেটা আগের পাতায় হিসাব হয়ে গেছে।")}</p>
         </div>
         <div className="actionbar">
-          {draft.exps.length > 0
+          {draft[field].length > 0
             ? <button className="btn ghost" style={{ flex: 1 }} onClick={() => setSub('ask')}>{t("ফিরে যান")}</button>
             : <button className="btn ghost" style={{ flex: 1 }} onClick={next}>{t("আর কোনো খরচ নেই")}</button>}
         </div>
@@ -796,13 +918,40 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
             <span className="v num">{money(matTotal(draft))}</span>
             <Icon name="fwd" size={16} />
           </button>
+          {(draft.rets?.length ?? 0) > 0 && (
+            <button className="review-row" onClick={() => onJump('returned')}>
+              <span><span className="t">{t("মাল ফেরত")}</span><span className="k">{draft.rets.map((r) => nameOf(s, r.item_id)).join(', ')}</span></span>
+              <span className="v num">−{money(retTotal(draft))}</span>
+              <Icon name="fwd" size={16} />
+            </button>
+          )}
           <button className="review-row" onClick={() => onJump('expense')}>
             <span><span className="t">{t("অন্য খরচ")}</span><span className="k">{draft.exps.length ? draft.exps.map((e) => t(e.head_bn)).join(', ') : t('কিছু নেই')}</span></span>
             <span className="v num">{money(expTotal(draft))}</span>
             <Icon name="fwd" size={16} />
           </button>
-          <div className="total"><span className="k">{t("আজকের মোট খরচ")}</span><span className="v num">{money(dayTotal(draft))}</span></div>
+          <div className="total"><span className="k">{t("আজকের মোট খরচ")}</span><span className="v num">{money(dayTotal(draft) - retTotal(draft))}</span></div>
         </div>
+
+        {/* His own book and the shop, kept apart from the job's cost above —
+            personal spending never touches a job, and goods put into the shop
+            are the shop's, not the site's. */}
+        {(s.settings.runs_shop || (draft.pexps?.length ?? 0) > 0 || (draft.invs?.length ?? 0) > 0) && (
+          <div className="card">
+            <button className="review-row" onClick={() => onJump('personal')}>
+              <span><span className="t">{t("নিজের খরচ")}</span><span className="k">{(draft.pexps?.length ?? 0) ? draft.pexps.map((e) => t(e.head_bn)).join(', ') : t('কিছু নেই')}</span></span>
+              <span className="v num">{money(pexpTotal(draft))}</span>
+              <Icon name="fwd" size={16} />
+            </button>
+            {s.settings.runs_shop && (
+              <button className="review-row" onClick={() => onJump('inventory')}>
+                <span><span className="t">{t("দোকানে মাল")}</span><span className="k">{(draft.invs?.length ?? 0) ? draft.invs.map((m) => nameOf(s, m.item_id)).join(', ') : t('কিছু নেই')}</span></span>
+                <span className="v num">{money(invTotal(draft))}</span>
+                <Icon name="fwd" size={16} />
+              </button>
+            )}
+          </div>
+        )}
 
         <div className="card">
           <button className="review-row" onClick={() => onJump('progress')}>

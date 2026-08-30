@@ -1,9 +1,9 @@
 {
-  "code": 11,
-  "name": "1.0.11",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=11",
-  "size": 7142676,
-  "notes_bn": "আজকের হিসাব এখন কাজ থাকলে সব ধাপ ঘুরে যায় — মাল, খরচ, অগ্রগতি কিছুই আর নিজে থেকে বাদ পড়ে না। আর ‘কাজ’ থেকে কোনো কাজ মুছে ফেলা যায়।",
-  "notes_en": "Today's entry now walks through every step when a job is live — nothing skips itself — and a job can be deleted from the Work book.",
-  "released_at": "2026-08-30T20:35:57.603Z"
+  "code": 12,
+  "name": "1.0.12",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=12",
+  "size": 7144168,
+  "notes_bn": "আজকের হিসাবে নতুন ধাপ — কী মাল ফেরত এল (দোকানে ফিরবে, কাজের খরচ কমবে), নিজের খরচ, আর দোকানে মাল তোলা। প্রতিটাই এড়িয়ে যাওয়া যায়।",
+  "notes_en": "New Today's-entry steps — material returned (back to shop, cuts job cost), personal spending, and adding to inventory. Each is skippable.",
+  "released_at": "2026-08-30T20:51:33.750Z"
 }
