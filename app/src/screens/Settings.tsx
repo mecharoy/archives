@@ -8,7 +8,7 @@ import {
 } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, num, isoDate, dateBn, agoBn } from '../lib/bn'
-import type { Project, Worker, Item, Party, Stage, Coeff } from '../lib/model'
+import type { Project, Worker, Item, Party, Stage, Coeff, Bill } from '../lib/model'
 import { flush, testEndpoint } from '../lib/sync'
 import { fetchBrief } from '../lib/brief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
@@ -738,7 +738,14 @@ const REMIND_LABEL: Record<RemindWhen, string> = {
 function RemindPage({ s, onBack }: { s: State; onBack: () => void }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
-  const planned = useMemo(() => plan(s.entries, s.settings.remind), [s.entries, s.settings.remind])
+  /* Preview exactly what reschedule() will queue — including the dates he set
+     for himself (দিতে হবে), which live in masters as bills. Leaving billRows
+     off here was the reason a বill he had just added showed nothing under
+     ‘এখন যা যা মনে করানো হবে’, even though the phone had it queued. */
+  const planned = useMemo(
+    () => plan(s.entries, s.settings.remind, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[]),
+    [s.entries, s.settings.remind, s.masters],
+  )
 
   const choose = async (w: RemindWhen) => {
     await saveSettings({ remind: w })

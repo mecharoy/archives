@@ -1,9 +1,9 @@
 {
-  "code": 5,
-  "name": "1.0.5",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=5",
-  "size": 7142936,
-  "notes_bn": "রঙিন হোম পাতা — কাজ, মজুত, হিসাব আলাদা রঙে চেনা যায়। ‘নজর দেওয়ার মতো’ এখন তিন খাতার নিচে। অন্ধকার মোডে সব লেখা এখন পরিষ্কার দেখা যায়। অ্যাপ খুললেই নতুন সংস্করণ এসেছে কিনা দেখে নেয়।",
-  "notes_en": "A colour-coded home — work, inventory and accounts each in their own hue. 'Worth a look' now sits below the three books. Everything is legible in dark mode. And the app checks for a new version every time you open it.",
-  "released_at": "2026-08-30T19:28:28.061Z"
+  "code": 6,
+  "name": "1.0.6",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=6",
+  "size": 7142940,
+  "notes_bn": "টাকার তাগাদায় ‘এখন যা যা মনে করানো হবে’ তালিকায় নিজের দেওয়া তারিখগুলোও (দিতে হবে) এখন দেখা যায়।",
+  "notes_en": "The reminder settings now list the dates you set for yourself (দিতে হবে) under what is queued, not just shop and customer dues.",
+  "released_at": "2026-08-30T19:45:55.430Z"
 }
