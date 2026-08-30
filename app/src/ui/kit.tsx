@@ -39,6 +39,8 @@ const paths: Record<string, string> = {
   /* An address book: the same book with a person on the cover and the tab
      down its spine, so it reads as "the names in the phone" at 20px. */
   contactbook: 'M6.5 3H18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3z M3 8h2M3 12h2M3 16h2 M12 11.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M9 16.6a3 3 0 0 1 6 0',
+  /* Four tiles — "everything, laid out." Reads as an app grid at any size. */
+  grid: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
 }
 
 export function Icon({ name, size = 22, stroke = 1.8 }: { name: keyof typeof paths | string; size?: number; stroke?: number }) {

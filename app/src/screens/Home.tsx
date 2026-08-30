@@ -1,35 +1,33 @@
-import { useEffect, useMemo, useState } from 'react'
-import { Icon, Empty } from '../ui/kit'
-import { SCurve, BurnBars } from '../ui/charts'
-import { useStore, activeProjects, workers, stages, items, allItems, nameOf, type State, type Brief } from '../lib/store'
-import { money, toBn, num, agoBn, dayLabelBn, isoDate, addDays } from '../lib/bn'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Icon } from '../ui/kit'
+import { useStore, activeProjects, workers, stages, type State, type Brief } from '../lib/store'
+import { money, toBn, isoDate, agoBn, dayLabelBn, addDays } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
 import { cashState, projectTotals, entriesInLastDays, lastEntryDate, shopStock, duesSplit, receivablesSplit } from '../lib/calc'
 import { lastAttendance, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
+import { allItems } from '../lib/store'
 import { flush } from '../lib/sync'
 import { t, pick } from '../lib/i18n'
 import { UpdateCard } from '../ui/UpdateCard'
+import type { Screen } from '../App'
 
-/* The home screen is three books on one shelf: কাজ (the sites), মজুত (the
-   shop) and হিসাব (the money). He is only ever in one of them at a time, and
-   the thing he does every evening — today's entry — sits above all three so
-   it is never behind a tab.
-
-   Everything above the tabs is judgement: tonight's headline and the alerts.
-   Everything inside a tab is arithmetic, and it is his own — the phone's sums
-   over his own rows, so a night without a brief costs him nothing. */
-
-type Tab = 'work' | 'stock' | 'money'
+/* The home screen is one calm page, not a set of tabs. The thing he does
+   every evening — today's entry — sits at the top. Under it, the night's
+   headline and anything worth his attention. Then the three books —
+   কাজ (sites), মজুত (shop), হিসাব (money) — each showing its own headline
+   figures right here, with a ‘দেখুন’ that opens the whole book, where he both
+   reads the detail and adds or changes things. Nothing is hidden behind a tab
+   he has to remember to press; the summaries of all three are always in view.
+   At the very bottom, one button opens every single thing the app can do. */
 
 export function Home({ onDay, onSameAsYesterday, onGo }: {
   onDay: () => void
   onSameAsYesterday: (d: Draft) => void
-  onGo: (screen: 'shop' | 'personal' | 'estimate' | 'settings' | 'history' | 'project' | 'payments') => void
+  onGo: (screen: Screen) => void
 }) {
   const s = useStore((x) => x)
   const [refreshing, setRefreshing] = useState(false)
-  const [tab, setTab] = useState<Tab>(s.settings.runs_sites ? 'work' : 'stock')
 
   // The brief lives on the same server as the rows, so an endpoint alone is
   // enough — briefUrl is only an override for hosting it somewhere else.
@@ -60,7 +58,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
         <h1>{t('সাইট খাতা')}<span className="sub">{dayLabelBn(isoDate())}, {t(partOfDay)}</span></h1>
         <button className="iconbtn" onClick={refresh} aria-label={t('নতুন করে আনুন')}
           style={{ opacity: refreshing ? .5 : 1 }}><Icon name="refresh" /></button>
-        <button className="iconbtn" data-tour="settings" onClick={() => onGo('settings')} aria-label={t('সেটিংস')}><Icon name="gear" /></button>
+        <button className="iconbtn" onClick={() => onGo('settings')} aria-label={t('সেটিংস')}><Icon name="gear" /></button>
       </div>
 
       <div className="scroll">
@@ -95,9 +93,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </button>
         )}
 
-        {/* Only ever drawn when the repository actually has something newer.
-            It sits under the day button rather than above it, because nothing
-            outranks writing the day down. */}
+        {/* Only ever drawn when the repository actually has something newer. */}
         <UpdateCard />
 
         {gap && (
@@ -116,15 +112,24 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </>
         )}
 
-        <div className="tabs" data-tour="tabs">
-          <button className={'tab' + (tab === 'work' ? ' on' : '')} onClick={() => setTab('work')}>{t('কাজ')}</button>
-          <button className={'tab' + (tab === 'stock' ? ' on' : '')} onClick={() => setTab('stock')}>{t('মজুত')}</button>
-          <button className={'tab' + (tab === 'money' ? ' on' : '')} onClick={() => setTab('money')}>{t('হিসাব')}</button>
+        {/* The three books, each with its headline figures in view and a way
+            into the whole book. Order follows what he runs, but all are shown
+            — he told us he uses all three, and hiding one behind a tap is the
+            scattering we are undoing. */}
+        <div data-tour="books" style={{ marginTop: '1.2rem' }}>
+          <WorkSummary s={s} brief={brief} onGo={onGo} />
+          <StockSummary s={s} onGo={onGo} />
+          <MoneySummary s={s} onGo={onGo} />
         </div>
 
-        {tab === 'work' && <WorkTab s={s} brief={brief} onGo={onGo} />}
-        {tab === 'stock' && <StockTab s={s} onGo={onGo} />}
-        {tab === 'money' && <MoneyTab s={s} brief={brief} onGo={onGo} />}
+        <button className="bigbtn allbtn" data-tour="all" onClick={() => onGo('all')} style={{ marginTop: '1.1rem' }}>
+          <Icon name="grid" size={28} stroke={1.7} />
+          <span style={{ flex: 1 }}>
+            <span className="t" style={{ display: 'block' }}>{t('সব কিছু')}</span>
+            <span className="s">{t('অ্যাপের সব কাজ এক জায়গায়')}</span>
+          </span>
+          <Icon name="fwd" size={22} />
+        </button>
 
         <SyncLine s={s} />
       </div>
@@ -134,210 +139,102 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
   )
 }
 
+/* A book on the shelf: its name, a ‘দেখুন’ into the whole thing, and its
+   headline figures underneath. Tapping anywhere on it opens the book. */
+function BookCard({ title, onOpen, children }: { title: string; onOpen: () => void; children: ReactNode }) {
+  return (
+    <div className="bookcard">
+      <button className="bookhead" onClick={onOpen}>
+        <span className="name">{t(title)}</span>
+        <span className="see">{t('দেখুন')} <Icon name="fwd" size={16} /></span>
+      </button>
+      <button className="bookbody" onClick={onOpen}>{children}</button>
+    </div>
+  )
+}
+
 /* ---------- কাজ ---------- */
 
-function WorkTab({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: 'estimate' | 'project' | 'history') => void }) {
+function WorkSummary({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: Screen) => void }) {
   const act = activeProjects(s)
   const rows = brief.projects ?? []
+  const top = rows[0]
   return (
-    <>
-      {act.length === 0 && (
-        <Empty>{t('এখনও কোনো কাজ যোগ করা হয়নি। কাজ এলে এখানে অগ্রগতি আর খরচ পাশাপাশি দেখা যাবে।')}</Empty>
-      )}
-
-      {rows.length > 0 && (
+    <BookCard title="কাজ" onOpen={() => onGo('work')}>
+      {act.length === 0 ? (
+        <p className="booknote">{t('এখনও কোনো কাজ যোগ করা হয়নি। ভিতরে গিয়ে কাজ যোগ করুন।')}</p>
+      ) : top ? (
         <>
-          <p className="sectionlabel">{t('কাজের অবস্থা')}</p>
-          <div className="card">
-            {rows.map((p, k) => (
-              <div key={k} style={{ padding: '.55rem 0', borderBottom: k < rows.length - 1 ? '1px solid var(--line-soft)' : 0 }}>
-                <div className="spread">
-                  <strong>{pick(p.name_bn, p.name_en)}</strong>
-                  <span className={'badge ' + (p.status || 'ok')}>{pick(p.note_bn, p.note_en)}</span>
-                </div>
-                <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
-                  <span className="name small muted">{t('কাজ')}</span>
-                  <span className="bartrack"><span className="barfill" style={{ width: `${Math.min(100, p.pct_done)}%` }} /></span>
-                  <span className="pct num">{toBn(Math.round(p.pct_done))}%</span>
-                </div>
-                <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
-                  <span className="name small muted">{t('খরচ')}</span>
-                  <span className="bartrack"><span className={'barfill ' + (p.pct_spent > p.pct_done + 6 ? 'warn' : '')}
-                    style={{ width: `${Math.min(100, p.pct_spent)}%` }} /></span>
-                  <span className="pct num">{toBn(Math.round(p.pct_spent))}%</span>
-                </div>
-              </div>
-            ))}
+          <div className="spread">
+            <strong>{pick(top.name_bn, top.name_en)}</strong>
+            <span className={'badge ' + (top.status || 'ok')}>{pick(top.note_bn, top.note_en)}</span>
           </div>
-        </>
-      )}
-
-      {brief.series?.scurve && (
-        <>
-          <p className="sectionlabel">{t('খরচ আর পরিকল্পনা')}</p>
-          <div className="card"><SCurve data={brief.series.scurve} /></div>
-        </>
-      )}
-
-      {brief.series?.burn && brief.series.burn.length > 0 && (
-        <>
-          <p className="sectionlabel">{t('মাল কত গেল')}</p>
-          <div className="card">
-            <BurnBars rows={brief.series.burn} done={brief.projects?.[0]?.pct_done ?? 0} />
+          <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
+            <span className="name small muted">{t('কাজ')}</span>
+            <span className="bartrack"><span className="barfill" style={{ width: `${Math.min(100, top.pct_done)}%` }} /></span>
+            <span className="pct num">{toBn(Math.round(top.pct_done))}%</span>
           </div>
+          <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
+            <span className="name small muted">{t('খরচ')}</span>
+            <span className="bartrack"><span className={'barfill ' + (top.pct_spent > top.pct_done + 6 ? 'warn' : '')}
+              style={{ width: `${Math.min(100, top.pct_spent)}%` }} /></span>
+            <span className="pct num">{toBn(Math.round(top.pct_spent))}%</span>
+          </div>
+          {rows.length > 1 && <p className="booknote">{t('আরও')} {toBn(rows.length - 1)} {t('কাজ চলছে')}</p>}
         </>
+      ) : (
+        <p className="booknote">{toBn(act.length)} {t('কাজ চলছে')} · {t('ভিতরে অগ্রগতি ও খরচ')}</p>
       )}
-
-      <div className="tilegrid">
-        <button className="tile" onClick={() => onGo('estimate')}>
-          <Icon name="calc" size={24} stroke={1.6} />
-          <span><span className="t" style={{ display: 'block' }}>{t('নতুন কাজের হিসাব')}</span><span className="s">{t('দর দেওয়ার আগে')}</span></span>
-        </button>
-        <button className="tile" onClick={() => onGo('project')}>
-          <Icon name="people" size={24} stroke={1.6} />
-          <span><span className="t" style={{ display: 'block' }}>{t('কাজ আর লোক')}</span><span className="s">{t('যোগ করা, বদলানো')}</span></span>
-        </button>
-      </div>
-    </>
+    </BookCard>
   )
 }
 
 /* ---------- মজুত ---------- */
 
-function StockTab({ s, onGo }: { s: State; onGo: (x: 'shop' | 'project') => void }) {
+function StockSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const levels = useMemo(() => shopStock(s.entries, allItems(s)), [s.entries, s.masters])
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const value = levels.reduce((a, l) => a + l.value, 0)
   const low = levels.filter((l) => l.qty <= 0)
-
   return (
-    <>
-      <div className="statgrid">
-        <div className="stat info">
-          <span className="k">{t('মজুতের দাম')}</span>
-          <span className="v num">{money(value)}</span>
-          <span className="s">{toBn(levels.length)} {t('রকম মাল')}</span>
-        </div>
-        <div className={'stat ' + (dues.overdue > 0 ? 'crit' : dues.total > 0 ? 'warn' : 'ok')}>
-          <span className="k">{t('দোকানে বাকি')}</span>
-          <span className="v num">{money(dues.total)}</span>
-          <span className="s">{dues.overdue > 0 ? `${money(dues.overdue)} ${t('সময় পেরিয়েছে')}` : t('সময়ের মধ্যে')}</span>
-        </div>
-      </div>
-
-      {levels.length === 0 && <Empty>{t('এখনও কোনো মাল ঢোকেনি। ‘মাল এসেছে’ থেকে শুরু করুন।')}</Empty>}
-
-      {levels.length > 0 && (
+    <BookCard title="মজুত" onOpen={() => onGo('shop')}>
+      {levels.length === 0 ? (
+        <p className="booknote">{t('এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।')}</p>
+      ) : (
         <>
-          <p className="sectionlabel">{t('এখন যা আছে')}</p>
-          <div className="card">
-            {levels.slice(0, 8).map((l) => {
-              const it = items(s).find((i) => i.id === l.item_id)
-              return (
-                <div className="review-row" key={l.item_id}>
-                  <span>
-                    <span className="t">{t(nameOf(s, l.item_id))}</span>
-                    <span className="k">{money(l.rate)} {t('দরে')}</span>
-                  </span>
-                  <span className="v num" style={{ color: l.qty < 0 ? 'var(--crit)' : undefined }}>
-                    {num(l.qty, l.qty % 1 ? 2 : 0)} {t(it?.unit_bn || '')}
-                  </span>
-                </div>
-              )
-            })}
-            {levels.length > 8 && <div className="review-row"><span className="k">{t('আরও')} {toBn(levels.length - 8)}</span></div>}
+          <div className="miniline">
+            <span><span className="k">{t('মজুতের দাম')}</span><span className="v num">{money(value)}</span></span>
+            <span><span className="k">{t('দোকানে বাকি')}</span>
+              <span className={'v num' + (dues.overdue > 0 ? ' crit' : dues.total > 0 ? ' warn' : '')}>{money(dues.total)}</span></span>
           </div>
+          <p className="booknote">
+            {toBn(levels.length)} {t('রকম মাল')}
+            {low.length > 0 ? ` · ${toBn(low.length)} ${t('রকম শেষ বা মাইনাসে')}` : ''}
+          </p>
         </>
       )}
-
-      {low.length > 0 && (
-        <div className="alert warn" style={{ marginTop: '.6rem' }}>
-          <span className="dot" />
-          <span>{toBn(low.length)} {t('রকম মাল শেষ বা মাইনাসে — একবার গুনে নিন।')}</span>
-        </div>
-      )}
-
-      <div className="tilegrid">
-        <button className="tile" onClick={() => onGo('shop')}>
-          <Icon name="shop" size={24} stroke={1.6} />
-          <span><span className="t" style={{ display: 'block' }}>{t('দোকানের মজুত')}</span><span className="s">{t('মাল ঢোকা, বিক্রি, গোনা')}</span></span>
-        </button>
-        <button className="tile" onClick={() => onGo('project')}>
-          <Icon name="book" size={24} stroke={1.6} />
-          <span><span className="t" style={{ display: 'block' }}>{t('মালের তালিকা')}</span><span className="s">{t('নাম, একক, শেষ দর')}</span></span>
-        </button>
-      </div>
-    </>
+    </BookCard>
   )
 }
 
 /* ---------- হিসাব ---------- */
 
-function MoneyTab({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: 'personal' | 'history' | 'project' | 'payments') => void }) {
+function MoneySummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const spend = useMemo(() => monthSpend(s.entries), [s.entries])
   const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
-
   return (
-    <>
-      <div className="statgrid">
-        <div className={'stat ' + (cash.computed < 0 ? 'crit' : 'ok')}>
-          <span className="k">{t('হাতে টাকা')}</span>
-          <span className="v num">{counted ? money(cash.computed) : '—'}</span>
-          <span className="s">{counted ? t('শেষ গোনা থেকে') : t('একবার গুনে বসিয়ে দিন')}</span>
-        </div>
-        <div className="stat info">
-          <span className="k">{t('এ মাসের খরচ')}</span>
-          <span className="v num">{money(spend)}</span>
-          <span className="s">{t('চলতি মাস')}</span>
-        </div>
+    <BookCard title="হিসাব" onOpen={() => onGo('money')}>
+      <div className="miniline">
+        <span><span className="k">{t('হাতে টাকা')}</span><span className={'v num' + (cash.computed < 0 ? ' crit' : '')}>{counted ? money(cash.computed) : '—'}</span></span>
+        <span><span className="k">{t('এ মাসের খরচ')}</span><span className="v num">{money(spend)}</span></span>
       </div>
-
-      {dues.all.length > 0 && (
-        <>
-          <p className="sectionlabel">{t('কাকে কত দিতে হবে')}</p>
-          <div className="card">
-            {dues.all.slice(0, 6).map((d) => (
-              <div className="review-row" key={d.entry_id}>
-                <span>
-                  <span className="t">{d.party_id ? nameOf(s, d.party_id) : t('নাম লেখা নেই')}</span>
-                  <span className="k">{t(nameOf(s, d.item_id))} · {d.due_date < isoDate() ? t('সময় পেরিয়েছে') : d.due_date}</span>
-                </span>
-                <span className="v num" style={{ color: d.due_date < isoDate() ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
-              </div>
-            ))}
-            <div className="total"><span className="k">{t('মোট বাকি')}</span><span className="v num">{money(dues.total)}</span></div>
-          </div>
-        </>
-      )}
-
-      {brief.todo_bn && brief.todo_bn.length > 0 && (
-        <>
-          <p className="sectionlabel">{t('যা করতে হবে')}</p>
-          <div className="card">
-            {brief.todo_bn.map((x, k) => (
-              <div key={k} className="review-row"><span className="t">{pick(x, brief.todo_en?.[k])}</span></div>
-            ))}
-          </div>
-        </>
-      )}
-
-      <div className="tilegrid">
-        <button className="tile" onClick={() => onGo('payments')}>
-          <Icon name="wallet" size={24} stroke={1.6} />
-          <span><span className="t" style={{ display: 'block' }}>{t('টাকা দেওয়া-নেওয়া')}</span><span className="s">{t('বাকি মেটানো, পাওনা তোলা')}</span></span>
-        </button>
-        <button className="tile" onClick={() => onGo('personal')}>
-          <Icon name="wallet" size={24} stroke={1.6} />
-          <span><span className="t" style={{ display: 'block' }}>{t('নিজের খরচ')}</span><span className="s">{t('আলাদা খাতা')}</span></span>
-        </button>
-        <button className="tile" onClick={() => onGo('history')}>
-          <Icon name="clock" size={24} stroke={1.6} />
-          <span><span className="t" style={{ display: 'block' }}>{t('পুরোনো হিসাব')}</span><span className="s">{t('দেখা ও সংশোধন')}</span></span>
-        </button>
-      </div>
-    </>
+      <p className="booknote">
+        {dues.total > 0 ? `${t('দোকানে বাকি')} ${money(dues.total)}` : t('কোনো বাকি নেই')}
+        {' · '}{t('ভিতরে টাকা দেওয়া-নেওয়া, নিজের খরচ')}
+      </p>
+    </BookCard>
   )
 }
 
@@ -369,7 +266,7 @@ function SyncLine({ s }: { s: State }) {
 /* The three numbers he actually carries in his head, kept on screen wherever
    he is: what is in the tin, what is owed to him, what he owes. Tapping the
    second or third opens the screen that settles it. */
-function StandingTotals({ s, onGo }: { s: State; onGo: (x: 'payments') => void }) {
+function StandingTotals({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const get = useMemo(() => receivablesSplit(s.entries), [s.entries])
   const owe = useMemo(() => duesSplit(s.entries), [s.entries])

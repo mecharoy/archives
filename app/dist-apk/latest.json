@@ -1,9 +1,9 @@
 {
-  "code": 2,
-  "name": "1.0.2",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=2",
-  "size": 7140508,
-  "notes_bn": "ফোনের তালিকা থেকে নাম, নিজের দেওয়ার তারিখ, অ্যাপ ঘুরে দেখা, আর এখন থেকে নতুন সংস্করণ নিজেই এসে যাবে।",
-  "notes_en": "Contacts from the phone book, dates you set for yourself, a guided tour — and from now on it tells you when a new version is out.",
-  "released_at": "2026-08-29T09:33:28.936Z"
+  "code": 3,
+  "name": "1.0.3",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=3",
+  "size": 7142520,
+  "notes_bn": "হোম পাতা নতুন করে সাজানো — কাজ, মজুত, হিসাব সব এক পাতায়, বিশদ এক চাপ দূরে, আর ‘সব কিছু’ বোতামে অ্যাপের প্রতিটা কাজ। লোক-মাল-দোকান এখন যে খাতার, সেই খাতাতেই বদলানো যায়।",
+  "notes_en": "Home reworked — work, inventory and accounts all on one page, detail one tap away, and a ‘Everything’ button for every task. Men, items and shops are now edited inside the book they belong to.",
+  "released_at": "2026-08-30T18:52:29.158Z"
 }

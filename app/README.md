@@ -224,12 +224,22 @@ position, and no CORS to fight.
 
 ## What is in the app
 
-**The home screen** is three books on one shelf — **কাজ** (the sites), **মজুত**
-(the shop) and **হিসাব** (the money) — with today's entry sitting above all
-three, because that is the one thing he does every evening and it must never be
-behind a tab. Tonight's headline and the alerts sit above the tabs too;
-everything inside a tab is his own arithmetic, so a night without a brief costs
-him nothing.
+**The home screen** is one calm page, not a set of tabs. Today's entry sits at
+the top — the one thing he does every evening — with tonight's headline and the
+alerts just under it. Below that, all three books — **কাজ** (the sites),
+**মজুত** (the shop) and **হিসাব** (the money) — show their own headline figures
+side by side, each with a **দেখুন** that opens the whole book, where he both
+reads the detail and adds or changes things. Nothing is hidden behind a tab he
+has to remember to press; the summaries of all three are always in view. At the
+foot of the page, **সব কিছু** opens the exploded view — every single thing the
+app can do, laid out flat under its section, so nothing he wants is ever more
+than one tap from home. Everything in the books is his own arithmetic, so a
+night without a brief costs him nothing.
+
+Editing lives beside the thing it changes: the men, the sites, the item list,
+the suppliers and the stages are all reached from inside the book they belong
+to (and from the exploded view), so he never goes to a different place to change
+a thing than the place he adds it.
 
 **First run** opens by saying what the app is for and what it will never do,
 then asks his name, which language he wants, and whether he runs sites, a shop,

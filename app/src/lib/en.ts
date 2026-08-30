@@ -786,4 +786,35 @@ export const EN: Record<string, string> = {
   'কোথা থেকে': 'Where from',
   'নতুন সংস্করণ বসালেও আপনার লেখা হিসাব থেকে যাবে — কিছু মুছবে না।': 'Installing a new version keeps everything you have written — nothing is erased.',
 
+  /* ---- the redesigned home: three books in view, one exploded view ---- */
+  'সব কিছু': 'Everything',
+  'অ্যাপের সব কাজ এক জায়গায়': 'Every task in one place',
+  'দেখুন': 'Open',
+  'এই খাতার কাজ': 'In this book',
+  'কাজ ও অগ্রগতি': 'Jobs and progress',
+  'সব সাইটের অবস্থা': "Every site's state",
+  'রোজকার এন্ট্রি': 'The daily entry',
+  'কাজ যোগ করা, বদলানো': 'Add or change a job',
+  'সাইটের নাম, দর': 'Site name, contract',
+  'কে, কত মজুরি': 'Who, what wage',
+  'অগ্রগতির নিয়ম': 'How progress is measured',
+  'হাতের টাকা গোনা': 'Count cash in hand',
+  'নতুন করে বসানো': 'Set it afresh',
+  'সরবরাহকারী, খদ্দের': 'Suppliers, customers',
+  'কোনো বাকি নেই': 'Nothing owed',
+  'ভিতরে টাকা দেওয়া-নেওয়া, নিজের খরচ': 'Inside: payments, personal spending',
+  'ভাষা, আকার, ব্যাকআপ, তাগাদা': 'Language, size, backup, reminders',
+  'কাজ চলছে': 'jobs running',
+  'রকম শেষ বা মাইনাসে': 'kinds out or below zero',
+  'এখনও কোনো কাজ যোগ করা হয়নি। ভিতরে গিয়ে কাজ যোগ করুন।': 'No job added yet. Open it and add a job.',
+  'এখনও কোনো কাজ যোগ করা হয়নি। নিচে ‘কাজ যোগ করা, বদলানো’ থেকে শুরু করুন।': "No job added yet. Start below under 'Add or change a job'.",
+  'এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।': "No goods in yet. Open it and start from 'Goods in'.",
+
+  /* ---- the walk round, restops ---- */
+  'তিনটে খাতা এক পাতায়': 'Three books, one page',
+  'কাজ, মজুত আর হিসাব — তিনটেরই মূল কথা এই পাতাতেই দেখা যায়। বিশদ দেখতে বা কিছু বদলাতে চাইলে ‘দেখুন’-এ চাপুন, ভিতরে সব একসাথে পাবেন।':
+    'Work, inventory and accounts — the gist of all three is on this page. Press Open to see the detail or change anything; it is all together inside.',
+  'সব কিছু এক জায়গায়': 'Everything in one place',
+  'অ্যাপের প্রতিটা কাজ — মাল, লোক, দোকান, দর, ব্যাকআপ, ভাষা — এই একটা বোতামের ভিতরে সাজানো আছে। যা খুঁজছেন, এখানে চাপলেই পাবেন।':
+    'Every task the app has — items, men, shop, quotes, backup, language — is laid out inside this one button. Whatever you are after, press here and you will find it.',
 }

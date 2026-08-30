@@ -92,7 +92,7 @@ await step('the tour opens by itself, first time', async () => {
 })
 
 await step('the spotlight sits over the thing it names', async () => {
-  const wanted = ['today', 'brief', 'tabs', 'standing', 'settings']
+  const wanted = ['today', 'brief', 'books', 'standing', 'all']
   for (let i = 0; i < wanted.length; i++) {
     const hole = await page.locator('.tour-hole').boundingBox()
     const el = await page.locator('[data-tour="' + wanted[i] + '"]').boundingBox()
@@ -183,7 +183,7 @@ await step('save the day', async () => {
 await step('dashboard reflects the entry', async () => {
   await page.waitForTimeout(500)
   const body = await page.locator('.scroll').first().innerText()
-  if (!body.includes('কাজের অবস্থা')) throw new Error('no project section')
+  if (!body.includes('রামপুর বাড়ি')) throw new Error('no project summary on home')
 })
 await step('same-as-yesterday appears next day', async () => {
   await page.evaluate(() => new Promise((res) => {
@@ -218,8 +218,7 @@ const home = async () => { await page.goto('http://localhost:5199/'); await page
 
 await step('shop flow: goods in', async () => {
   await home()
-  await page.locator('.tabs .tab', { hasText: 'মজুত' }).click()
-  await page.locator('.tile', { hasText: 'দোকানের মজুত' }).click()
+  await page.locator('.bookhead', { hasText: 'মজুত' }).click()
   await tap('মাল এসেছে')
   await pickItem('সিমেন্ট')
   for (const d of ['২', '০']) await page.locator('.pad button', { hasText: d }).first().click()
@@ -235,6 +234,7 @@ await step('shop flow: goods in', async () => {
 })
 await step('estimator: size, floors and foundation', async () => {
   await home()
+  await page.locator('.bookhead', { hasText: 'কাজ' }).click()
   await page.locator('.tile', { hasText: 'নতুন কাজের হিসাব' }).click()
   await page.locator('.chip').first().click()
   await page.getByText('এক তলার মাপ কত বর্গফুট?').waitFor({ timeout: 3000 })
@@ -275,7 +275,7 @@ await step('estimator: quote comes out whole', async () => {
 })
 await step('history lists days and can reverse', async () => {
   await home()
-  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
   await page.locator('.tile', { hasText: 'পুরোনো হিসাব' }).click()
   await page.locator('.pick').first().click()
   await page.locator('.sheet .iconbtn').first().click()
@@ -284,7 +284,7 @@ await step('history lists days and can reverse', async () => {
 })
 await step('personal book with pin', async () => {
   await home()
-  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
   await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
   await page.getByText('খরচ লিখুন').waitFor({ timeout: 3000 })
   await tap('খরচ লিখুন')
@@ -298,7 +298,7 @@ await step('personal book with pin', async () => {
    money lands in his own book without him typing it a second time. */
 await step('a date he sets for himself', async () => {
   await home()
-  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
   await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
   await page.getByText('দিতে হবে').first().waitFor({ timeout: 3000 })
   await page.locator('.chip', { hasText: 'নতুন তারিখ' }).click()
@@ -342,7 +342,7 @@ const pressBack = () => page.evaluate(() => import('/src/lib/back.ts').then((m) 
 
 await step('back closes a sheet, not the screen under it', async () => {
   await home()
-  await page.locator('[data-tour="settings"]').click()
+  await page.locator('.topbar .iconbtn').nth(1).click()
   await page.locator('.pick', { hasText: 'দোকান ও খদ্দের' }).click()
   await page.locator('.topbar .iconbtn').last().click()   // the + for a new name
   await page.locator('.sheet').waitFor({ timeout: 3000 })
@@ -370,7 +370,7 @@ await step('and from settings itself nothing claims it', async () => {
 /* The list of household heads can never be complete. */
 await step('personal spending takes a name of his own', async () => {
   await home()
-  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
   await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
   await page.getByText('খরচ লিখুন').waitFor({ timeout: 3000 })
   await tap('খরচ লিখুন')
@@ -399,8 +399,7 @@ await step('which then offers itself as a chip', async () => {
 
 await step('a credit sale becomes a receivable', async () => {
   await home()
-  await page.locator('.tabs .tab', { hasText: 'মজুত' }).click()
-  await page.locator('.tile', { hasText: 'দোকানের মজুত' }).click()
+  await page.locator('.bookhead', { hasText: 'মজুত' }).click()
   await tap('বিক্রি হয়েছে')
   await pickItem('সিমেন্ট')
   for (const d of ['৫']) await page.locator('.pad button', { hasText: d }).first().click()
@@ -419,7 +418,7 @@ await step('a credit sale becomes a receivable', async () => {
   if (!foot.includes('২,৫০০')) throw new Error('the ₹2,500 credit sale should show as receivable: ' + foot)
 })
 await step('settling it clears the balance', async () => {
-  await page.locator('.tabs .tab', { hasText: 'হিসাব' }).click()
+  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
   await page.locator('.tile', { hasText: 'টাকা দেওয়া-নেওয়া' }).click()
   await page.getByText('যাদের কাছে পাওনা').waitFor({ timeout: 3000 })
   await page.getByText('হালদার বাবু').first().click()
@@ -518,7 +517,7 @@ await step('and it opens on a question he can answer', async () => {
 await step('putting one man back brings the question back', async () => {
   await page.locator('.wizhead .iconbtn').last().click()   // close the wizard
   await page.waitForTimeout(500)
-  await page.locator('[data-tour="settings"]').click()
+  await page.locator('.topbar .iconbtn').nth(1).click()
   await page.locator('.pick', { hasText: 'লোকজন' }).click()
   await page.locator('.topbar .iconbtn').last().click()
   await page.locator('.sheet input.input').first().fill('নতুন মিস্ত্রি')
@@ -543,7 +542,7 @@ await step('and a man can be added without leaving the question', async () => {
 
 await step('the update page says so in a browser', async () => {
   await home()
-  await page.locator('[data-tour="settings"]').click()
+  await page.locator('.topbar .iconbtn').nth(1).click()
   await page.locator('.pick', { hasText: 'অ্যাপ আপডেট' }).click()
   await page.getByText('এখন আছে').waitFor({ timeout: 4000 })
   await page.waitForTimeout(1200)

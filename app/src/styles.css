@@ -406,9 +406,47 @@ textarea.input { min-height: 5rem; resize: none; }
   * { animation-duration: .001ms !important; transition-duration: .001ms !important; }
 }
 
-/* ---------- home sections ----------
-   Three books on one shelf. Big enough to hit without looking, and the one
-   he is in is filled rather than underlined, so it reads at arm's length. */
+/* ---------- home book cards ----------
+   Each of the three books shows its headline figures right on the home page,
+   inside a card that is one big target opening the whole book. No tabs to
+   remember — all three are in view at once, which is the whole point. */
+
+.bookcard {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow); overflow: hidden; margin-bottom: .8rem;
+}
+.bookhead {
+  width: 100%; display: flex; align-items: center; justify-content: space-between;
+  padding: .85rem 1.05rem .55rem; text-align: left;
+}
+.bookhead .name { font-size: 1.16rem; font-weight: 650; letter-spacing: -.01em; }
+.bookhead .see {
+  display: inline-flex; align-items: center; gap: .15rem;
+  font-size: .86rem; font-weight: 600; color: var(--accent);
+}
+.bookbody { width: 100%; text-align: left; padding: 0 1.05rem 1rem; display: block; }
+.bookbody:active, .bookhead:active { background: var(--sunk); }
+.booknote { font-size: .82rem; color: var(--muted); margin: .45rem 0 0; line-height: 1.45; }
+.miniline { display: flex; gap: 1.4rem; }
+.miniline > span { display: flex; flex-direction: column; gap: .1rem; }
+.miniline .k { font-size: .76rem; color: var(--muted); }
+.miniline .v { font-size: 1.24rem; font-weight: 650; letter-spacing: -.02em; }
+.miniline .v.warn { color: var(--warn); }
+.miniline .v.crit { color: var(--crit); }
+
+/* "সব কিছু" — the exploded-view door. Deliberately not the green of the
+   evening button: it is a second-order action, always available, never the
+   thing he came to do. */
+.bigbtn.allbtn {
+  background: var(--surface); color: var(--ink); border: 1px solid var(--line);
+  min-height: 4.4rem;
+}
+.bigbtn.allbtn > svg { color: var(--accent); }
+.bigbtn.allbtn .s { color: var(--muted); opacity: 1; }
+
+/* ---------- home tabs (legacy, no longer mounted) ----------
+   Kept only so any older markup keeps its shape; the home screen now shows
+   all three books at once instead of switching between them. */
 
 .tabs {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: .35rem;

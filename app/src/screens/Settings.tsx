@@ -3,7 +3,7 @@ import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast,
 import { PinSheet } from './Personal'
 import { NewItemSheet } from './DayWizard'
 import {
-  useStore, saveMaster, saveSettings, activeProjects, allWorkers, allItems, parties, stages, coeffs,
+  useStore, saveMaster, saveSettings, allWorkers, allItems, parties, stages, coeffs,
   projects as allProjects, nameOf, type State,
 } from '../lib/store'
 import { uid } from '../lib/db'
@@ -56,19 +56,13 @@ export function Settings({ onBack }: { onBack: () => void }) {
     <>
       <TopBar title="সেটিংস" onBack={onBack} />
       <div className="scroll">
-        <p className="sectionlabel">{t("হিসাবের জিনিসপত্র")}</p>
-        <div className="rowlist">
-          <Pick title="কাজ" sub={tf('{0}টা চলছে', toBn(activeProjects(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('projects')} />
-          <Pick title="লোকজন" sub={tf('{0} জন', toBn(allWorkers(s).filter((w) => w.active).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('workers')} />
-          <Pick title="মাল" sub={tf('{0} রকম', toBn(allItems(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('items')} />
-          <Pick title="দোকান ও খদ্দের" sub={tf('{0} টি নাম', toBn(parties(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('parties')} />
-          <Pick title="কাজের ধাপ ও থাম্ব রুল" sub={tf('{0}টা ধাপ', toBn(stages(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('stages')} />
-        </div>
-
+        {/* The lists he edits — সাইট, লোক, মাল, দোকান, ধাপ — used to live here.
+            They now sit inside the book each belongs to (কাজ, মজুত) and in
+            ‘সব কিছু’, so a thing is changed where it is added, not in a separate
+            settings drawer. What remains here is the app itself: how it looks,
+            how it talks to the server, backups and the passcode. */}
         <p className="sectionlabel">{t("টাকা ও খাতা")}</p>
         <div className="rowlist">
-          <Pick title="হাতের টাকা" sub={money(cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed)}
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('cash')} />
           <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? t('জোড়া লাগানো আছে') : t('শুধু ফোনে রাখা হচ্ছে')}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('sync')} />
           <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={<Icon name="fwd" size={18} />} onClick={() => setPage('backup')} />
@@ -326,7 +320,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
 
 /* ---------- masters ---------- */
 
-function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Project | null>(null)
   const list = allProjects(s)
   const blank = (): Project => ({
@@ -373,7 +367,7 @@ function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
-function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Worker | null>(null)
   const [book, setBook] = useState(false)
   const list = allWorkers(s)
@@ -419,7 +413,7 @@ function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
-function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Item | null>(null)
   const [pick, setPick] = useState(false)
   const list = allItems(s)
@@ -501,7 +495,7 @@ export function ContactPicker({ onClose, onPicked }: { onClose: () => void; onPi
   )
 }
 
-function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Party | null>(null)
   const [filter, setFilter] = useState<'all' | 'supplier' | 'client'>('all')
   const [q, setQ] = useState('')
@@ -566,7 +560,7 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
-function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
   const list = stages(s)
   const cf = coeffs(s)
   const [edit, setEdit] = useState<Stage | null>(null)
@@ -650,7 +644,7 @@ function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
-function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [amount, setAmount] = useState<number | null>(s.settings.opening_cash)
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const toast = useToast()
