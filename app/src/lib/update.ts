@@ -69,9 +69,12 @@ export async function nativePlatform(): Promise<boolean> {
 }
 
 async function isNative(): Promise<boolean> {
+  // Bounded at the source, so every caller (install included) is safe: a
+  // dynamic import that stalls on a bad WebView can no longer freeze the whole
+  // flow with a silent, never-settling await.
   try {
-    const { Capacitor } = await import('@capacitor/core')
-    return Capacitor.isNativePlatform()
+    const mod = await withTimeout(import('@capacitor/core'), 2500)
+    return mod.Capacitor.isNativePlatform()
   } catch {
     return false
   }
@@ -198,20 +201,19 @@ export async function downloadAndInstall(
     onStage('downloading')
     const { Filesystem, Directory } = await import('@capacitor/filesystem')
     const name = `SiteKhata-${release.code}.apk`
-    const got = await Filesystem.downloadFile({
+    const got = await withTimeout(Filesystem.downloadFile({
       url: release.url,
       path: name,
       directory: Directory.Cache,
-    })
+    }), 90_000)
     const path = got.path || ''
     if (!path) { onStage('failed', t('ফাইলটা নামানো গেল না')); return }
 
     onStage('opening')
-    // No pre-check on the install permission: Android asks for it at install
-    // time itself, and a flaky bridge answering "no" must never be what stops
-    // an install that would have worked. If handing it to the installer throws,
-    // the caller falls back to the browser.
-    await (await plugin()).install({ path })
+    // Bounded, so handing the file to Android's installer can never hang the
+    // button. If it throws or times out, the catch reports 'failed' and the
+    // caller falls back to the browser.
+    await withTimeout((await plugin()).install({ path }), 8000)
     onStage('done')
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e)

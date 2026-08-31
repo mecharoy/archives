@@ -155,7 +155,7 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
      installer (the one-tap screen, the nearest thing to a Play Store update).
      Only if that path fails do we fall back to the phone's browser. */
   const install = (r: Release) => {
-    setWhy('')
+    setWhy(''); setStage('downloading')   // instant feedback — never a dead button
     void downloadAndInstall(r, (st, detail) => {
       setStage(st)
       if (detail) setWhy(detail)

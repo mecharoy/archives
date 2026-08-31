@@ -26,6 +26,7 @@ function useInstall() {
   const [stage, setStage] = useState<Stage | null>(null)
   const [blocked, setBlocked] = useState(false)
   const run = (r: Release) => {
+    setStage('downloading')   // instant feedback — the button never looks dead
     void downloadAndInstall(r, (st) => {
       setStage(st)
       if (st === 'blocked') setBlocked(true)

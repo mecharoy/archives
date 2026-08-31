@@ -1,9 +1,9 @@
 {
-  "code": 18,
-  "name": "1.0.18",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=18",
-  "size": 7144868,
-  "notes_bn": "পরীক্ষার আপডেট — অ্যাপের ভিতর থেকে বসানো ঠিকমতো কাজ করছে কিনা দেখার জন্য।",
-  "notes_en": "A test update — to confirm the in-app install works end to end.",
-  "released_at": "2026-08-31T06:37:22.739Z"
+  "code": 19,
+  "name": "1.0.19",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=19",
+  "size": 7144940,
+  "notes_bn": "আপডেটের বোতাম আর কখনও নিস্তেজ থাকবে না — চাপলেই সঙ্গে সঙ্গে সাড়া দেয়, আর কোনো ধাপ আটকে গেলে নিজে থেকে ব্রাউজারে নামায়। কিছুই আর চুপচাপ থেমে থাকবে না।",
+  "notes_en": "The update button never sits dead — it responds the instant you tap, and if any step stalls it falls back to the browser download on its own.",
+  "released_at": "2026-08-31T06:48:34.479Z"
 }
