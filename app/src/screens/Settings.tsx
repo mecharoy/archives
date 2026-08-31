@@ -3,12 +3,12 @@ import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast,
 import { PinSheet } from './Personal'
 import { NewItemSheet } from './DayWizard'
 import {
-  useStore, saveMaster, saveSettings, activeProjects, allWorkers, allItems, parties, stages, coeffs,
+  useStore, saveMaster, saveSettings, allWorkers, allItems, parties, stages, coeffs,
   projects as allProjects, nameOf, type State,
 } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, num, isoDate, dateBn, agoBn } from '../lib/bn'
-import type { Project, Worker, Item, Party, Stage, Coeff } from '../lib/model'
+import type { Project, Worker, Item, Party, Stage, Coeff, Bill } from '../lib/model'
 import { flush, testEndpoint } from '../lib/sync'
 import { fetchBrief } from '../lib/brief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
@@ -22,9 +22,10 @@ import { cashState } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import {
-  installed, fetchRelease, downloadAndInstall, canInstall, openInstallSettings,
-  sizeText, DEFAULT_MANIFEST, type Installed, type Release, type Stage as UpdateStage,
+  fetchRelease, downloadAndInstall, openInstallSettings,
+  nativePlatform, openLatestDownload, sizeText, DEFAULT_MANIFEST, type Release, type Stage as UpdateStage,
 } from '../lib/update'
+import { BUILD_CODE, BUILD_NAME } from '../lib/buildinfo'
 
 type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update'
 
@@ -56,19 +57,13 @@ export function Settings({ onBack }: { onBack: () => void }) {
     <>
       <TopBar title="সেটিংস" onBack={onBack} />
       <div className="scroll">
-        <p className="sectionlabel">{t("হিসাবের জিনিসপত্র")}</p>
-        <div className="rowlist">
-          <Pick title="কাজ" sub={tf('{0}টা চলছে', toBn(activeProjects(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('projects')} />
-          <Pick title="লোকজন" sub={tf('{0} জন', toBn(allWorkers(s).filter((w) => w.active).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('workers')} />
-          <Pick title="মাল" sub={tf('{0} রকম', toBn(allItems(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('items')} />
-          <Pick title="দোকান ও খদ্দের" sub={tf('{0} টি নাম', toBn(parties(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('parties')} />
-          <Pick title="কাজের ধাপ ও থাম্ব রুল" sub={tf('{0}টা ধাপ', toBn(stages(s).length))} right={<Icon name="fwd" size={18} />} onClick={() => setPage('stages')} />
-        </div>
-
+        {/* The lists he edits — সাইট, লোক, মাল, দোকান, ধাপ — used to live here.
+            They now sit inside the book each belongs to (কাজ, মজুত) and in
+            ‘সব কিছু’, so a thing is changed where it is added, not in a separate
+            settings drawer. What remains here is the app itself: how it looks,
+            how it talks to the server, backups and the passcode. */}
         <p className="sectionlabel">{t("টাকা ও খাতা")}</p>
         <div className="rowlist">
-          <Pick title="হাতের টাকা" sub={money(cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed)}
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('cash')} />
           <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? t('জোড়া লাগানো আছে') : t('শুধু ফোনে রাখা হচ্ছে')}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('sync')} />
           <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={<Icon name="fwd" size={18} />} onClick={() => setPage('backup')} />
@@ -112,7 +107,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
             right={<Icon name="trash" size={18} />} onClick={() => setPage('reset')} />
         </div>
 
-        <p className="small muted" style={{ marginTop: '1.6rem' }}>{tf('Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।', toBn('1.0'))}</p>
+        <p className="small muted" style={{ marginTop: '1.6rem' }}>{tf('Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।', toBn(BUILD_NAME))}</p>
       </div>
       {pin && <PinSheet onClose={() => setPin(false)} onSaved={() => { setPin(false); toast.show('পাসকোড সেভ হয়েছে') }} />}
       {toast.msg && <Toast text={toast.msg} />}
@@ -127,23 +122,46 @@ export function Settings({ onBack }: { onBack: () => void }) {
    including "you already have the newest one", which is the answer he wants
    most of the time and the one an alert can never give him. */
 function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
-  const [here, setHere] = useState<Installed | null>(null)
   const [there, setThere] = useState<Release | null>(null)
   const [looking, setLooking] = useState(true)
+  const [native, setNative] = useState(false)
   const [stage, setStage] = useState<UpdateStage | null>(null)
   const [why, setWhy] = useState('')
-  const [allowed, setAllowed] = useState(true)
 
   const look = async () => {
-    setLooking(true); setWhy(''); setStage(null)
-    const [a, b, c] = await Promise.all([installed(), fetchRelease(), canInstall()])
-    setHere(a); setThere(b); setAllowed(c); setLooking(false)
-    await saveSettings({ update_checked_at: new Date().toISOString() })
+    setLooking(true)
+    // Every probe is individually capped, so no single call — not even a
+    // native bridge or a dynamic import that never answers on a given phone —
+    // can hold the check open. The spinner always ends within ~10 seconds.
+    const cap = <T,>(p: Promise<T>, fb: T): Promise<T> =>
+      Promise.race([p.catch(() => fb), new Promise<T>((r) => setTimeout(() => r(fb), 10000))])
+    try {
+      const [n, b] = await Promise.all([cap(nativePlatform(), true), cap(fetchRelease(), null)])
+      setNative(n); setThere(b)
+      await saveSettings({ update_checked_at: new Date().toISOString() })
+    } finally {
+      setLooking(false)
+    }
   }
   useEffect(() => { void look() }, []) // eslint-disable-line
 
-  const newer = here && there && there.code > here.code
-  const phone = here !== null
+  /* The installed version comes from the bundle (BUILD_CODE/BUILD_NAME), never
+     the native bridge — that read fails on some phones and used to drag the
+     whole page down with it. Offer whenever the server has a higher build. */
+  const offer = native && !!there && there.code > BUILD_CODE
+  const phone = native
+
+  /* Update in the app first — download it here, then hand it to Android's own
+     installer (the one-tap screen, the nearest thing to a Play Store update).
+     Only if that path fails do we fall back to the phone's browser. */
+  const install = (r: Release) => {
+    setWhy(''); setStage('downloading')   // instant feedback — never a dead button
+    void downloadAndInstall(r, (st, detail) => {
+      setStage(st)
+      if (detail) setWhy(detail)
+      if (st === 'failed') openLatestDownload(r.url)   // last resort: the browser
+    })
+  }
 
   return (
     <>
@@ -156,7 +174,7 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
         <div className="card" style={{ marginTop: '1rem' }}>
           <div className="spread">
             <span>{t('এখন আছে')}</span>
-            <strong className="num">{phone ? here!.name : '—'}</strong>
+            <strong className="num">{toBn(BUILD_NAME)}</strong>
           </div>
           <div className="spread" style={{ marginTop: '.5rem' }}>
             <span>{t('সবচেয়ে নতুন')}</span>
@@ -174,11 +192,11 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
             {t('খবর আনা গেল না। নেট এলে আবার দেখুন।')}
           </p>
         )}
-        {!looking && phone && there && !newer && (
+        {!looking && phone && there && !offer && (
           <p className="hint" style={{ marginTop: '.9rem' }}>{t('আপনার কাছে সবচেয়ে নতুনটাই আছে।')}</p>
         )}
 
-        {newer && (
+        {offer && (
           <>
             {there!.notes_bn && (
               <>
@@ -186,25 +204,31 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
                 <div className="card">{pick(there!.notes_bn, there!.notes_en)}</div>
               </>
             )}
-            {!allowed && (
-              <div className="alert warn" style={{ marginTop: '.9rem' }}>
-                <span className="dot" />
-                <span>{t('এই অ্যাপকে নতুন সংস্করণ বসানোর অনুমতি দেওয়া নেই। একবার অনুমতি দিলে পরের বার থেকে আর লাগবে না।')}</span>
-              </div>
+            {stage === 'blocked' ? (
+              <>
+                <div className="alert warn" style={{ marginTop: '.9rem' }}>
+                  <span className="dot" />
+                  <span>{t('অ্যাপের ভিতর থেকে বসাতে হলে একবার অনুমতি দিতে হয় — “Allow from this source” চালু করুন, তারপর ফিরে এসে আবার “নতুনটা নিন” চাপুন।')}</span>
+                </div>
+                <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+                  onClick={() => void openInstallSettings()}>{t('অনুমতি দিন')}</button>
+              </>
+            ) : (
+              <>
+                <p className="hint" style={{ marginTop: '.9rem' }}>
+                  {t('“নতুনটা নিন” চাপলে অ্যাপের ভিতরেই ফাইলটা নামবে, তারপর ফোনের নিজের বসানোর পাতা খুলবে — Install চাপুন। আপনার লেখা হিসাব থেকে যাবে।')}
+                </p>
+                {stage === 'downloading' && <p className="hint">{t('নামছে…')}{there!.size ? ' · ' + sizeText(there!.size) : ''}</p>}
+                {stage === 'opening' && <p className="hint">{t('বসানোর পাতা খুলছে…')}</p>}
+                {stage === 'done' && <p className="hint">{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
+                {stage === 'failed' && <p className="hint warn">{why || t('অ্যাপেই বসানো গেল না — ব্রাউজারে নামানো হচ্ছে।')}</p>}
+                <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+                  disabled={stage === 'downloading' || stage === 'opening'}
+                  onClick={() => install(there!)}>
+                  {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
+                </button>
+              </>
             )}
-            {stage === 'downloading' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('নামছে…')}</p>}
-            {stage === 'opening' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('বসানোর পাতা খুলছে…')}</p>}
-            {stage === 'done' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
-            {stage === 'failed' && <p className="hint warn" style={{ marginTop: '.9rem' }}>{why}</p>}
-            <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
-              disabled={stage === 'downloading' || stage === 'opening'}
-              onClick={() => {
-                if (!allowed) { void openInstallSettings(); return }
-                void downloadAndInstall(there!, (st, d) => { setStage(st); if (d) setWhy(d); if (st === 'blocked') setAllowed(false) })
-              }}>
-              {t(allowed ? 'নতুনটা নিন' : 'অনুমতি দিন')}
-              {allowed && there!.size ? ' · ' + sizeText(there!.size) : ''}
-            </button>
           </>
         )}
 
@@ -326,8 +350,10 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
 
 /* ---------- masters ---------- */
 
-function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Project | null>(null)
+  const [delConfirm, setDelConfirm] = useState(false)
+  const open = (p: Project | null) => { setDelConfirm(false); setEdit(p) }
   const list = allProjects(s)
   const blank = (): Project => ({
     id: uid(), kind: 'project', name_bn: '', client_bn: '', ptype: HOUSE, area_sqft: null,
@@ -341,12 +367,12 @@ function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
           {list.map((p) => (
             <Pick key={p.id} title={p.name_bn} sub={`${p.client_bn || t('খদ্দের লেখা নেই')} · ${p.status === 'active' ? t('চলছে') : t('শেষ')}`}
-              right={<span className="num small">{p.budget ? money(p.budget) : ''}</span>} onClick={() => setEdit(p)} />
+              right={<span className="num small">{p.budget ? money(p.budget) : ''}</span>} onClick={() => open(p)} />
           ))}
         </div>
       </div>
       {edit && (
-        <Sheet title={edit.name_bn || 'নতুন কাজ'} onClose={() => setEdit(null)}>
+        <Sheet title={edit.name_bn || 'নতুন কাজ'} onClose={() => { setEdit(null); setDelConfirm(false) }}>
           <Field label="কাজের নাম"><input className="input" value={edit.name_bn} onChange={(e) => setEdit({ ...edit, name_bn: e.target.value })} placeholder="যেমন — রামপুর বাড়ি" /></Field>
           <Field label="খদ্দের"><input className="input" value={edit.client_bn} onChange={(e) => setEdit({ ...edit, client_bn: e.target.value })} /></Field>
           <Field label="ধরন">
@@ -367,13 +393,27 @@ function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
           </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
             onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
+          {/* Delete only shows once a job actually exists. Two taps, because it
+              takes the job off every list — its already-written rows stay in the
+              ledger (nothing there can be un-happened), but the job stops
+              appearing and stops counting on the dashboard. */}
+          {list.some((p) => p.id === edit.id) && (
+            <button className="btn ghost" style={{ marginTop: '.6rem', width: '100%', color: 'var(--crit)', borderColor: 'var(--crit)' }}
+              onClick={async () => {
+                if (!delConfirm) { setDelConfirm(true); return }
+                await saveMaster({ ...edit, deleted: true })
+                setEdit(null); setDelConfirm(false)
+              }}>
+              {delConfirm ? t('হ্যাঁ, কাজটা মুছে ফেলুন') : t('কাজটা মুছে ফেলুন')}
+            </button>
+          )}
         </Sheet>
       )}
     </>
   )
 }
 
-function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Worker | null>(null)
   const [book, setBook] = useState(false)
   const list = allWorkers(s)
@@ -419,7 +459,7 @@ function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
-function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Item | null>(null)
   const [pick, setPick] = useState(false)
   const list = allItems(s)
@@ -501,7 +541,7 @@ export function ContactPicker({ onClose, onPicked }: { onClose: () => void; onPi
   )
 }
 
-function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Party | null>(null)
   const [filter, setFilter] = useState<'all' | 'supplier' | 'client'>('all')
   const [q, setQ] = useState('')
@@ -566,7 +606,7 @@ function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
-function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
   const list = stages(s)
   const cf = coeffs(s)
   const [edit, setEdit] = useState<Stage | null>(null)
@@ -650,7 +690,7 @@ function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
-function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
+export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [amount, setAmount] = useState<number | null>(s.settings.opening_cash)
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const toast = useToast()
@@ -744,7 +784,14 @@ const REMIND_LABEL: Record<RemindWhen, string> = {
 function RemindPage({ s, onBack }: { s: State; onBack: () => void }) {
   const toast = useToast()
   const [busy, setBusy] = useState(false)
-  const planned = useMemo(() => plan(s.entries, s.settings.remind), [s.entries, s.settings.remind])
+  /* Preview exactly what reschedule() will queue — including the dates he set
+     for himself (দিতে হবে), which live in masters as bills. Leaving billRows
+     off here was the reason a বill he had just added showed nothing under
+     ‘এখন যা যা মনে করানো হবে’, even though the phone had it queued. */
+  const planned = useMemo(
+    () => plan(s.entries, s.settings.remind, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[]),
+    [s.entries, s.settings.remind, s.masters],
+  )
 
   const choose = async (w: RemindWhen) => {
     await saveSettings({ remind: w })

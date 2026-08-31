@@ -1,78 +1,101 @@
-/* The one line he sees when there is a newer build.
+/* What he sees when a newer build exists.
 
-   It draws nothing at all unless the repository genuinely has a higher build
-   number than the one installed — no spinner, no "you are up to date", no
-   space taken while there is nothing to say. Checking happens twice a day at
-   most, quietly, and a failed check is a check that never happened.
+   Both the quiet card on the home screen and the pop-up that greets him when
+   he opens the app read the same thing from the store — the answer the shell
+   parked there on open. Neither draws anything unless there is genuinely a
+   newer build than the one he is running.
 
-   The tap sequence is: he presses নতুনটা নিন, the file comes down, Android's
-   own install screen opens, and he presses Install. We cannot and should not
-   remove that last screen — an app that can replace itself unattended is a
-   different and much worse thing than this one. */
+   Installing downloads the build inside the app and hands it to Android's own
+   installer — the one-tap install screen, the nearest thing to a Play Store
+   update. Only if that fails does it fall back to the phone's browser. The
+   last tap is always his; Android never lets a sideloaded app replace itself
+   unattended. */
 
-import { useEffect, useState } from 'react'
-import { Icon } from './kit'
+import { useState } from 'react'
+import { Icon, Sheet } from './kit'
 import {
-  checkForUpdate, downloadAndInstall, openInstallSettings, sizeText,
-  type Stage, type UpdateState,
+  downloadAndInstall, openInstallSettings, openLatestDownload, sizeText, type Release, type Stage,
 } from '../lib/update'
+import { useStore, setState } from '../lib/store'
+import { BUILD_NAME } from '../lib/buildinfo'
 import { t, tf, pick } from '../lib/i18n'
 
-export function UpdateCard() {
-  const [found, setFound] = useState<UpdateState | null>(null)
+/* The shared install flow: in-app download → Android installer, with the
+   browser as a last resort and a permission prompt when Android asks for one. */
+function useInstall() {
   const [stage, setStage] = useState<Stage | null>(null)
-  const [why, setWhy] = useState('')
-
-  useEffect(() => {
-    let alive = true
-    // Not on the first paint — the day button matters more than this does.
-    const timer = setTimeout(() => {
-      void checkForUpdate().then((u) => { if (alive) setFound(u) })
-    }, 2500)
-    return () => { alive = false; clearTimeout(timer) }
-  }, [])
-
-  if (!found) return null
-
-  const r = found.release
-  const busy = stage === 'downloading' || stage === 'opening'
-
-  const go = () => {
-    setWhy('')
-    void downloadAndInstall(r, (s, detail) => {
-      setStage(s)
-      if (detail) setWhy(detail)
+  const [blocked, setBlocked] = useState(false)
+  const run = (r: Release) => {
+    setStage('downloading')   // instant feedback — the button never looks dead
+    void downloadAndInstall(r, (st) => {
+      setStage(st)
+      if (st === 'blocked') setBlocked(true)
+      if (st === 'failed') openLatestDownload(r.url)   // last resort: the browser
     })
   }
+  const busy = stage === 'downloading' || stage === 'opening'
+  return { stage, blocked, setBlocked, run, busy }
+}
 
+function stageLine(stage: Stage | null, size?: number): string {
+  if (stage === 'downloading') return t('নামছে…') + (size ? ' · ' + sizeText(size) : '')
+  if (stage === 'opening') return t('বসানোর পাতা খুলছে…')
+  if (stage === 'done') return t('ফোনের নিজের পাতায় "Install" চাপুন।')
+  if (stage === 'failed') return t('অ্যাপেই বসানো গেল না — ব্রাউজারে নামানো হচ্ছে।')
+  return ''
+}
+
+/* The pop-up. It comes up over the home screen each time he opens the app and
+   there is a newer build waiting — he asked to be told every time. ‘পরে’ hides
+   it for now; it returns next time he opens the app, because the check runs
+   again then and parks the answer afresh. */
+export function UpdateModal() {
+  const found = useStore((s) => s.update)
+  const [hidden, setHidden] = useState(false)
+  const { stage, blocked, setBlocked, run, busy } = useInstall()
+  if (!found || hidden) return null
+  const r = found.release
+  return (
+    <Sheet title={tf('নতুন সংস্করণ এসেছে — {0}', r.name)} onClose={() => setHidden(true)}>
+      <p className="hint">{tf('এখন আছে {0}, নতুন {1}', BUILD_NAME, r.name)}</p>
+      {pick(r.notes_bn, r.notes_en) && <p className="hint">{pick(r.notes_bn, r.notes_en)}</p>}
+      {stage && <p className={'hint' + (stage === 'failed' ? ' warn' : '')}>{stageLine(stage, r.size)}</p>}
+      {blocked ? (
+        <button className="btn primary" onClick={() => { void openInstallSettings(); setBlocked(false) }}>{t('অনুমতি দিন')}</button>
+      ) : (
+        <button className="btn primary" disabled={busy} onClick={() => run(r)}>
+          {t('এখনই নিন')}{r.size ? ' · ' + sizeText(r.size) : ''}
+        </button>
+      )}
+      <button className="btn quiet" disabled={busy} onClick={() => setHidden(true)}>{t('পরে')}</button>
+    </Sheet>
+  )
+}
+
+/* The quiet inline card, for when he has dismissed the pop-up but the update
+   is still there — it sits under the day button and never outranks it. */
+export function UpdateCard() {
+  const found = useStore((s) => s.update)
+  const [gone, setGone] = useState(false)
+  const { stage, blocked, setBlocked, run, busy } = useInstall()
+  if (!found || gone) return null
+  const r = found.release
   return (
     <div className="updatecard">
       <Icon name="cloud" size={24} stroke={1.7} />
       <div className="body">
         <p className="t">{tf('নতুন সংস্করণ এসেছে — {0}', r.name)}</p>
         {pick(r.notes_bn, r.notes_en) && <p className="s">{pick(r.notes_bn, r.notes_en)}</p>}
-
-        {stage === 'blocked' && (
-          <p className="s warn">
-            {t('এই অ্যাপকে নতুন সংস্করণ বসানোর অনুমতি দেওয়া নেই। একবার অনুমতি দিলে পরের বার থেকে আর লাগবে না।')}
-          </p>
-        )}
-        {stage === 'failed' && <p className="s warn">{why || t('নামানো গেল না। পরে আবার দেখুন।')}</p>}
-        {stage === 'downloading' && <p className="s">{t('নামছে…')}{r.size ? ' · ' + sizeText(r.size) : ''}</p>}
-        {stage === 'opening' && <p className="s">{t('বসানোর পাতা খুলছে…')}</p>}
-        {stage === 'done' && <p className="s">{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
-
+        {stage && <p className={'s' + (stage === 'failed' ? ' warn' : '')}>{stageLine(stage, r.size)}</p>}
         <div className="acts">
-          {stage === 'blocked' ? (
-            <button className="btn primary" onClick={() => { void openInstallSettings(); setStage(null) }}>
-              {t('অনুমতি দিন')}
-            </button>
+          {blocked ? (
+            <button className="btn primary" onClick={() => { void openInstallSettings(); setBlocked(false) }}>{t('অনুমতি দিন')}</button>
           ) : (
-            <button className="btn primary" disabled={busy} onClick={go}>
-              {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}
+            <button className="btn primary" disabled={busy} onClick={() => run(r)}>
+              {t('নতুনটা নিন')}{r.size ? ' · ' + sizeText(r.size) : ''}
             </button>
           )}
-          <button className="btn quiet" disabled={busy} onClick={() => setFound(null)}>{t('পরে')}</button>
+          <button className="btn quiet" disabled={busy} onClick={() => { setGone(true); setState({ update: null }) }}>{t('পরে')}</button>
         </div>
       </div>
     </div>

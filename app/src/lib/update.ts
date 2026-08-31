@@ -12,7 +12,8 @@
    simply not mentioning an update, because a man entering his day's wages must
    never be interrupted by our infrastructure having a bad morning. */
 
-import { getState, saveSettings } from './store'
+import { getState, saveSettings, setState } from './store'
+import { BUILD_CODE, BUILD_NAME } from './buildinfo'
 import { t } from './i18n'
 
 /** Where the repository publishes the build. Overridable in settings. */
@@ -33,17 +34,47 @@ export interface Release {
 
 export interface Installed { code: number; name: string }
 
+/* BUILD_CODE (from ./buildinfo, written at release time) is what lets the app
+   know its own version WITHOUT the native bridge — the one call that was
+   failing on his phone and dragging the whole updater down with it. The
+   manifest is compared against this, so a broken native read can never hide a
+   real update again. */
+const BUILT_CODE = BUILD_CODE
+
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 const str = (v: unknown, max = 400): string => (typeof v === 'string' ? v.slice(0, max) : '')
+
+/** The installed build number: the phone's own answer if it gives one, else
+    the number baked into this bundle. Never depends on the native bridge. */
+export async function currentCode(): Promise<number> {
+  const nat = await installed()
+  return nat?.code || BUILT_CODE
+}
+
+/** Hand the APK link to the phone's browser — it downloads and offers to
+    install, exactly like the manual sideload, with no dependence on the
+    custom native plugin. This is the install path that always works. */
+export function openLatestDownload(url: string): void {
+  try { window.open(url, '_system') } catch { /* nothing else to try */ }
+}
 
 /* Everything below is a no-op off a phone. Asking the bridge for a native
    plugin in a browser does not return an error — it throws where nothing is
    waiting to catch it, which surfaces as a page error in an app that should
    simply have said nothing. So the question is asked once, first. */
+export async function nativePlatform(): Promise<boolean> {
+  // Bounded like every other probe: a dynamic import that stalls on a bad
+  // WebView must never be able to hang the whole update check.
+  try { return await withTimeout(isNative(), 4000) } catch { return true }
+}
+
 async function isNative(): Promise<boolean> {
+  // Bounded at the source, so every caller (install included) is safe: a
+  // dynamic import that stalls on a bad WebView can no longer freeze the whole
+  // flow with a silent, never-settling await.
   try {
-    const { Capacitor } = await import('@capacitor/core')
-    return Capacitor.isNativePlatform()
+    const mod = await withTimeout(import('@capacitor/core'), 2500)
+    return mod.Capacitor.isNativePlatform()
   } catch {
     return false
   }
@@ -60,10 +91,23 @@ async function plugin() {
 }
 
 /** What is installed. Null off a phone — the browser has no version. */
+/* No call in the update check may hang the screen. A native bridge that never
+   answers, or a fetch that never returns on a bad network, would otherwise
+   leave the page saying "checking" for ever. So every await here is bounded:
+   whatever has not answered in a few seconds is treated as "could not find
+   out", which the page can show, rather than a spinner with no end. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms)
+    p.then((v) => { clearTimeout(timer); resolve(v) },
+           (e) => { clearTimeout(timer); reject(e) })
+  })
+}
+
 export async function installed(): Promise<Installed | null> {
   if (!(await isNative())) return null
   try {
-    const res = await (await plugin()).current()
+    const res = await withTimeout((await plugin()).current(), 6000)
     if (!res?.ok || res.code == null) return null
     return { code: num(res.code), name: str(res.name, 20) || '—' }
   } catch {
@@ -78,9 +122,9 @@ export async function fetchRelease(url = ''): Promise<Release | null> {
   try {
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 15_000)
-    const res = await fetch(where + (where.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
+    const res = await withTimeout(fetch(where + (where.includes('?') ? '&' : '?') + 'v=' + Date.now(), {
       cache: 'no-store', signal: ctrl.signal,
-    })
+    }), 16_000)
     clearTimeout(timer)
     if (!res.ok) return null
     const raw = (await res.json()) as Record<string, unknown>
@@ -108,23 +152,24 @@ export interface UpdateState { release: Release; from: Installed }
  * row in Settings where he asked on purpose and deserves an answer.
  */
 export async function checkForUpdate(force = false): Promise<UpdateState | null> {
+  if (!(await nativePlatform())) return null   // the browser has nothing to update
   const s = getState()
   if (!force) {
     const last = s.settings.update_checked_at
     if (last && Date.now() - Date.parse(last) < EVERY_HOURS * 3600_000) return null
   }
-  const here = await installed()
-  if (!here) return null                       // not on a phone; nothing to update
   const there = await fetchRelease()
   await saveSettings({ update_checked_at: new Date().toISOString() })
-  if (!there || there.code <= here.code) return null
-  return { release: there, from: here }
+  // Compare against the build baked into this bundle, exactly as the manual
+  // page does — never the native read, so the pop-up and the page always agree.
+  if (!there || there.code <= BUILD_CODE) return null
+  return { release: there, from: { code: BUILD_CODE, name: BUILD_NAME } }
 }
 
 /** Whether Android will let this app hand a file to the installer. */
 export async function canInstall(): Promise<boolean> {
   if (!(await isNative())) return false
-  try { return Boolean((await (await plugin()).canInstall()).value) } catch { return false }
+  try { return Boolean((await withTimeout((await plugin()).canInstall(), 6000)).value) } catch { return false }
 }
 
 export async function openInstallSettings(): Promise<void> {
@@ -147,21 +192,28 @@ export async function downloadAndInstall(
 ): Promise<void> {
   try {
     if (!(await isNative())) { onStage('failed', t('এটা ব্রাউজারে চলছে')); return }
+    // Android will not let the app hand a file to the installer until the
+    // person has switched on "install unknown apps" for it once. Without that,
+    // the install intent resolves to nothing — the screen he saw that never
+    // opened. So ask for it up front and stop here until it is granted.
     if (!(await canInstall())) { onStage('blocked'); return }
 
     onStage('downloading')
     const { Filesystem, Directory } = await import('@capacitor/filesystem')
     const name = `SiteKhata-${release.code}.apk`
-    const got = await Filesystem.downloadFile({
+    const got = await withTimeout(Filesystem.downloadFile({
       url: release.url,
       path: name,
       directory: Directory.Cache,
-    })
+    }), 90_000)
     const path = got.path || ''
     if (!path) { onStage('failed', t('ফাইলটা নামানো গেল না')); return }
 
     onStage('opening')
-    await (await plugin()).install({ path })
+    // Bounded, so handing the file to Android's installer can never hang the
+    // button. If it throws or times out, the catch reports 'failed' and the
+    // caller falls back to the browser.
+    await withTimeout((await plugin()).install({ path }), 8000)
     onStage('done')
   } catch (e) {
     const m = e instanceof Error ? e.message : String(e)
@@ -173,4 +225,18 @@ export async function downloadAndInstall(
 export function sizeText(bytes?: number): string {
   if (!bytes) return ''
   return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+/* Ask on every app open (and every resume), not twice a day. He wanted the
+   phone to look for a new build each time he opens it, so this forces the
+   check past the throttle and parks the answer in the store; the card on the
+   home screen reads it from there. Off a phone, or when nothing is newer,
+   the store simply holds null and the card draws nothing. */
+export async function refreshUpdate(force = true): Promise<void> {
+  try {
+    const found = await checkForUpdate(force)
+    setState({ update: found })
+  } catch {
+    /* a failed look is a look that never happened — never a visible error */
+  }
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type MouseEvent, type TouchEvent } from 'react'
 import { toBn, num } from '../lib/bn'
 import type { Brief, Status } from '../lib/store'
 import { t, tf } from '../lib/i18n'
@@ -16,9 +16,12 @@ export function SCurve({ data }: { data: NonNullable<NonNullable<Brief['series']
   const y = (v: number) => T + (1 - v / maxY) * (H - T - B)
   const line = (vals: number[]) => vals.map((v, k) => `${x(days[k])},${y(v)}`).join(' ')
   const ticks = [0, maxY / 2, maxY]
+  // A brief may carry a plan with no actuals yet; nothing below may assume
+  // there is a last point to read out.
   const last = data.actual.length - 1
+  const latest = last >= 0 ? data.actual[last] : null
 
-  const pick = (e: React.MouseEvent<SVGRectElement> | React.TouchEvent<SVGRectElement>) => {
+  const pick = (e: MouseEvent<SVGRectElement> | TouchEvent<SVGRectElement>) => {
     const rect = (e.currentTarget as SVGRectElement).getBoundingClientRect()
     const cx = ('touches' in e ? e.touches[0]?.clientX : e.clientX) ?? 0
     const px = ((cx - rect.left) / rect.width) * W
@@ -30,7 +33,9 @@ export function SCurve({ data }: { data: NonNullable<NonNullable<Brief['series']
   return (
     <div>
       <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img"
-        aria-label={tf('পরিকল্পনার তুলনায় খরচ — এখন {0} {1}', data.actual[last], data.unit)}>
+        aria-label={latest == null
+          ? t('পরিকল্পনার তুলনায় খরচ — এখনও কোনো খরচ লেখা হয়নি')
+          : tf('পরিকল্পনার তুলনায় খরচ — এখন {0} {1}', latest, data.unit)}>
         {ticks.map((t, k) => (
           <g key={k}>
             <line className="grid" x1={L} x2={W - R} y1={y(t)} y2={y(t)} />

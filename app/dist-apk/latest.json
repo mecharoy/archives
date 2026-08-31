@@ -1,9 +1,9 @@
 {
-  "code": 2,
-  "name": "1.0.2",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=2",
-  "size": 7140508,
-  "notes_bn": "ফোনের তালিকা থেকে নাম, নিজের দেওয়ার তারিখ, অ্যাপ ঘুরে দেখা, আর এখন থেকে নতুন সংস্করণ নিজেই এসে যাবে।",
-  "notes_en": "Contacts from the phone book, dates you set for yourself, a guided tour — and from now on it tells you when a new version is out.",
-  "released_at": "2026-08-29T09:33:28.936Z"
+  "code": 20,
+  "name": "1.0.20",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=20",
+  "size": 7144952,
+  "notes_bn": "পরীক্ষার ছোট আপডেট।",
+  "notes_en": "A small test update.",
+  "released_at": "2026-08-31T06:52:28.417Z"
 }

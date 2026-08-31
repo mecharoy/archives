@@ -20,8 +20,11 @@ export function reversedIds(entries: Entry[]): Set<ID> {
   return s
 }
 
-/** Live rows: reversal pairs cancel out arithmetically, so for sums keep
-    everything; for "the latest state of X" queries drop both sides. */
+/** Drops both halves of every reversal pair — the cancelled row and the row
+    that cancelled it. Use this for "the latest state of X" questions, where a
+    cancelled row must not win. Do NOT use it for sums: a reversal carries a
+    negative amount, so summing the raw entries already nets to the right
+    figure, and filtering here would double-count the correction. */
 export function liveEntries(entries: Entry[]): Entry[] {
   const rev = reversedIds(entries)
   return entries.filter((e) => !e.reverses && !rev.has(e.id))

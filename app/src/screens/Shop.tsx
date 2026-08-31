@@ -14,7 +14,7 @@ import { useBackHandler } from '../lib/back'
 
 type Flow = null | 'in' | 'sale' | 'count' | 'transfer'
 
-export function Shop({ onBack }: { onBack: () => void }) {
+export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' | 'parties') => void }) {
   const s = useStore((x) => x)
   const [flow, setFlow] = useState<Flow>(null)
   const toast = useToast()
@@ -78,6 +78,20 @@ export function Shop({ onBack }: { onBack: () => void }) {
             ))}
             <div className="total"><span className="k">{t("মজুতের দাম")}</span><span className="v num">{money(value)}</span></div>
           </div>
+        )}
+
+        {onGo && (
+          <>
+            <p className="sectionlabel">{t("এই খাতার কাজ")}</p>
+            <div className="tilegrid">
+              <button className="tile" onClick={() => onGo('items')}>
+                <Icon name="book" size={24} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("মালের তালিকা")}</span><span className="s">{t("নাম, একক, শেষ দর")}</span></span>
+              </button>
+              <button className="tile" onClick={() => onGo('parties')}>
+                <Icon name="contactbook" size={24} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("দোকান ও খদ্দের")}</span><span className="s">{t("সরবরাহকারী, খদ্দের")}</span></span>
+              </button>
+            </div>
+          </>
         )}
       </div>
       {toast.msg && <Toast text={toast.msg} />}

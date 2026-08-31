@@ -88,3 +88,24 @@ Location: app/src/lib/update.ts
 Action: adding the in-app update check.
 Cause: Capacitor's web shim throws when a native-only plugin method is called, and the throw escaped the try/catch around the await — it surfaces as an uncaught page error rather than a rejected promise.
 Fix: ask Capacitor.isNativePlatform() first and return a no-op off a phone, rather than catching after the fact. Also stubbed latest.json with page.route in the smoke suite so the tests never touch the network and the newer-version path is actually exercised.
+
+2026-08-31
+Problem: after the home redesign (tabs -> three always-visible book cards + a "সব কিছু" exploded view), six smoke flows timed out on the settings/workers/update pages.
+Location: app/scripts/smoke.mjs, app/src/screens/Home.tsx
+Action: rewriting the home screen and its first-run tour.
+Cause: the old home gear button carried data-tour="settings" and the tour had a settings stop; the redesigned tour drops that stop, so the attribute was removed. Every test that opened Settings via page.locator('[data-tour="settings"]') then had nothing to click.
+Fix: open Settings by the gear's stable position instead — page.locator('.topbar .iconbtn').nth(1) (refresh is nth(0), gear nth(1)). Also renamed the tour stops the suite asserts (tabs->books, settings->all) and changed the "project section on home" assertion from the 'কাজের অবস্থা' label (now only inside the কাজ book) to the project name shown in the home summary. 35/35 flows pass.
+
+2026-08-31
+Problem: after setting a personal date (দিতে হবে) and choosing a reminder timing, the reminder settings preview ‘এখন যা যা মনে করানো হবে’ showed nothing.
+Location: app/src/screens/Settings.tsx (RemindPage)
+Action: previewing what reminders are queued.
+Cause: the preview computed its list with plan(s.entries, s.settings.remind) — omitting the 4th arg billRows, which defaults to []. So personal bills were excluded from the PREVIEW even though reschedule() passes them and the notification was actually queued. The preview disagreed with reality.
+Fix: pass the bills to plan() in the preview exactly as reschedule() does: plan(s.entries, when, 9, s.masters.filter(m => m.kind === 'bill')). Imported the Bill type. Note the separate, correct behaviour: with 'on the day' (same, 0 days) a bill dated today after 9AM is intentionally skipped as already past.
+
+2026-08-31
+Problem: the অ্যাপ আপডেট page stayed on "checking" (দেখা হচ্ছে) forever; the Settings footer always showed "1.0" regardless of the installed build.
+Location: app/src/lib/update.ts (installed/canInstall/fetchRelease), app/src/screens/Settings.tsx (UpdatePage.look, footer)
+Action: opening the update page and reading the version on the phone.
+Cause: (1) look() awaited Promise.all of three calls with no timeout and no finally — if a native bridge call or the manifest fetch never settled on the device, `looking` never cleared. (2) The footer printed a hard-coded toBn('1.0'), never the real versionName.
+Fix: (1) added withTimeout() and wrapped installed()/canInstall()/fetchRelease(); look() now clears the spinner in a finally, so it always ends. (2) footer now reads installed()?.name (falls back to '—' off a phone). Note: a phone already on the broken build must sideload the fixed APK once — the fix cannot arrive through the checker it fixes.

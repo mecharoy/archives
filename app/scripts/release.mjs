@@ -76,6 +76,11 @@ if (!process.env.VITE_SYNC_ENDPOINT || !process.env.VITE_SYNC_TOKEN) {
   process.exit(1)
 }
 
+// Write this build's number into a source file the bundle compiles, so the
+// app knows its own version without the native bridge. A generated constant is
+// dependable where a build-env var was not.
+writeFileSync(join(APP, 'src/lib/buildinfo.ts'),
+  `/* Written by scripts/release.mjs at release time. 0 / 'dev' in a dev build. */\nexport const BUILD_CODE = ${code}\nexport const BUILD_NAME = '${name}'\n`)
 run('npm', ['run', 'build'])
 run('npx', ['cap', 'sync', 'android'])
 

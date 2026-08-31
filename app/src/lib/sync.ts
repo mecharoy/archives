@@ -39,7 +39,13 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
   const s = getState()
   if (running) return { sent: 0, error: '' }
   if (!s.outbox.length) { setState({ sync_error: '' }); return { sent: 0, error: '' } }
-  if (!s.settings.endpoint) return { sent: 0, error: t('সেটিংসে ঠিকানা দেওয়া নেই') }
+  if (!s.settings.endpoint) {
+    // Say so in the status line too, or a stale error from before the endpoint
+    // was cleared keeps sitting on the home screen.
+    const msg = t('সেটিংসে ঠিকানা দেওয়া নেই')
+    if (s.sync_error !== msg) setState({ sync_error: msg })
+    return { sent: 0, error: msg }
+  }
   if (!s.online && !force) return { sent: 0, error: '' }
 
   running = true
