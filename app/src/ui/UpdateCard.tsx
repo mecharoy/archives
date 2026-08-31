@@ -17,6 +17,7 @@ import {
   downloadAndInstall, openInstallSettings, openLatestDownload, sizeText, type Release, type Stage,
 } from '../lib/update'
 import { useStore, setState } from '../lib/store'
+import { BUILD_NAME } from '../lib/buildinfo'
 import { t, tf, pick } from '../lib/i18n'
 
 /* The shared install flow: in-app download → Android installer, with the
@@ -55,6 +56,7 @@ export function UpdateModal() {
   const r = found.release
   return (
     <Sheet title={tf('নতুন সংস্করণ এসেছে — {0}', r.name)} onClose={() => setHidden(true)}>
+      <p className="hint">{tf('এখন আছে {0}, নতুন {1}', BUILD_NAME, r.name)}</p>
       {pick(r.notes_bn, r.notes_en) && <p className="hint">{pick(r.notes_bn, r.notes_en)}</p>}
       {stage && <p className={'hint' + (stage === 'failed' ? ' warn' : '')}>{stageLine(stage, r.size)}</p>}
       {blocked ? (

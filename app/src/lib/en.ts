@@ -836,4 +836,5 @@ export const EN: Record<string, string> = {
   'ঘরের বা নিজের খরচ — কাজের হিসাবে ধরা হবে না।': 'Household or personal spending — never counted against a job.',
   'দোকানের জন্য মাল তুললে এখানে লিখুন — সাইটের হিসাবে যাবে না।': 'Goods bought for the shop go here — not counted against a site.',
   'দোকানে মাল': 'Goods into shop',
+  'এখন আছে {0}, নতুন {1}': 'You have {0}, newest is {1}',
 }

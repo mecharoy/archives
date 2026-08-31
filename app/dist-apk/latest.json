@@ -1,9 +1,9 @@
 {
-  "code": 15,
-  "name": "1.0.15",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=15",
-  "size": 7144668,
-  "notes_bn": "অ্যাপের ভিতরের আপডেট আরও নির্ভরযোগ্য — অনুমতির আগাম পরীক্ষা বাদ, ফোন নিজেই বসানোর সময় অনুমতি চাইবে।",
-  "notes_en": "In-app update made more reliable — no permission pre-check; Android asks at install time.",
-  "released_at": "2026-08-31T05:35:05.812Z"
+  "code": 16,
+  "name": "1.0.16",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=16",
+  "size": 7144712,
+  "notes_bn": "পরীক্ষার আপডেট — অ্যাপের ভিতরেই বসানো কাজ করছে কিনা দেখার জন্য। পপ-আপে এখন কোন সংস্করণ থেকে কোনটায় যাচ্ছে তা দেখায়।",
+  "notes_en": "A test update — to check the in-app install works. The pop-up now shows which version you have and which is new.",
+  "released_at": "2026-08-31T06:03:57.344Z"
 }
