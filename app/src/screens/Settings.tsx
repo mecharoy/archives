@@ -22,7 +22,7 @@ import { cashState } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import {
-  fetchRelease, downloadAndInstall,
+  fetchRelease, downloadAndInstall, openInstallSettings,
   nativePlatform, openLatestDownload, sizeText, DEFAULT_MANIFEST, type Release, type Stage as UpdateStage,
 } from '../lib/update'
 import { BUILD_CODE, BUILD_NAME } from '../lib/buildinfo'
@@ -204,18 +204,31 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
                 <div className="card">{pick(there!.notes_bn, there!.notes_en)}</div>
               </>
             )}
-            <p className="hint" style={{ marginTop: '.9rem' }}>
-              {t('“নতুনটা নিন” চাপলে অ্যাপের ভিতরেই ফাইলটা নামবে, তারপর ফোনের নিজের বসানোর পাতা খুলবে — Install চাপুন। আপনার লেখা হিসাব থেকে যাবে।')}
-            </p>
-            {stage === 'downloading' && <p className="hint">{t('নামছে…')}{there!.size ? ' · ' + sizeText(there!.size) : ''}</p>}
-            {stage === 'opening' && <p className="hint">{t('বসানোর পাতা খুলছে…')}</p>}
-            {stage === 'done' && <p className="hint">{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
-            {stage === 'failed' && <p className="hint warn">{why || t('অ্যাপেই বসানো গেল না — ব্রাউজারে নামানো হচ্ছে।')}</p>}
-            <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
-              disabled={stage === 'downloading' || stage === 'opening'}
-              onClick={() => install(there!)}>
-              {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
-            </button>
+            {stage === 'blocked' ? (
+              <>
+                <div className="alert warn" style={{ marginTop: '.9rem' }}>
+                  <span className="dot" />
+                  <span>{t('অ্যাপের ভিতর থেকে বসাতে হলে একবার অনুমতি দিতে হয় — “Allow from this source” চালু করুন, তারপর ফিরে এসে আবার “নতুনটা নিন” চাপুন।')}</span>
+                </div>
+                <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+                  onClick={() => void openInstallSettings()}>{t('অনুমতি দিন')}</button>
+              </>
+            ) : (
+              <>
+                <p className="hint" style={{ marginTop: '.9rem' }}>
+                  {t('“নতুনটা নিন” চাপলে অ্যাপের ভিতরেই ফাইলটা নামবে, তারপর ফোনের নিজের বসানোর পাতা খুলবে — Install চাপুন। আপনার লেখা হিসাব থেকে যাবে।')}
+                </p>
+                {stage === 'downloading' && <p className="hint">{t('নামছে…')}{there!.size ? ' · ' + sizeText(there!.size) : ''}</p>}
+                {stage === 'opening' && <p className="hint">{t('বসানোর পাতা খুলছে…')}</p>}
+                {stage === 'done' && <p className="hint">{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
+                {stage === 'failed' && <p className="hint warn">{why || t('অ্যাপেই বসানো গেল না — ব্রাউজারে নামানো হচ্ছে।')}</p>}
+                <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+                  disabled={stage === 'downloading' || stage === 'opening'}
+                  onClick={() => install(there!)}>
+                  {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
+                </button>
+              </>
+            )}
           </>
         )}
 

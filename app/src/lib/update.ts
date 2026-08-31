@@ -13,7 +13,7 @@
    never be interrupted by our infrastructure having a bad morning. */
 
 import { getState, saveSettings, setState } from './store'
-import { BUILD_CODE } from './buildinfo'
+import { BUILD_CODE, BUILD_NAME } from './buildinfo'
 import { t } from './i18n'
 
 /** Where the repository publishes the build. Overridable in settings. */
@@ -157,12 +157,10 @@ export async function checkForUpdate(force = false): Promise<UpdateState | null>
   }
   const there = await fetchRelease()
   await saveSettings({ update_checked_at: new Date().toISOString() })
-  // Compare against the build baked into this bundle, not the native read —
-  // so an unresponsive native bridge can never mask a genuine update.
-  const code = await currentCode()
-  if (!there || there.code <= code) return null
-  const here = (await installed()) || { code, name: '' }
-  return { release: there, from: here }
+  // Compare against the build baked into this bundle, exactly as the manual
+  // page does — never the native read, so the pop-up and the page always agree.
+  if (!there || there.code <= BUILD_CODE) return null
+  return { release: there, from: { code: BUILD_CODE, name: BUILD_NAME } }
 }
 
 /** Whether Android will let this app hand a file to the installer. */
@@ -191,6 +189,11 @@ export async function downloadAndInstall(
 ): Promise<void> {
   try {
     if (!(await isNative())) { onStage('failed', t('এটা ব্রাউজারে চলছে')); return }
+    // Android will not let the app hand a file to the installer until the
+    // person has switched on "install unknown apps" for it once. Without that,
+    // the install intent resolves to nothing — the screen he saw that never
+    // opened. So ask for it up front and stop here until it is granted.
+    if (!(await canInstall())) { onStage('blocked'); return }
 
     onStage('downloading')
     const { Filesystem, Directory } = await import('@capacitor/filesystem')

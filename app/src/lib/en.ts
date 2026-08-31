@@ -837,4 +837,5 @@ export const EN: Record<string, string> = {
   'দোকানের জন্য মাল তুললে এখানে লিখুন — সাইটের হিসাবে যাবে না।': 'Goods bought for the shop go here — not counted against a site.',
   'দোকানে মাল': 'Goods into shop',
   'এখন আছে {0}, নতুন {1}': 'You have {0}, newest is {1}',
+  'অ্যাপের ভিতর থেকে বসাতে হলে একবার অনুমতি দিতে হয় — “Allow from this source” চালু করুন, তারপর ফিরে এসে আবার “নতুনটা নিন” চাপুন।': 'To install from inside the app you must allow it once — turn on “Allow from this source”, come back, and tap “Get the new one” again.',
 }
