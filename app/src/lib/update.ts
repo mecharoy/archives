@@ -62,7 +62,11 @@ export function openLatestDownload(url: string): void {
    plugin in a browser does not return an error — it throws where nothing is
    waiting to catch it, which surfaces as a page error in an app that should
    simply have said nothing. So the question is asked once, first. */
-export async function nativePlatform(): Promise<boolean> { return isNative() }
+export async function nativePlatform(): Promise<boolean> {
+  // Bounded like every other probe: a dynamic import that stalls on a bad
+  // WebView must never be able to hang the whole update check.
+  try { return await withTimeout(isNative(), 4000) } catch { return true }
+}
 
 async function isNative(): Promise<boolean> {
   try {

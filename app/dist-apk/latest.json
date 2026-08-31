@@ -1,9 +1,9 @@
 {
-  "code": 12,
-  "name": "1.0.12",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=12",
-  "size": 7144168,
-  "notes_bn": "আজকের হিসাবে নতুন ধাপ — কী মাল ফেরত এল (দোকানে ফিরবে, কাজের খরচ কমবে), নিজের খরচ, আর দোকানে মাল তোলা। প্রতিটাই এড়িয়ে যাওয়া যায়।",
-  "notes_en": "New Today's-entry steps — material returned (back to shop, cuts job cost), personal spending, and adding to inventory. Each is skippable.",
-  "released_at": "2026-08-30T20:51:33.750Z"
+  "code": 13,
+  "name": "1.0.13",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=13",
+  "size": 7144224,
+  "notes_bn": "আপডেট দেখা আর কখনও ‘দেখা হচ্ছে’-তে আটকাবে না — পুরো পরীক্ষাটার উপর সময়সীমা বসানো হল।",
+  "notes_en": "The update check can never stay stuck on 'checking' — the whole check now has a hard time limit.",
+  "released_at": "2026-08-31T05:16:00.607Z"
 }

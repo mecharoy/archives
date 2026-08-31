@@ -133,13 +133,18 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
 
   const look = async () => {
     setLooking(true)
+    // Every probe is individually capped, so no single call — not even a
+    // native bridge or a dynamic import that never answers on a given phone —
+    // can hold the check open. The spinner always ends within ~10 seconds.
+    const cap = <T,>(p: Promise<T>, fb: T): Promise<T> =>
+      Promise.race([p.catch(() => fb), new Promise<T>((r) => setTimeout(() => r(fb), 10000))])
     try {
-      const [n, a, b, c] = await Promise.all([nativePlatform(), installed(), fetchRelease(), canInstall()])
+      const [n, a, b, c] = await Promise.all([
+        cap(nativePlatform(), true), cap(installed(), null), cap(fetchRelease(), null), cap(canInstall(), false),
+      ])
       setNative(n); setHere(a); setThere(b); setAllowed(c)
       await saveSettings({ update_checked_at: new Date().toISOString() })
     } finally {
-      // Whatever failed or timed out, the spinner always stops — never a
-      // page stuck on "checking".
       setLooking(false)
     }
   }
