@@ -156,7 +156,16 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
      Only if that path fails do we fall back to the phone's browser. */
   const install = (r: Release) => {
     setWhy(''); setStage('downloading')   // instant feedback — never a dead button
+    // A phone whose native bridge stalls never gets moving; after ~20s with no
+    // sign of progress, hand it to the browser, which works everywhere.
+    let settled = false
+    const toBrowser = setTimeout(() => {
+      if (settled) return
+      settled = true
+      setStage('failed'); openLatestDownload(r.url)
+    }, 20000)
     void downloadAndInstall(r, (st, detail) => {
+      if (st === 'opening' || st === 'done' || st === 'blocked' || st === 'failed') { settled = true; clearTimeout(toBrowser) }
       setStage(st)
       if (detail) setWhy(detail)
       if (st === 'failed') openLatestDownload(r.url)   // last resort: the browser

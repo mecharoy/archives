@@ -27,7 +27,19 @@ function useInstall() {
   const [blocked, setBlocked] = useState(false)
   const run = (r: Release) => {
     setStage('downloading')   // instant feedback — the button never looks dead
+    // If the in-app path does not clearly get moving within ~20s (a phone whose
+    // native bridge stalls), stop waiting and hand it to the browser, which
+    // works everywhere. Reaching the installer, a block, or a failure cancels
+    // this — only a silent stall trips it.
+    let settled = false
+    const toBrowser = setTimeout(() => {
+      if (settled) return
+      settled = true
+      setStage('failed')
+      openLatestDownload(r.url)
+    }, 20000)
     void downloadAndInstall(r, (st) => {
+      if (st === 'opening' || st === 'done' || st === 'blocked' || st === 'failed') { settled = true; clearTimeout(toBrowser) }
       setStage(st)
       if (st === 'blocked') setBlocked(true)
       if (st === 'failed') openLatestDownload(r.url)   // last resort: the browser
