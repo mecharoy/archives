@@ -22,7 +22,7 @@ import { cashState } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import {
-  fetchRelease, canInstall, downloadAndInstall, openInstallSettings,
+  fetchRelease, downloadAndInstall,
   nativePlatform, openLatestDownload, sizeText, DEFAULT_MANIFEST, type Release, type Stage as UpdateStage,
 } from '../lib/update'
 import { BUILD_CODE, BUILD_NAME } from '../lib/buildinfo'
@@ -124,7 +124,6 @@ export function Settings({ onBack }: { onBack: () => void }) {
 function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
   const [there, setThere] = useState<Release | null>(null)
   const [looking, setLooking] = useState(true)
-  const [allowed, setAllowed] = useState(true)
   const [native, setNative] = useState(false)
   const [stage, setStage] = useState<UpdateStage | null>(null)
   const [why, setWhy] = useState('')
@@ -137,10 +136,8 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
     const cap = <T,>(p: Promise<T>, fb: T): Promise<T> =>
       Promise.race([p.catch(() => fb), new Promise<T>((r) => setTimeout(() => r(fb), 10000))])
     try {
-      const [n, b, c] = await Promise.all([
-        cap(nativePlatform(), true), cap(fetchRelease(), null), cap(canInstall(), false),
-      ])
-      setNative(n); setThere(b); setAllowed(c)
+      const [n, b] = await Promise.all([cap(nativePlatform(), true), cap(fetchRelease(), null)])
+      setNative(n); setThere(b)
       await saveSettings({ update_checked_at: new Date().toISOString() })
     } finally {
       setLooking(false)
@@ -162,7 +159,6 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
     void downloadAndInstall(r, (st, detail) => {
       setStage(st)
       if (detail) setWhy(detail)
-      if (st === 'blocked') setAllowed(false)
       if (st === 'failed') openLatestDownload(r.url)   // last resort: the browser
     })
   }
@@ -208,26 +204,18 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
                 <div className="card">{pick(there!.notes_bn, there!.notes_en)}</div>
               </>
             )}
-            {!allowed && (
-              <div className="alert warn" style={{ marginTop: '.9rem' }}>
-                <span className="dot" />
-                <span>{t('এই অ্যাপকে নতুন সংস্করণ বসানোর অনুমতি দেওয়া নেই। একবার অনুমতি দিলে পরের বার থেকে আর লাগবে না।')}</span>
-              </div>
-            )}
-            {stage === 'downloading' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('নামছে…')}{there!.size ? ' · ' + sizeText(there!.size) : ''}</p>}
-            {stage === 'opening' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('বসানোর পাতা খুলছে…')}</p>}
-            {stage === 'done' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
-            {stage === 'failed' && <p className="hint warn" style={{ marginTop: '.9rem' }}>{why || t('অ্যাপেই বসানো গেল না — ব্রাউজারে নামানো হচ্ছে।')}</p>}
-            {allowed ? (
-              <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
-                disabled={stage === 'downloading' || stage === 'opening'}
-                onClick={() => install(there!)}>
-                {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
-              </button>
-            ) : (
-              <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
-                onClick={() => { void openInstallSettings(); setAllowed(true) }}>{t('অনুমতি দিন')}</button>
-            )}
+            <p className="hint" style={{ marginTop: '.9rem' }}>
+              {t('“নতুনটা নিন” চাপলে অ্যাপের ভিতরেই ফাইলটা নামবে, তারপর ফোনের নিজের বসানোর পাতা খুলবে — Install চাপুন। আপনার লেখা হিসাব থেকে যাবে।')}
+            </p>
+            {stage === 'downloading' && <p className="hint">{t('নামছে…')}{there!.size ? ' · ' + sizeText(there!.size) : ''}</p>}
+            {stage === 'opening' && <p className="hint">{t('বসানোর পাতা খুলছে…')}</p>}
+            {stage === 'done' && <p className="hint">{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
+            {stage === 'failed' && <p className="hint warn">{why || t('অ্যাপেই বসানো গেল না — ব্রাউজারে নামানো হচ্ছে।')}</p>}
+            <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+              disabled={stage === 'downloading' || stage === 'opening'}
+              onClick={() => install(there!)}>
+              {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
+            </button>
           </>
         )}
 

@@ -191,7 +191,6 @@ export async function downloadAndInstall(
 ): Promise<void> {
   try {
     if (!(await isNative())) { onStage('failed', t('এটা ব্রাউজারে চলছে')); return }
-    if (!(await canInstall())) { onStage('blocked'); return }
 
     onStage('downloading')
     const { Filesystem, Directory } = await import('@capacitor/filesystem')
@@ -205,6 +204,10 @@ export async function downloadAndInstall(
     if (!path) { onStage('failed', t('ফাইলটা নামানো গেল না')); return }
 
     onStage('opening')
+    // No pre-check on the install permission: Android asks for it at install
+    // time itself, and a flaky bridge answering "no" must never be what stops
+    // an install that would have worked. If handing it to the installer throws,
+    // the caller falls back to the browser.
     await (await plugin()).install({ path })
     onStage('done')
   } catch (e) {

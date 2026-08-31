@@ -1,9 +1,9 @@
 {
-  "code": 14,
-  "name": "1.0.14",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=14",
-  "size": 7144752,
-  "notes_bn": "সংস্করণ নম্বর এখন সব সময় দেখা যায় (ফোনকে জিজ্ঞেস না করেই)। আপডেট এখন অ্যাপের ভিতরেই নামে আর বসে — ব্রাউজার শুধু শেষ উপায়। নতুন থাকলে অ্যাপ খুললেই পপ-আপে জানায়।",
-  "notes_en": "The version always shows now (no native call). Updates download and install inside the app — the browser is only a fallback. A pop-up on open tells you when a new build is out.",
-  "released_at": "2026-08-31T05:30:18.526Z"
+  "code": 15,
+  "name": "1.0.15",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=15",
+  "size": 7144668,
+  "notes_bn": "অ্যাপের ভিতরের আপডেট আরও নির্ভরযোগ্য — অনুমতির আগাম পরীক্ষা বাদ, ফোন নিজেই বসানোর সময় অনুমতি চাইবে।",
+  "notes_en": "In-app update made more reliable — no permission pre-check; Android asks at install time.",
+  "released_at": "2026-08-31T05:35:05.812Z"
 }
