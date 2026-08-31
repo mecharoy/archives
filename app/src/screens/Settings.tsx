@@ -22,9 +22,10 @@ import { cashState } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import {
-  installed, fetchRelease, canInstall,
-  nativePlatform, openLatestDownload, sizeText, DEFAULT_MANIFEST, type Installed, type Release,
+  fetchRelease, canInstall, downloadAndInstall, openInstallSettings,
+  nativePlatform, openLatestDownload, sizeText, DEFAULT_MANIFEST, type Release, type Stage as UpdateStage,
 } from '../lib/update'
+import { BUILD_CODE, BUILD_NAME } from '../lib/buildinfo'
 
 type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update'
 
@@ -33,10 +34,6 @@ export function Settings({ onBack }: { onBack: () => void }) {
   const [page, setPage] = useState<Page>(null)
   const [pin, setPin] = useState(false)
   const toast = useToast()
-  // The real installed version, read from the phone itself — the footer used
-  // to print a hard-coded "1.0", which told him nothing about what he had.
-  const [ver, setVer] = useState('')
-  useEffect(() => { void installed().then((i) => { if (i?.name) setVer(i.name) }) }, [])
   // Back out of লোকজন and you land on সেটিংস, not on the home screen.
   useBackHandler(() => setPage(null), page !== null)
 
@@ -110,7 +107,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
             right={<Icon name="trash" size={18} />} onClick={() => setPage('reset')} />
         </div>
 
-        <p className="small muted" style={{ marginTop: '1.6rem' }}>{tf('Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।', ver ? toBn(ver) : '—')}</p>
+        <p className="small muted" style={{ marginTop: '1.6rem' }}>{tf('Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।', toBn(BUILD_NAME))}</p>
       </div>
       {pin && <PinSheet onClose={() => setPin(false)} onSaved={() => { setPin(false); toast.show('পাসকোড সেভ হয়েছে') }} />}
       {toast.msg && <Toast text={toast.msg} />}
@@ -125,11 +122,12 @@ export function Settings({ onBack }: { onBack: () => void }) {
    including "you already have the newest one", which is the answer he wants
    most of the time and the one an alert can never give him. */
 function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
-  const [here, setHere] = useState<Installed | null>(null)
   const [there, setThere] = useState<Release | null>(null)
   const [looking, setLooking] = useState(true)
   const [allowed, setAllowed] = useState(true)
   const [native, setNative] = useState(false)
+  const [stage, setStage] = useState<UpdateStage | null>(null)
+  const [why, setWhy] = useState('')
 
   const look = async () => {
     setLooking(true)
@@ -139,10 +137,10 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
     const cap = <T,>(p: Promise<T>, fb: T): Promise<T> =>
       Promise.race([p.catch(() => fb), new Promise<T>((r) => setTimeout(() => r(fb), 10000))])
     try {
-      const [n, a, b, c] = await Promise.all([
-        cap(nativePlatform(), true), cap(installed(), null), cap(fetchRelease(), null), cap(canInstall(), false),
+      const [n, b, c] = await Promise.all([
+        cap(nativePlatform(), true), cap(fetchRelease(), null), cap(canInstall(), false),
       ])
-      setNative(n); setHere(a); setThere(b); setAllowed(c)
+      setNative(n); setThere(b); setAllowed(c)
       await saveSettings({ update_checked_at: new Date().toISOString() })
     } finally {
       setLooking(false)
@@ -150,13 +148,24 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
   }
   useEffect(() => { void look() }, []) // eslint-disable-line
 
-  /* Offer the latest whenever the server has one and it is not older than
-     what we can see. Crucially this does NOT require reading the installed
-     version: if that native call fails (here === null) on a real phone, the
-     manual update must still work — reinstalling the same build is harmless,
-     and being unable to read a version must never trap him on an old one. */
-  const offer = native && !!there && (!here || there.code > here.code)
+  /* The installed version comes from the bundle (BUILD_CODE/BUILD_NAME), never
+     the native bridge — that read fails on some phones and used to drag the
+     whole page down with it. Offer whenever the server has a higher build. */
+  const offer = native && !!there && there.code > BUILD_CODE
   const phone = native
+
+  /* Update in the app first — download it here, then hand it to Android's own
+     installer (the one-tap screen, the nearest thing to a Play Store update).
+     Only if that path fails do we fall back to the phone's browser. */
+  const install = (r: Release) => {
+    setWhy('')
+    void downloadAndInstall(r, (st, detail) => {
+      setStage(st)
+      if (detail) setWhy(detail)
+      if (st === 'blocked') setAllowed(false)
+      if (st === 'failed') openLatestDownload(r.url)   // last resort: the browser
+    })
+  }
 
   return (
     <>
@@ -169,7 +178,7 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
         <div className="card" style={{ marginTop: '1rem' }}>
           <div className="spread">
             <span>{t('এখন আছে')}</span>
-            <strong className="num">{here ? here.name : phone ? t('জানা যায়নি') : '—'}</strong>
+            <strong className="num">{toBn(BUILD_NAME)}</strong>
           </div>
           <div className="spread" style={{ marginTop: '.5rem' }}>
             <span>{t('সবচেয়ে নতুন')}</span>
@@ -205,13 +214,20 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
                 <span>{t('এই অ্যাপকে নতুন সংস্করণ বসানোর অনুমতি দেওয়া নেই। একবার অনুমতি দিলে পরের বার থেকে আর লাগবে না।')}</span>
               </div>
             )}
-            <p className="hint" style={{ marginTop: '.9rem' }}>
-              {t('“নতুনটা নিন” চাপলে ফোনের ব্রাউজারে নতুন ফাইলটা নামবে, তারপর Install চাপুন।')}
-            </p>
-            <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
-              onClick={() => openLatestDownload(there!.url)}>
-              {t('নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
-            </button>
+            {stage === 'downloading' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('নামছে…')}{there!.size ? ' · ' + sizeText(there!.size) : ''}</p>}
+            {stage === 'opening' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('বসানোর পাতা খুলছে…')}</p>}
+            {stage === 'done' && <p className="hint" style={{ marginTop: '.9rem' }}>{t('ফোনের নিজের পাতায় "Install" চাপুন।')}</p>}
+            {stage === 'failed' && <p className="hint warn" style={{ marginTop: '.9rem' }}>{why || t('অ্যাপেই বসানো গেল না — ব্রাউজারে নামানো হচ্ছে।')}</p>}
+            {allowed ? (
+              <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+                disabled={stage === 'downloading' || stage === 'opening'}
+                onClick={() => install(there!)}>
+                {t(stage === 'failed' ? 'আবার চেষ্টা করুন' : 'নতুনটা নিন')}{there!.size ? ' · ' + sizeText(there!.size) : ''}
+              </button>
+            ) : (
+              <button className="btn primary" style={{ width: '100%', marginTop: '1rem' }}
+                onClick={() => { void openInstallSettings(); setAllowed(true) }}>{t('অনুমতি দিন')}</button>
+            )}
           </>
         )}
 
