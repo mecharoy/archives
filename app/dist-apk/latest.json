@@ -1,9 +1,9 @@
 {
-  "code": 17,
-  "name": "1.0.17",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=17",
-  "size": 7144880,
-  "notes_bn": "অ্যাপের ভিতর থেকে বসানোর জন্য দরকারি অনুমতিটা এখন আগে চাওয়া হয় — তাই বসানোর পাতা সত্যিই খোলে, ব্রাউজারে যেতে হয় না। পপ-আপও ঠিকমতো আসে।",
-  "notes_en": "The app now asks for the one install permission first, so the install screen actually opens — no browser. The open-time pop-up is fixed too.",
-  "released_at": "2026-08-31T06:12:23.772Z"
+  "code": 18,
+  "name": "1.0.18",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=18",
+  "size": 7144868,
+  "notes_bn": "পরীক্ষার আপডেট — অ্যাপের ভিতর থেকে বসানো ঠিকমতো কাজ করছে কিনা দেখার জন্য।",
+  "notes_en": "A test update — to confirm the in-app install works end to end.",
+  "released_at": "2026-08-31T06:37:22.739Z"
 }
