@@ -3,6 +3,8 @@ import { Icon } from '../ui/kit'
 import { useStore, activeProjects, workers, stages, type State, type Brief } from '../lib/store'
 import { money, toBn, isoDate, agoBn, dayLabelBn, addDays } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
+import { hasAiKey, maybeMakeBrief } from '../lib/aiBrief'
+import { statusWord } from '../lib/i18n'
 import { cashState, projectTotals, entriesInLastDays, lastEntryDate, shopStock, duesSplit, receivablesSplit } from '../lib/calc'
 import { lastAttendance, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
@@ -29,9 +31,19 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
   const s = useStore((x) => x)
   const [refreshing, setRefreshing] = useState(false)
 
-  // The brief lives on the same server as the rows, so an endpoint alone is
-  // enough — briefUrl is only an override for hosting it somewhere else.
-  useEffect(() => { if (s.settings.briefUrl || s.settings.endpoint) void fetchBrief() }, []) // eslint-disable-line
+  // With a Gemini key built in, the phone writes its own brief once a day
+  // (see aiBrief.ts) and checks again whenever the app comes back to the
+  // front. Without one, the brief comes from the server as before.
+  useEffect(() => {
+    if (!hasAiKey()) {
+      if (s.settings.briefUrl || s.settings.endpoint) void fetchBrief()
+      return
+    }
+    void maybeMakeBrief()
+    const onShow = () => { if (!document.hidden) void maybeMakeBrief() }
+    document.addEventListener('visibilitychange', onShow)
+    return () => document.removeEventListener('visibilitychange', onShow)
+  }, []) // eslint-disable-line
 
   const stale = briefIsStale(s.brief)
   const brief: Brief = useMemo(() => (s.brief && !stale ? s.brief : localBrief()), [s.brief, stale, s.entries, s.masters])
@@ -44,7 +56,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
 
   const refresh = async () => {
     setRefreshing(true)
-    await Promise.all([fetchBrief(false), flush(true)])
+    await Promise.all([hasAiKey() ? maybeMakeBrief() : fetchBrief(false), flush(true)])
     setRefreshing(false)
   }
 
@@ -126,6 +138,17 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </>
         )}
 
+        {brief.todo_bn && brief.todo_bn.length > 0 && (
+          <>
+            <p className="sectionlabel">{t('আজ যা করবেন')}</p>
+            <div className="card">
+              {brief.todo_bn.slice(0, 4).map((x, k) => (
+                <div key={k} className="todo"><span className="n num">{toBn(k + 1)}</span><span>{pick(x, brief.todo_en?.[k])}</span></div>
+              ))}
+            </div>
+          </>
+        )}
+
         <button className="bigbtn allbtn" data-tour="all" onClick={() => onGo('all')} style={{ marginTop: '1.1rem' }}>
           <Icon name="grid" size={28} stroke={1.7} />
           <span style={{ flex: 1 }}>
@@ -174,8 +197,9 @@ function WorkSummary({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: Scr
         <>
           <div className="spread">
             <strong>{pick(top.name_bn, top.name_en)}</strong>
-            <span className={'badge ' + (top.status || 'ok')}>{pick(top.note_bn, top.note_en)}</span>
+            <span className={'badge ' + (top.status || 'ok')}>{statusWord(top.status)}</span>
           </div>
+          {(top.note_bn || top.note_en) && <p className="jobnote">{pick(top.note_bn, top.note_en)}</p>}
           <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
             <span className="name small muted">{t('কাজ')}</span>
             <span className="bartrack"><span className="barfill" style={{ width: `${Math.min(100, top.pct_done)}%` }} /></span>

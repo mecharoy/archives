@@ -12,6 +12,8 @@
     "isolatedModules": true,
     "noEmit": true,
     "resolveJsonModule": true,
+    "allowJs": true,
+    "checkJs": false,
     "allowImportingTsExtensions": true,
     "verbatimModuleSyntax": true
   },

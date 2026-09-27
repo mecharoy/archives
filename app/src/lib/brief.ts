@@ -7,7 +7,7 @@
 import { kvSet } from './db'
 import { getState, setState, apiUrl, type Brief, type Status, activeProjects, stages, coeffs, allItems, nameOf } from './store'
 import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries, SETTLE_HEAD } from './calc'
-import { hoursSince, isoDate, daysBetween, addDays, money, toBn } from './bn'
+import { hoursSince, isoDate, daysBetween, addDays, money, toBn, dayLabelBn } from './bn'
 import type { Entry, StockEntry } from './model'
 import { t, tf } from './i18n'
 
@@ -158,7 +158,7 @@ export function localBrief(): Brief {
     headline_bn: alerts[0]?.text_bn || (active.length ? t('সব ঠিক চলছে।') : t('একটা কাজ যোগ করে শুরু করুন।')),
     cards, projects: projs, alerts,
     series: { scurve: main ? sCurve(main.id) : undefined, burn: burnRows },
-    todo_bn: dues.all.slice(0, 4).map((d) => `${nameOf(s, d.party_id) || t('দোকান')} — ${money(d.amount)}, ${d.due_date}`),
+    todo_bn: dues.all.slice(0, 4).map((d) => `${nameOf(s, d.party_id) || t('দোকান')} — ${money(d.amount)}, ${dayLabelBn(d.due_date)}`),
   }
 }
 

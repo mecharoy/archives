@@ -109,3 +109,10 @@ Location: app/src/lib/update.ts (installed/canInstall/fetchRelease), app/src/scr
 Action: opening the update page and reading the version on the phone.
 Cause: (1) look() awaited Promise.all of three calls with no timeout and no finally — if a native bridge call or the manifest fetch never settled on the device, `looking` never cleared. (2) The footer printed a hard-coded toBn('1.0'), never the real versionName.
 Fix: (1) added withTimeout() and wrapped installed()/canInstall()/fetchRelease(); look() now clears the spinner in a finally, so it always ends. (2) footer now reads installed()?.name (falls back to '—' off a phone). Note: a phone already on the broken build must sideload the fixed APK once — the fix cannot arrive through the checker it fixes.
+
+2026-09-26
+Problem: every progress/burn bar rendered empty — "খরচ ১০%" and "রড ৪৫%" showed a grey track with no fill.
+Location: app/src/styles.css (.barfill), used by Home.tsx, Work.tsx, ui/charts.tsx
+Action: screenshotting the home and work screens after seeding three weeks of data.
+Cause: .barfill is a <span>; an inline element ignores width and height, so the fill had no size. The smoke test checks text, never pixels, so it never noticed.
+Fix: .barfill { display: block }.
