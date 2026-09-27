@@ -15,7 +15,7 @@
    Nothing is pushed. Check the diff, then commit — the phone only ever sees
    what is on the branch. */
 
-import { readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, statSync } from 'fs'
+import { readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, statSync, mkdirSync } from 'fs'
 import { execFileSync } from 'child_process'
 import { join } from 'path'
 
@@ -90,6 +90,8 @@ assemble()
 if (!existsSync(BUILT)) { console.error('no APK at ' + BUILT); process.exit(1) }
 
 const dest = join(OUT, APK_NAME)
+// trash/ is git-ignored, so a fresh clone does not have it.
+mkdirSync(join(APP, 'trash'), { recursive: true })
 if (existsSync(dest)) renameSync(dest, join(APP, 'trash', `SiteKhata-prev-${code - 1}.apk`))
 copyFileSync(BUILT, dest)
 const size = statSync(dest).size

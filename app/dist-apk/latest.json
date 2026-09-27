@@ -1,9 +1,9 @@
 {
-  "code": 22,
-  "name": "1.0.22",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=22",
-  "size": 7145060,
-  "notes_bn": "ছোট পরীক্ষার আপডেট।",
-  "notes_en": "Small test update.",
-  "released_at": "2026-08-31T07:07:46.789Z"
+  "code": 23,
+  "name": "1.0.23",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=23",
+  "size": 7497870,
+  "notes_bn": "রাতের হিসাব এখন ফোনেই তৈরি হয়; দাগগুলো ঠিক হল; হোমে আজকের কাজ",
+  "notes_en": "The nightly brief is now made on the phone; bars fixed; today's to-dos on home",
+  "released_at": "2026-09-27T01:37:32.668Z"
 }
