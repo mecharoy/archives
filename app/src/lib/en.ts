@@ -838,4 +838,10 @@ export const EN: Record<string, string> = {
   'দোকানে মাল': 'Goods into shop',
   'এখন আছে {0}, নতুন {1}': 'You have {0}, newest is {1}',
   'অ্যাপের ভিতর থেকে বসাতে হলে একবার অনুমতি দিতে হয় — “Allow from this source” চালু করুন, তারপর ফিরে এসে আবার “নতুনটা নিন” চাপুন।': 'To install from inside the app you must allow it once — turn on “Allow from this source”, come back, and tap “Get the new one” again.',
+  'এই ফোনেই তৈরি হয় — রোজ সন্ধের পর একবার।': 'Made on this phone — once a day, after six in the evening.',
+  'এখনই তৈরি করুন': 'Make it now',
+  'বিপদ': 'Trouble',
+  'নজর দিন': 'Watch this',
+  'খবর': 'Note',
+  'আজ যা করবেন': 'To do today',
 }

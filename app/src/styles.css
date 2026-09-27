@@ -364,7 +364,7 @@ textarea.input { min-height: 5rem; resize: none; }
 .barrow { display: grid; grid-template-columns: 4.6rem 1fr auto; gap: .7rem; align-items: center; padding: .45rem 0; }
 .barrow .name { font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bartrack { height: 1.1rem; background: var(--sunk); border-radius: 4px; overflow: hidden; position: relative; }
-.barfill { height: 100%; border-radius: 4px; background: var(--ok); }
+.barfill { display: block; height: 100%; border-radius: 4px; background: var(--ok); }
 .barfill.warn { background: var(--warn); }
 .barfill.crit { background: var(--crit); }
 .barmark { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--ink); opacity: .55; }
@@ -559,3 +559,11 @@ textarea.input { min-height: 5rem; resize: none; }
 .updatecard .s.warn { color: var(--warn); }
 .updatecard .acts { display: flex; gap: .6rem; margin-top: .8rem; }
 .updatecard .acts .btn { flex: 1; min-height: 3rem; }
+
+/* A job's note from the brief: a sentence of its own under the name, not
+   squeezed into a pill beside it. */
+.jobnote { font-size: .92rem; line-height: 1.45; color: var(--ink-2, var(--ink)); margin: .25rem 0 .35rem; }
+/* Today's to-dos on the home screen, numbered so he can tick them off in his head. */
+.todo { display: flex; gap: .7rem; align-items: baseline; padding: .55rem 0; border-bottom: 1px solid var(--line-soft); line-height: 1.45; }
+.todo:last-child { border-bottom: 0; }
+.todo .n { font-weight: 700; color: var(--accent); min-width: 1rem; }

@@ -50,3 +50,8 @@ export function pick(bn?: string, en?: string): string {
 export function tf(bn: string, ...args: (string | number | undefined)[]): string {
   return args.reduce<string>((s, a, i) => s.split(`{${i}}`).join(a == null ? '' : String(a)), t(bn))
 }
+
+/** One plain word for a status, so a badge is never an empty pill. */
+export function statusWord(st?: string): string {
+  return t(st === 'crit' ? 'বিপদ' : st === 'warn' ? 'নজর দিন' : st === 'info' ? 'খবর' : 'ঠিক আছে')
+}

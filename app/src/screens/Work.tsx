@@ -4,7 +4,7 @@ import { SCurve, BurnBars } from '../ui/charts'
 import { useStore, activeProjects, type Brief } from '../lib/store'
 import { toBn } from '../lib/bn'
 import { localBrief, briefIsStale } from '../lib/brief'
-import { t, pick } from '../lib/i18n'
+import { t, pick, statusWord } from '../lib/i18n'
 import type { Screen } from '../App'
 
 /* কাজ — the whole site book on one screen. Progress and cost of every live
@@ -35,8 +35,9 @@ export function Work({ onBack, onGo }: { onBack: () => void; onGo: (s: Screen) =
                 <div key={k} style={{ padding: '.55rem 0', borderBottom: k < rows.length - 1 ? '1px solid var(--line-soft)' : 0 }}>
                   <div className="spread">
                     <strong>{pick(p.name_bn, p.name_en)}</strong>
-                    <span className={'badge ' + (p.status || 'ok')}>{pick(p.note_bn, p.note_en)}</span>
+                    <span className={'badge ' + (p.status || 'ok')}>{statusWord(p.status)}</span>
                   </div>
+                  {(p.note_bn || p.note_en) && <p className="jobnote">{pick(p.note_bn, p.note_en)}</p>}
                   <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
                     <span className="name small muted">{t('কাজ')}</span>
                     <span className="bartrack"><span className="barfill" style={{ width: `${Math.min(100, p.pct_done)}%` }} /></span>

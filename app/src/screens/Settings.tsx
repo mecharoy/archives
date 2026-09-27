@@ -11,6 +11,7 @@ import { money, toBn, num, isoDate, dateBn, agoBn } from '../lib/bn'
 import type { Project, Worker, Item, Party, Stage, Coeff, Bill } from '../lib/model'
 import { flush, testEndpoint } from '../lib/sync'
 import { fetchBrief } from '../lib/brief'
+import { hasAiKey, makePhoneBrief } from '../lib/aiBrief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
 import { restoreFromServer } from '../lib/restore'
 import { seedHouse, HOUSE } from '../lib/seed'
@@ -313,13 +314,14 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
             <span>{t("রাতের হিসাব")}</span>
             <span className="small muted">{s.brief ? agoBn(s.brief.generated_at) : t('এখনও আসেনি')}</span>
           </div>
-          <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || !s.settings.endpoint}
+          {hasAiKey() && <p className="small muted" style={{ marginTop: '.4rem' }}>{t('এই ফোনেই তৈরি হয় — রোজ সন্ধের পর একবার।')}</p>}
+          <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || (!hasAiKey() && !s.settings.endpoint)}
             onClick={async () => {
               setBusy('brief')
-              const err = await fetchBrief(false)
+              const err = hasAiKey() ? await makePhoneBrief() : await fetchBrief(false)
               setBusy('')
-              toast.show(err || 'রাতের হিসাব এসে গেছে')
-            }}>{busy === 'brief' ? t('আনছি…') : t('এখন আনুন')}</button>
+              toast.show(err || t('রাতের হিসাব এসে গেছে'))
+            }}>{busy === 'brief' ? t('আনছি…') : hasAiKey() ? t('এখনই তৈরি করুন') : t('এখন আনুন')}</button>
         </div>
 
         <p className="sectionlabel">{t("নতুন ফোনে")}</p>
