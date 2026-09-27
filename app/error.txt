@@ -116,3 +116,17 @@ Location: app/src/styles.css (.barfill), used by Home.tsx, Work.tsx, ui/charts.t
 Action: screenshotting the home and work screens after seeding three weeks of data.
 Cause: .barfill is a <span>; an inline element ignores width and height, so the fill had no size. The smoke test checks text, never pixels, so it never noticed.
 Fix: .barfill { display: block }.
+
+2026-09-27
+Problem: npm run release failed with EBUSY renaming dist-apk/SiteKhata-1.0.apk into trash/.
+Location: app/scripts/release.mjs (step that moves the previous APK aside)
+Action: releasing build 23 after reading the sync endpoint/token back out of the previous APK.
+Cause: the Python helper still held the old APK open (zipfile not closed) while it launched the release, and Windows will not rename an open file.
+Fix: read the APK inside `with zipfile.ZipFile(...)` so it is closed before the release starts.
+
+2026-09-27
+Problem: release then failed with ENOENT renaming the previous APK into trash/.
+Location: app/scripts/release.mjs
+Action: second attempt at releasing build 23.
+Cause: trash/ is git-ignored, so a fresh clone has no trash/ folder and renameSync cannot create it.
+Fix: mkdirSync(trash, { recursive: true }) before moving the previous APK aside.
