@@ -1,9 +1,9 @@
 {
-  "code": 24,
-  "name": "1.0.24",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=24",
-  "size": 7507163,
-  "notes_bn": "এআই কী বসানোর জায়গা; ওয়েবসাইটের অনুসন্ধান এখানে আসে; হিসাব ও দেনা-পাওনার বেশ কয়েকটা ভুল ঠিক হল",
-  "notes_en": "AI key can be entered in Settings; website enquiries arrive in the app; several money-calculation fixes",
-  "released_at": "2026-10-02T08:57:40.662Z"
+  "code": 25,
+  "name": "1.0.25",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=25",
+  "size": 7508435,
+  "notes_bn": "লেখা আরও পরিষ্কার পড়া যায়; ইংরেজিতে বাকি লেখাগুলো যোগ হল; একই তারিখের বাকির হিসাব ঠিক হল; ছোট স্ক্রিনে নিচের তিনটে সংখ্যা কাটে না",
+  "notes_en": "Clearer text; missing English added; same-day dues now add up the same everywhere; bottom totals fit small screens",
+  "released_at": "2026-10-02T10:10:34.399Z"
 }
