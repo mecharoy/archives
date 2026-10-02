@@ -1,9 +1,9 @@
 {
-  "code": 23,
-  "name": "1.0.23",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=23",
-  "size": 7497870,
-  "notes_bn": "রাতের হিসাব এখন ফোনেই তৈরি হয়; দাগগুলো ঠিক হল; হোমে আজকের কাজ",
-  "notes_en": "The nightly brief is now made on the phone; bars fixed; today's to-dos on home",
-  "released_at": "2026-09-27T01:37:32.668Z"
+  "code": 24,
+  "name": "1.0.24",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=24",
+  "size": 7507163,
+  "notes_bn": "এআই কী বসানোর জায়গা; ওয়েবসাইটের অনুসন্ধান এখানে আসে; হিসাব ও দেনা-পাওনার বেশ কয়েকটা ভুল ঠিক হল",
+  "notes_en": "AI key can be entered in Settings; website enquiries arrive in the app; several money-calculation fixes",
+  "released_at": "2026-10-02T08:57:40.662Z"
 }
