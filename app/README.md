@@ -253,6 +253,30 @@ budget, a cancelled purchase or count, two counts on one day, a rent bill on the
 31st, a reminder written late, a refused row at the front of the queue, and the
 hours after midnight in India when a Worker is still on yesterday's date.
 
+`npm run fuzz` does the same on ledgers nobody wrote by hand: each one is generated
+from a seed (the wizard's own row builder, shop rows, payments, cancellations,
+rows written in the same instant), and the phone, the server and a third answer
+key written in whole paise must agree on every figure. It also checks that the
+order rows come back in changes nothing, that a thing written and cancelled
+changes nothing, that every row survives the trip to the server and back, and that
+the outbox never loses a row. `npm test` runs 120 ledgers; `FUZZ_N=3000
+FUZZ_SEED=7 npm run fuzz` runs more, and a failing ledger is cut down to the few
+rows that still fail and written to a file.
+
+`npm run large` builds ledgers of 13,000 to 100,000 rows and checks that every
+figure the home screen shows, and the phone's own brief, grow in step with the
+ledger (a loop inside a loop would show as slope 2), and that the biggest one is
+still right. `npm run large:ui` opens a 5,000 to 40,000 row ledger in the real app
+with the CPU slowed 4x and times opening the app, each book, a redraw and saving a
+day. Neither is part of `npm test`: timings on a busy PC are not steady enough.
+
+`npm run i18n` lists every Bengali sentence in the screens that has no English
+entry (an English phone otherwise shows Bengali there). `npm run ui:sweep` walks
+every screen at 360 and 320 pixels wide, at normal and large text, in English and
+in dark mode, takes a picture of each (`scripts/shot-ui-*.png`) and lists words
+cut off, things sticking out of the screen, buttons under 44 pixels, text below
+4.5:1 contrast and Bengali left on an English screen (`scripts/ui-report/latest.md`).
+
 ### The website link
 
 The public website (`../rcb`) shows what the shop has — *in stock* or *out*, by

@@ -91,10 +91,11 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
   useBackHandler(() => (i > 0 ? setI(i - 1) : onExit(false)))
 
   useEffect(() => { if (draft && draft.step !== i) patch({ step: i }) }, [i]) // eslint-disable-line
-  useEffect(() => { if (i > steps.length - 1) setI(steps.length - 1) }, [steps.length]) // eslint-disable-line
+  useEffect(() => { if (i > steps.length - 1) setI(steps.length - 1) }, [steps.length, i]) // eslint-disable-line
 
   if (!draft) return null
-  const step = steps[Math.min(i, steps.length - 1)]
+  const at = Math.min(i, steps.length - 1)   // a saved draft can be past the end for one frame
+  const step = steps[at]
   const back = () => (i > 0 ? setI(i - 1) : onExit(false))
   const next = () => setI(Math.min(i + 1, steps.length - 1))
   const jumpTo = (id: StepId) => { const k = steps.indexOf(id); if (k >= 0) setI(k) }
@@ -121,9 +122,9 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       <div className="wizhead">
         <button className="iconbtn" onClick={back} aria-label="আগের ধাপ"><Icon name="back" /></button>
         <div className="stepdots">
-          {steps.map((sid, k) => <i key={sid} className={k <= i ? 'on' : ''} />)}
+          {steps.map((sid, k) => <i key={sid} className={k <= at ? 'on' : ''} />)}
         </div>
-        <span className="stepcount num">{toBn(i + 1)} / {toBn(steps.length)}</span>
+        <span className="stepcount num">{toBn(at + 1)} / {toBn(steps.length)}</span>
         <button className="iconbtn" onClick={() => onExit(false)} aria-label="বন্ধ করুন"><Icon name="close" /></button>
       </div>
 
@@ -1043,7 +1044,7 @@ export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCr
               {writing === g.group_bn && (
                 <div style={{ display: 'flex', gap: '.5rem', marginTop: '.5rem' }}>
                   <input className="input" style={{ flex: 1 }} value={own} autoFocus
-                    placeholder={g.group_bn === 'ইঞ্চি' ? '৫"' : g.group_bn === 'মিলিমিটার' ? '৩২ মিমি' : 'যেমন — গ্রেড ৫৩'}
+                    placeholder={t(g.group_bn === 'ইঞ্চি' ? '৫"' : g.group_bn === 'মিলিমিটার' ? '৩২ মিমি' : 'যেমন — গ্রেড ৫৩')}
                     onChange={(e) => setOwn(e.target.value)}
                     onKeyDown={(e) => { if (e.key === 'Enter') takeOwn() }} />
                   <button className="btn quiet small" disabled={!own.trim()} onClick={takeOwn}>{t('বসান')}</button>

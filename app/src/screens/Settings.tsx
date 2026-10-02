@@ -302,7 +302,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
           </div>
         )}
 
-        <div className="actionbar" style={{ borderTop: 0, padding: '.8rem 0 1rem' }}>
+        <div className="actionbar" style={{ borderTop: 0, padding: '.8rem 0 1rem', background: 'transparent' }}>
           <button className="btn ghost" disabled={!!busy || !key.trim()} onClick={async () => {
             setBusy('test')
             setResult(await testAiKey(key))
@@ -816,14 +816,14 @@ export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
         <div className="card" style={{ marginTop: '1rem' }}>
           <div className="spread"><span>{t("এখন হিসাবমতো")}</span><strong className="num" style={{ fontSize: '1.3rem' }}>{money(cash.computed)}</strong></div>
           <p className="small muted" style={{ marginTop: '.4rem' }}>
-            শেষ গোনা {dateBn(cash.anchor_date, false)} — {money(cash.anchor_amount)}। তারপর ঢুকেছে {money(cash.in_since)}, বেরিয়েছে {money(cash.out_since)}।
+            {tf('শেষ গোনা {0} — {1}। তারপর ঢুকেছে {2}, বেরিয়েছে {3}।', dateBn(cash.anchor_date, false), money(cash.anchor_amount), money(cash.in_since), money(cash.out_since))}
           </p>
         </div>
         <p className="hint" style={{ marginTop: '1rem' }}>
           {t("রোজকার হিসাবের শেষে টাকা গুনলে এই সংখ্যাটা নিজে থেকেই ঠিক হয়ে যায়। প্রথম দিনের জন্য শুধু একবার শুরুর টাকাটা বসিয়ে দিন।")}
         </p>
         <Field label="শুরুর টাকা"><NumField value={amount} onChange={setAmount} /></Field>
-        <button className="btn primary" onClick={async () => {
+        <button className="btn primary" style={{ width: '100%' }} onClick={async () => {
           await saveSettings({ opening_cash: amount ?? 0, opening_date: isoDate() })
           toast.show('সেভ হয়েছে')
         }}>{t("সেভ করুন")}</button>

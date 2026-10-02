@@ -16,3 +16,4 @@ server/.dev.vars
 trash/
 tsconfig.tsbuildinfo
 .claude/
+scripts/ui-report/

@@ -214,3 +214,52 @@ Location: app/src/lib/model.ts rowForMaster, src/lib/restore.ts, src/lib/sync.ts
 Action: cross-checking restore, deletion and the outbox.
 Cause: "deleted" was a phone-only flag with no column; KIND_OF_TAB/MASTER_TABS predated Bills; the outbox always sent the first forty rows, refused or not.
 Fix: a deleted job is sent with status 'deleted' (server leaves it out, restore keeps it hidden, once-only re-send for jobs deleted earlier); Bills added to restore; refused rows go to the back of the queue (pickBatch). Covered by scripts/audit-check.mjs.
+
+2026-10-02
+Problem: (fuzz) with two bills due on the same day, the total owed depended on the order the phone returned its rows in, and the phone and the server disagreed by up to 50 paise per pair.
+Location: src/lib/calc.ts openDues/openReceivables, server/src/summary.js net()
+Action: running the random-ledger check (scripts/fuzz-check.mjs) for the first time.
+Cause: bills were ordered by due date only, with a comparator that never returned 0, and the server left ties to SQLite. A payment that clears the first bill can leave 30 paise on the second, and anything of 50 paise or less counts as paid, so which bill is first changes the total. Float noise (21941.20 - 21940.70 = 0.5000000000014) also made that cutoff unreliable.
+Fix: one rule on both sides: due date, then day written, then created_at, then id; amounts are rounded to whole paise after each payment. Directed cases in fuzz-check.mjs.
+
+2026-10-02
+Problem: (fuzz) a job whose every entry had been cancelled showed cost-per-work 0 and a red status instead of "nothing spent".
+Location: src/lib/calc.ts projectTotals, server/src/summary.js
+Action: same fuzz run (seeds 2407, 1081, 1878).
+Cause: a row plus its cancelling row added to 0.0000000000004, not 0, so cost > 0 was true and earned / cost came out as 0.
+Fix: job totals are rounded to whole paise before the cost > 0 test, on both sides.
+
+2026-10-02
+Problem: (fuzz) cash anchor and last cash count could pick different rows when two counts had the same date and the same created_at.
+Location: src/lib/calc.ts cashState sort, server/src/summary.js last-count ORDER BY
+Action: reading the sort comparators while writing the fuzz generator.
+Cause: the comparator returned 1 for equal rows (not a valid ordering) and the SQL had no final tie-break.
+Fix: both use date, created_at, id.
+
+2026-10-02
+Problem: server per-job costs counted a bill settlement (the settle-old-bill head) if one ever carried a project id, while the phone left it out.
+Location: server/src/summary.js per-project queries, heads, spend curve
+Action: comparing the two halves in the fuzz check. The app never writes a settlement with a project, so this was latent.
+Cause: the SETTLE_HEAD exclusion existed only in periodTotals and on the phone.
+Fix: head_bn <> SETTLE_HEAD added to the per-project money queries; directed case added.
+
+2026-10-02
+Problem: a bash heredoc that ran a python patch aborted with "unexpected EOF while looking for matching quote" and applied nothing (again).
+Location: scripts/ui-sweep.mjs rewrite
+Action: patching a JS file that contained regexes with backslashes and quotes through a python heredoc.
+Cause: the same Git Bash wrapper problem as on 2026-10-01; I repeated it.
+Fix: use the Write or Edit tool for any file with backslashes or mixed quotes. Check that a patch actually applied before running the next step.
+
+2026-10-02
+Problem: a long fuzz run started with an inner "( ... &)" in the shell produced an empty output file and no result.
+Location: shell, background run of scripts/fuzz-check.mjs
+Action: starting a 3000-ledger run in the background.
+Cause: the inner background job was killed when the tool call returned; only the outer shell was tracked.
+Fix: start the command itself with run_in_background and redirect its output to a file inside the command.
+
+2026-10-02
+Problem: the large-ledger timing check failed intermittently ("slope" and "doubling" limits) with no code change.
+Location: scripts/large-check.mjs
+Action: timing the home-screen figures at 13k to 98k rows.
+Cause: wall-clock timings on a busy PC and V8 garbage-collection steps make single doublings jumpy (a 3.7 ms step to 20 ms and back to linear).
+Fix: judge the log-log slope from the first measurable size to the last (limit 1.5; a loop inside a loop is 2) with best-of-nine timings, and keep the check out of npm test (npm run large).

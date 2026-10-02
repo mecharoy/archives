@@ -154,7 +154,7 @@ export function MoneyPad({ value, onChange, prefix = '₹', allowDecimal = false
     <div>
       <div className={'moneyfield num' + (value ? '' : ' empty')}>
         <span className="cur">{prefix}</span>
-        <span>{value ? toBn(display) : '০'}</span>
+        <span>{value ? toBn(display) : toBn(0)}</span>
         <span className="caret" />
       </div>
       {chips && chips.length > 0 && (

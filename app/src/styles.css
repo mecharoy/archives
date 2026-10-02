@@ -16,7 +16,8 @@
   --sunk:      #EAE7E0;
   --ink:       #14181B;
   --ink-2:     #414B51;
-  --muted:     #79838A;
+  --muted:     #5E686F;   /* 4.6:1 on the darkest panel, 5.1:1 on the page */
+  --on-accent: #FFFFFF;   /* text on a green button */
   --line:      #DFDBD2;
   --line-soft: #EDEAE3;
   --accent:    #0E5E4E;
@@ -39,21 +40,23 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     --bg: #0E1214; --surface: #161B1E; --sunk: #1D2427; --ink: #E8EDEE;
-    --ink-2: #B7C1C5; --muted: #859299; --line: #262E32; --line-soft: #1E2528;
+    --ink-2: #B7C1C5; --muted: #93A0A6; --line: #262E32; --line-soft: #1E2528;
     --accent: #57BFA0; --accent-bg: #12302A; --ok: #57BFA0; --warn: #DCA854;
     --warn-bg: #2C2413; --crit: #E8788A; --crit-bg: #331A1E;
     --c-work: #7DA9FF; --c-work-bg: #16233B; --c-stock: #E0A44E; --c-stock-bg: #2C2413; --c-money: #B794F6; --c-money-bg: #241B36;
     --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -22px rgba(0,0,0,.9);
+    --on-accent: #0B1512;
     color-scheme: dark;
   }
 }
 :root[data-theme='dark'] {
   --bg: #0E1214; --surface: #161B1E; --sunk: #1D2427; --ink: #E8EDEE;
-  --ink-2: #B7C1C5; --muted: #859299; --line: #262E32; --line-soft: #1E2528;
+  --ink-2: #B7C1C5; --muted: #93A0A6; --line: #262E32; --line-soft: #1E2528;
   --accent: #57BFA0; --accent-bg: #12302A; --ok: #57BFA0; --warn: #DCA854;
   --warn-bg: #2C2413; --crit: #E8788A; --crit-bg: #331A1E;
     --c-work: #7DA9FF; --c-work-bg: #16233B; --c-stock: #E0A44E; --c-stock-bg: #2C2413; --c-money: #B794F6; --c-money-bg: #241B36;
   --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -22px rgba(0,0,0,.9);
+  --on-accent: #0B1512;
   color-scheme: dark;
 }
 
@@ -131,15 +134,13 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
   min-height: 5.4rem;
   border-radius: 14px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   display: flex; align-items: center; gap: .9rem;
   padding: 1rem 1.15rem;
   text-align: left;
   box-shadow: var(--shadow);
   transition: transform .08s ease;
 }
-:root[data-theme='dark'] .bigbtn, :root:not([data-theme='light']) .bigbtn { color: #0B1512; }
-@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .bigbtn { color: #fff; } }
 .bigbtn:active { transform: scale(.985); }
 .bigbtn .t { font-size: 1.24rem; font-weight: 600; line-height: 1.25; }
 .bigbtn .s { font-size: .82rem; opacity: .82; }
@@ -237,18 +238,16 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
   border-top: 1px solid var(--line); background: var(--surface);
 }
 .btn {
-  flex: 1; min-height: var(--tap); border-radius: 12px; font-size: 1.06rem; font-weight: 600;
-  display: grid; place-items: center; background: var(--accent); color: #fff;
+  flex: 1; min-height: var(--tap); min-width: 5.5rem; padding: 0 1.2rem; border-radius: 12px; font-size: 1.06rem; font-weight: 600;
+  display: grid; place-items: center; background: var(--accent); color: var(--on-accent);
   transition: transform .08s ease;
 }
-:root[data-theme='dark'] .btn.primary, :root:not([data-theme='light']) .btn.primary { color: #0B1512; }
-@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .btn.primary { color: #fff; } }
 .btn:active { transform: scale(.985); }
 .btn[disabled] { opacity: .45; }
 .btn.ghost { background: var(--surface); color: var(--ink); border: 1px solid var(--line); flex: 0 0 auto; padding: 0 1.1rem; }
 .btn.quiet { background: var(--sunk); color: var(--ink); }
-.btn.danger { background: var(--crit); color: #fff; }
-.btn.small { min-height: 2.6rem; font-size: .92rem; border-radius: 10px; }
+.btn.danger { background: var(--crit); color: var(--on-accent); }
+.btn.small { min-height: 2.75rem; font-size: .92rem; border-radius: 10px; }
 
 /* ---------- pickable rows and chips ---------- */
 
@@ -277,15 +276,13 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
   font-size: 1.02rem; font-weight: 500; display: inline-flex; align-items: center; gap: .4rem;
 }
 .chip:active { background: var(--sunk); }
-.chip.on { background: var(--accent); border-color: var(--accent); color: #fff; }
-:root[data-theme='dark'] .chip.on, :root:not([data-theme='light']) .chip.on { color: #0B1512; }
-@media (prefers-color-scheme: light) { :root:not([data-theme='dark']) .chip.on { color: #fff; } }
+.chip.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 .chip .sub { font-size: .74rem; opacity: .7; font-weight: 400; }
 .chip.more { background: none; border-style: dashed; color: var(--muted); }
 
 .yesno { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
 .yesno button { min-height: 5rem; border-radius: 14px; border: 1px solid var(--line); background: var(--surface); font-size: 1.3rem; font-weight: 600; }
-.yesno button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.yesno button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 
 /* ---------- fields ---------- */
 
@@ -304,7 +301,7 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
 .inputwrap > .input { padding-right: 3.1rem; }
 .inputwrap > .inmark {
   position: absolute; right: .25rem; top: 50%; transform: translateY(-50%);
-  width: 2.6rem; height: 2.6rem; border-radius: 9px;
+  width: 2.75rem; height: 2.75rem; border-radius: 9px;
   display: grid; place-items: center; color: var(--muted); background: none;
 }
 .inputwrap > .inmark:active { background: var(--sunk); color: var(--accent); }
@@ -357,7 +354,7 @@ textarea.input { min-height: 5rem; resize: none; }
 
 .chart { width: 100%; height: auto; display: block; overflow: visible; }
 .chart .grid { stroke: var(--line); stroke-width: 1; }
-.chart .axis { fill: var(--muted); font-size: 10px; font-family: Inter, sans-serif; }
+.chart .axis { fill: var(--muted); font-size: 12px; font-family: Inter, sans-serif; }
 .chart .plan { stroke: var(--muted); stroke-width: 2; fill: none; stroke-dasharray: 5 4; stroke-linecap: round; }
 .chart .actual { stroke: var(--accent); stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
 
@@ -505,16 +502,19 @@ textarea.input { min-height: 5rem; resize: none; }
    buttons, because seeing what he owes and settling it is one thought. */
 
 .footbar {
-  display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px;
   background: var(--line-soft); border-top: 1px solid var(--line);
   padding-bottom: env(safe-area-inset-bottom);
 }
 .footbar .foot {
   background: var(--surface); border: 0; text-align: left;
   padding: .6rem .8rem calc(.6rem); display: flex; flex-direction: column; gap: .1rem;
+  min-width: 0; container-type: inline-size;
 }
 .footbar .foot .k { font-size: .74rem; letter-spacing: .04em; color: var(--muted); font-weight: 600; }
-.footbar .foot .v { font-size: 1.06rem; font-weight: 650; }
+.footbar .foot .v { font-size: 1.06rem; font-weight: 650; white-space: nowrap; }
+/* A figure like ₹5,41,063 must fit its third of the width: shrink it to the box, never cut it off. */
+@supports (font-size: 1cqw) { .footbar .foot .v { font-size: min(1.06rem, 15cqw); } }
 .footbar .foot .v.warn { color: var(--warn); }
 .footbar .foot .v.crit { color: var(--crit); }
 .footbar button.foot:active { background: var(--sunk); }

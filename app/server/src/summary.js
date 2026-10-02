@@ -64,20 +64,29 @@ const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
 /** Payments land on the oldest bill for that party first, exactly as in the
     app's calc.ts, so both sides answer the same question the same way. */
+const paise = (v) => Math.round(v * 100) / 100
+const cmp = (a, b) => (a < b ? -1 : a > b ? 1 : 0)
+
+/* Oldest bill first: due date, then the day it was written, then the instant,
+   then id — the same four keys as calc.ts, because a payment that clears one
+   bill can leave 30 paise on the next (which then counts as paid), so the order
+   of two bills with one due date changes the total. */
 function net(rows, settlements, dir, today, week) {
   const pot = new Map()
   for (const s of settlements) {
     if (s.dir !== dir) continue
-    pot.set(s.party_id, n(pot.get(s.party_id)) + n(s.amount))
+    pot.set(s.party_id, paise(n(pot.get(s.party_id)) + n(s.amount)))
   }
+  const oldest = [...rows].sort((a, b) =>
+    cmp(a.due_date, b.due_date) || cmp(a.date, b.date) || cmp(a.created_at || '', b.created_at || '') || cmp(String(a.id), String(b.id)))
   let total = 0, overdue = 0, inWeek = 0
-  for (const r of rows) {
+  for (const r of oldest) {
     let amount = n(r.amount)
     const left = n(pot.get(r.party_id))
     if (left > 0) {
       const used = Math.min(left, amount)
-      amount -= used
-      pot.set(r.party_id, left - used)
+      amount = paise(amount - used)
+      pot.set(r.party_id, paise(left - used))
     }
     if (amount <= 0.5) continue
     total += amount
@@ -107,14 +116,13 @@ export async function buildSummary(db, hid) {
     // A count that was later cancelled is not "the last count".
     one(db, `SELECT cash_counted, cash_computed, date FROM day
              WHERE household_id = ?1 AND cash_counted IS NOT NULL AND ${LIVE('day')}
-             ORDER BY date DESC, created_at DESC LIMIT 1`, hid),
+             ORDER BY date DESC, created_at DESC, id DESC LIMIT 1`, hid),
     // Open bills, and the payments that close them. The netting is done in
     // JavaScript with exactly the rule the phone uses — oldest bill first —
     // so the dashboard and his screen can never disagree about what he owes.
     // A purchase that was cancelled (and the row that cancelled it) is owed to nobody.
-    all(db, `SELECT party_id, amount, COALESCE(NULLIF(due_date,''), date) AS due_date, dir
-             FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale') AND ${LIVE('stock')}
-             ORDER BY due_date`, hid),
+    all(db, `SELECT id, party_id, amount, date, created_at, COALESCE(NULLIF(due_date,''), date) AS due_date, dir
+             FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale') AND ${LIVE('stock')}`, hid),
     all(db, `SELECT party_id, dir, COALESCE(SUM(amount),0) AS amount
              FROM money WHERE household_id = ?1 AND personal = 0 AND head_bn = ?2
              GROUP BY party_id, dir`, hid, SETTLE_HEAD),
@@ -233,16 +241,18 @@ export async function buildSummary(db, hid) {
     const t = await one(db, `SELECT
         (SELECT COALESCE(SUM(amount),0) FROM attendance WHERE household_id = ?1 AND project_id = ?2) AS labour,
         (SELECT COALESCE(SUM(amount),0) FROM stock WHERE household_id = ?1 AND project_id = ?2 AND dir IN ('in','transfer')) AS material,
-        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0) AS other,
-        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'received' AND personal = 0) AS received,
+        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0 AND head_bn <> '${SETTLE_HEAD}') AS other,
+        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'received' AND personal = 0 AND head_bn <> '${SETTLE_HEAD}') AS received,
         (SELECT COALESCE(SUM(amount),0) FROM attendance WHERE household_id = ?1 AND project_id = ?2 AND date >= ${WEEK}) AS labour_week,
         (SELECT COALESCE(SUM(amount),0) FROM stock WHERE household_id = ?1 AND project_id = ?2 AND dir IN ('in','transfer') AND date >= ${WEEK}) AS material_week,
-        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0 AND date >= ${WEEK}) AS other_week,
-        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'received' AND personal = 0 AND date >= ${WEEK}) AS received_week,
+        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0 AND head_bn <> '${SETTLE_HEAD}' AND date >= ${WEEK}) AS other_week,
+        (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'received' AND personal = 0 AND head_bn <> '${SETTLE_HEAD}' AND date >= ${WEEK}) AS received_week,
         (SELECT COALESCE(SUM(days),0) FROM attendance WHERE household_id = ?1 AND project_id = ?2 AND date >= ${WEEK}) AS mandays_week`,
       hid, p.id)
 
-    const cost = n(t.labour) + n(t.material) + n(t.other)
+    // Whole paise, as on the phone: a cancelled row can leave 0.0000000000004 behind, and a job
+    // with that much cost and no work done reads as cost-per-work 0 — red — instead of "nothing spent".
+    const cost = paise(n(t.labour) + n(t.material) + n(t.other))
     const budget = n(p.budget)
     const pct_done = stagePercent(p, stages, progress)
     const pct_spent = budget > 0 ? (cost / budget) * 100 : 0
@@ -294,7 +304,7 @@ export async function buildSummary(db, hid) {
       // Where this job's money actually went, so "spending is ahead" can be
       // followed by "on what".
       heads: await all(db, `SELECT head_bn, COALESCE(SUM(amount),0) AS amount, COUNT(*) AS times
-             FROM money WHERE household_id = ?1 AND project_id = ?2 AND personal = 0 AND dir = 'paid'
+             FROM money WHERE household_id = ?1 AND project_id = ?2 AND personal = 0 AND dir = 'paid' AND head_bn <> '${SETTLE_HEAD}'
              GROUP BY head_bn HAVING amount <> 0 ORDER BY amount DESC LIMIT 10`, hid, p.id),
       items: await all(db, `SELECT COALESCE(i.name_bn,'(নাম নেই)') AS name_bn, COALESCE(i.unit_bn,'') AS unit_bn,
                     COALESCE(SUM(s.qty),0) AS qty, COALESCE(SUM(s.amount),0) AS amount
@@ -501,7 +511,7 @@ async function spendCurve(db, hid, project) {
       UNION ALL
       SELECT date, amount FROM stock WHERE household_id = ?1 AND project_id = ?2 AND dir IN ('in','transfer')
       UNION ALL
-      SELECT date, amount FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0
+      SELECT date, amount FROM money WHERE household_id = ?1 AND project_id = ?2 AND dir = 'paid' AND personal = 0 AND head_bn <> '${SETTLE_HEAD}'
     ) GROUP BY date ORDER BY date`, hid, project.id)
   if (!rows.length) return { days: [], cum: [] }
 

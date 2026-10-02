@@ -52,14 +52,17 @@ export interface ProjectTotals {
 
 export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): ProjectTotals {
   const mine = entries.filter((e) => e.project_id === p.id)
-  const labour = byKind(mine, 'attendance').reduce((a, e) => a + (e.amount || 0), 0)
-  const material = byKind(mine, 'stock')
+  /* Whole paise. A row and the row that cancels it add to 0.0000000000004, not
+     to 0, and a job with that much "cost" and no work done has a cost-per-work
+     of exactly 0 — which painted a job that had spent nothing red. */
+  const labour = paise(byKind(mine, 'attendance').reduce((a, e) => a + (e.amount || 0), 0))
+  const material = paise(byKind(mine, 'stock')
     .filter((e) => e.dir === 'in' || e.dir === 'transfer')
-    .reduce((a, e) => a + (e.amount || 0), 0)
+    .reduce((a, e) => a + (e.amount || 0), 0))
   const money = byKind(mine, 'money').filter((e) => !e.personal && e.head_bn !== SETTLE_HEAD)
-  const other = money.filter((e) => e.dir === 'paid').reduce((a, e) => a + (e.amount || 0), 0)
-  const received = money.filter((e) => e.dir === 'received').reduce((a, e) => a + (e.amount || 0), 0)
-  const cost = labour + material + other
+  const other = paise(money.filter((e) => e.dir === 'paid').reduce((a, e) => a + (e.amount || 0), 0))
+  const received = paise(money.filter((e) => e.dir === 'received').reduce((a, e) => a + (e.amount || 0), 0))
+  const cost = paise(labour + material + other)
   const pct_done = projectPct(p, entries, stages)
   const budget = p.budget || 0
   const pct_spent = budget > 0 ? (cost / budget) * 100 : 0
@@ -82,12 +85,18 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
   return { project_id: p.id, labour, material, other, cost, received, pct_done, pct_spent, earned, cpi, at_finish, profit, status, flag_bn }
 }
 
+/* A row and the row that cancels it are both on the same job, so the job's own
+   progress rows can be picked out first and the cancelled pairs dropped from
+   that short list — rather than sorting out every row in the ledger once per job. */
+const liveProgress = (entries: Entry[], p: Project) =>
+  liveEntries(entries.filter((e) => e.kind === 'progress' && e.project_id === p.id)) as ProgressEntry[]
+
 /** Percent from stage weights, never a guess he typed. */
 export function projectPct(p: Project, entries: Entry[], stages: Stage[]): number {
   const st = stagesFor(p, stages)
   if (!st.length) return 0
   const total = st.reduce((a, s) => a + s.weight, 0) || 100
-  const live = liveEntries(entries).filter((e) => e.kind === 'progress' && e.project_id === p.id) as ProgressEntry[]
+  const live = liveProgress(entries, p)
   const best = new Map<number, 'half' | 'done'>()
   for (const e of live) {
     const cur = best.get(e.stage_seq)
@@ -111,7 +120,7 @@ export function stagesFor(p: Project, stages: Stage[]): Stage[] {
 /** The stage he is on and the one after it — the wizard shows only these two. */
 export function currentStage(p: Project, entries: Entry[], stages: Stage[]) {
   const st = stagesFor(p, stages)
-  const live = liveEntries(entries).filter((e) => e.kind === 'progress' && e.project_id === p.id) as ProgressEntry[]
+  const live = liveProgress(entries, p)
   const done = new Set<number>()
   const half = new Set<number>()
   for (const e of live) (e.state === 'done' ? done : half).add(e.stage_seq)
@@ -134,7 +143,7 @@ export interface CashState {
     typed once in March. A wrong count fixes itself the next time he counts. */
 export function cashState(entries: Entry[], openingAmount: number, openingDate: string): CashState {
   const days = liveEntries(entries).filter((e) => e.kind === 'day' && (e as DayEntry).cash_counted != null) as DayEntry[]
-  days.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.created_at < b.created_at ? -1 : 1))
+  days.sort(inOrder)
   const last = days[days.length - 1]
   const anchor_date = last ? last.date : openingDate
   const anchor_amount = last ? (last.cash_counted as number) : openingAmount
@@ -169,7 +178,7 @@ export function cashState(entries: Entry[], openingAmount: number, openingDate: 
 
 /* ---- dues ---- */
 
-export interface Due { party_id: ID; date: string; due_date: string; amount: number; item_id: ID; entry_id: ID }
+export interface Due { party_id: ID; date: string; due_date: string; amount: number; item_id: ID; entry_id: ID; created_at: string }
 
 /* A due is opened by an unpaid row and closed by a payment to that party —
    never by editing the original row, which stays exactly as it was written.
@@ -180,7 +189,7 @@ const SETTLED = (entries: Entry[], dir: 'paid' | 'received') => {
   const byParty = new Map<ID, number>()
   for (const m of money) {
     if (m.personal || m.head_bn !== SETTLE_HEAD || m.dir !== dir) continue
-    byParty.set(m.party_id, (byParty.get(m.party_id) || 0) + (m.amount || 0))
+    byParty.set(m.party_id, paise((byParty.get(m.party_id) || 0) + (m.amount || 0)))
   }
   return byParty
 }
@@ -193,21 +202,38 @@ function netted(rows: Due[], paid: Map<ID, number>): Due[] {
     const pot = left.get(d.party_id) || 0
     if (pot > 0) {
       const used = Math.min(pot, amount)
-      amount -= used
-      left.set(d.party_id, pot - used)
+      // Whole paise: 21941.20 − 21940.70 is 0.5000000000014 in floating point, and "50 paise or less counts as paid" must not depend on that.
+      amount = paise(amount - used)
+      left.set(d.party_id, paise(pot - used))
     }
     if (amount > 0.5) out.push({ ...d, amount })
   }
   return out
 }
 
+const paise = (x: number) => Math.round(x * 100) / 100
+
+/* Oldest bill first: by the date it falls due, then the day it was written,
+   then the instant, then id. Two bills with the same due date used to be
+   ordered by whatever order the phone returned them in — and since a payment
+   that clears one bill can leave 30 paise on the other (which then counts as
+   paid), that order changed the total. It is now the same on every phone and
+   on the server (summary.js uses the same four keys). */
+const oldestFirst = (a: Due, b: Due) =>
+  a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1
+    : a.date < b.date ? -1 : a.date > b.date ? 1
+      : a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1
+        : a.entry_id < b.entry_id ? -1 : a.entry_id > b.entry_id ? 1 : 0
+
+const dueOf = (s: StockEntry): Due => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || s.date, amount: s.amount, item_id: s.item_id, entry_id: s.id, created_at: s.created_at })
+
 /** What he still owes his suppliers. */
 export function openDues(entries: Entry[]): Due[] {
   const stock = liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]
   const rows = stock
     .filter((s) => (s.dir === 'in' || s.dir === 'transfer') && !s.paid && (s.amount || 0) > 0)
-    .map((s) => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || s.date, amount: s.amount, item_id: s.item_id, entry_id: s.id }))
-    .sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
+    .map(dueOf)
+    .sort(oldestFirst)
   return netted(rows, SETTLED(entries, 'paid'))
 }
 
@@ -216,8 +242,8 @@ export function openReceivables(entries: Entry[]): Due[] {
   const stock = liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]
   const rows = stock
     .filter((s) => s.dir === 'sale' && !s.paid && (s.amount || 0) > 0)
-    .map((s) => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || s.date, amount: s.amount, item_id: s.item_id, entry_id: s.id }))
-    .sort((a, b) => (a.due_date < b.due_date ? -1 : 1))
+    .map(dueOf)
+    .sort(oldestFirst)
   return netted(rows, SETTLED(entries, 'received'))
 }
 
