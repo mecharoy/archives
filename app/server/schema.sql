@@ -16,6 +16,23 @@ CREATE TABLE IF NOT EXISTS briefs (
   received_at  TEXT NOT NULL
 );
 
+-- Questions and call-back requests from the public website. The site posts them
+-- with its own scoped token; the phone reads them with the device token.
+CREATE TABLE IF NOT EXISTS enquiries (
+  household_id TEXT NOT NULL,
+  id           TEXT NOT NULL,
+  received_at  TEXT NOT NULL,
+  name         TEXT NOT NULL,
+  phone        TEXT NOT NULL,
+  email        TEXT,
+  location     TEXT,
+  service      TEXT,
+  message      TEXT,
+  locale       TEXT,
+  PRIMARY KEY (household_id, id)
+);
+CREATE INDEX IF NOT EXISTS ix_enquiries_h ON enquiries (household_id, received_at);
+
 CREATE TABLE IF NOT EXISTS projects (
   household_id TEXT NOT NULL,
   name_bn      TEXT,
@@ -51,6 +68,7 @@ CREATE TABLE IF NOT EXISTS items (
   last_rate    REAL,
   active       INTEGER,
   updated_at   TEXT,
+  web_hidden   INTEGER,
   id           TEXT NOT NULL,
   received_at  TEXT NOT NULL,
   PRIMARY KEY (household_id, id)

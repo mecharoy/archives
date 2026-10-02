@@ -220,6 +220,47 @@ The brief is served from the same origin as the rows, behind the same token,
 with `X-Robots-Tag: noindex`. There is no public path holding his cash
 position, and no CORS to fight.
 
+### Writing it on the phone, with a free model
+
+The phone can write the same brief itself (`src/lib/aiBrief.ts`), once a day
+after six in the evening, using Google's free Gemini tier. The key is typed in at
+**সেটিংস → এআই কী** (a free one comes from aistudio.google.com/apikey) and lives
+only in the phone's own storage: it is **not** built into the APK, not in the
+backup, not in the sync queue and not in any message the app shows. It was a key
+built into a published APK that Google found and cancelled; `npm run release`
+now refuses to continue if a Google key is anywhere in the built bundle.
+
+A free model is a small model, so it is boxed in (`nightly/gemini.mjs`,
+`nightly/check.mjs`): the reply is forced into a fixed JSON shape at low
+temperature; a dead key, a busy model, a cut-off reply and a blocked prompt are
+each told apart and each handled their own way; names are swapped for labels
+before anything leaves the phone; every sentence is checked and any piece with an
+invented figure, money written in words, a made-up label, or the wrong language
+in the wrong field is dropped; the model gets one second try with the exact
+faults pointed out; and if all of that fails the phone shows a brief made only
+of its own computed figures, labelled as such. `npm run gemini:check` and
+`npm run nightly:check` exercise every one of those paths with no network.
+`npm run brief:live` makes one real call once you have a key
+(`GEMINI_API_KEY=… npm run brief:live`).
+
+### The numbers are audited
+
+`npm run audit` builds one ledger through the app's own code, works out by hand
+what every figure should be, and checks both the phone's sums (`calc.ts`) and the
+server's (`summary.js`) against it — cash, dues, what he is owed, the shelf, each
+job's cost and percentage — along with the edge cases: an empty ledger, no
+budget, a cancelled purchase or count, two counts on one day, a rent bill on the
+31st, a reminder written late, a refused row at the front of the queue, and the
+hours after midnight in India when a Worker is still on yesterday's date.
+
+### The website link
+
+The public website (`../rcb`) shows what the shop has — *in stock* or *out*, by
+name, never how many or at what price — and every enquiry it receives lands in
+the app (**সব কিছু → ওয়েবসাইটের অনুসন্ধান**) with a number to ring. Each item
+has a **ওয়েবসাইটে দেখাবে?** switch in **মাল**. How it is wired, and the order to
+deploy it in, is in [`server/README.md`](server/README.md#linking-the-website).
+
 ---
 
 ## What is in the app

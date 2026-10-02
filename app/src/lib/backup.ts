@@ -46,7 +46,7 @@ export async function buildJson(): Promise<string> {
     app: 'site-khata',
     masters: await dbAll('masters'),
     entries: await dbAll('entries'),
-    settings: { ...s.settings, token: '', briefToken: '', pin_hash: '' },
+    settings: { ...s.settings, token: '', briefToken: '', pin_hash: '', ai_key: '' },
   }, null, 1)
 }
 

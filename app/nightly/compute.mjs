@@ -20,8 +20,10 @@ export const toBn = (s) => String(s).replace(/[0-9]/g, (d) => BN_DIGITS[+d])
 
 /** Indian grouping: 12,34,567 — not 1,234,567. */
 export function groupIndian(v) {
-  const neg = v < 0
-  const s = String(Math.round(Math.abs(v)))
+  // Round first, then ask whether it is negative: -0.4 is ₹0, not "₹-0".
+  const whole = Math.round(v)
+  const neg = whole < 0
+  const s = String(Math.abs(whole))
   if (s.length <= 3) return (neg ? '-' : '') + s
   const head = s.slice(0, -3)
   const tail = s.slice(-3)
@@ -133,9 +135,11 @@ export function cards(sum) {
   }
 
   /* Silence is the loudest fact in this ledger: an empty book means every
-     other card on this screen is out of date. */
+     other card on this screen is out of date. It goes FIRST — it used to be
+     added last and then cut off by the six-card limit, on exactly the nights
+     it mattered most. */
   if (n(b.entries_last_3_days) === 0) {
-    out.push({
+    out.unshift({
       label_bn: 'লেখা হয়নি', label_en: 'Nothing written',
       value: b.last_entry_date ? toBn(daysSince(b.last_entry_date)) + ' দিন' : '—',
       sub_bn: 'তিন দিনে একটাও হিসাব ওঠেনি',
@@ -144,11 +148,22 @@ export function cards(sum) {
     })
   }
 
-  return out.slice(0, 6)
+  /* The phone shows six. When there are more, what goes is the quiet cards —
+     the ones that are fine or merely informative — from the back; a card that
+     is warning him is never the one that gets cut. */
+  while (out.length > 6) {
+    let cut = -1
+    for (let i = out.length - 1; i >= 1; i--) if (out[i].status === 'ok' || out[i].status === 'info') { cut = i; break }
+    out.splice(cut < 0 ? out.length - 1 : cut, 1)
+  }
+  return out
 }
 
+/* Whole days from a YYYY-MM-DD date to today in Kolkata, whatever zone this
+   machine is set to. */
 function daysSince(iso) {
-  const d = Math.round((Date.now() - Date.parse(iso + 'T00:00:00')) / 86400000)
+  const istToday = new Date(Date.now() + 5.5 * 3600000).toISOString().slice(0, 10)
+  const d = Math.round((Date.parse(istToday + 'T00:00:00Z') - Date.parse(iso + 'T00:00:00Z')) / 86400000)
   return Math.max(0, d)
 }
 
@@ -158,10 +173,12 @@ function daysSince(iso) {
    never from the model, which does not get to decide that a job is fine. */
 export function projectStatus(p) {
   if (n(p.budget) <= 0) return 'info'
-  if (has(p.cpi) && p.cpi < 0.9) return 'crit'
   const gap = n(p.pct_spent) - n(p.pct_done)
-  if (gap > 15 || (has(p.cpi) && p.cpi < 1)) return 'crit'
-  if (gap > 6) return 'warn'
+  // Red: spending well ahead of the work, or work that has cost over a tenth
+  // more than it earned. Amber: spending ahead, or any cost over earnings.
+  // Kept identical to calc.ts projectTotals, which colours the phone's own copy.
+  if (gap > 15 || (has(p.cpi) && p.cpi < 0.9)) return 'crit'
+  if (gap > 6 || (has(p.cpi) && p.cpi < 1)) return 'warn'
   return 'ok'
 }
 

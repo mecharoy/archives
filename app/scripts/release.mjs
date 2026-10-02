@@ -15,7 +15,7 @@
    Nothing is pushed. Check the diff, then commit — the phone only ever sees
    what is on the branch. */
 
-import { readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, statSync, mkdirSync } from 'fs'
+import { readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, statSync, mkdirSync, readdirSync } from 'fs'
 import { execFileSync } from 'child_process'
 import { join } from 'path'
 
@@ -82,6 +82,19 @@ if (!process.env.VITE_SYNC_ENDPOINT || !process.env.VITE_SYNC_TOKEN) {
 writeFileSync(join(APP, 'src/lib/buildinfo.ts'),
   `/* Written by scripts/release.mjs at release time. 0 / 'dev' in a dev build. */\nexport const BUILD_CODE = ${code}\nexport const BUILD_NAME = '${name}'\n`)
 run('npm', ['run', 'build'])
+
+/* The APK is published from a public repository, so anything inside the bundle
+   is public. A Google key found there is cancelled within days — that is how
+   the last one died. Refuse to go on if one is in the build. */
+const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
+  e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)])
+for (const f of walk(join(APP, 'dist'))) {
+  if (/\.(js|css|html|json|map|txt)$/i.test(f) && /AIza[0-9A-Za-z_-]{20,}/.test(readFileSync(f, 'utf8'))) {
+    console.error(`\n✗ a Google API key is inside the built bundle (${f}). It would be published with the APK. Nothing was released.`)
+    process.exit(1)
+  }
+}
+
 run('npx', ['cap', 'sync', 'android'])
 
 /* ---- 3. the signed APK ---- */

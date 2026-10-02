@@ -48,7 +48,8 @@ is furthest along or the thing he most recently did.
 
 1. `entries_last_3_days` is 0 — he has stopped writing the day down. Nothing
    else in the brief can be trusted until he starts again, and it must be said
-   first and plainly.
+   first and plainly. `days_since_last_entry` is how many days it has been —
+   quote it as given; do not count the days yourself.
 2. `cash_variance` outside ±2000 — what he counted and what the book says have
    drifted apart, so an entry is missing. Say which way it drifted: more in
    hand than the book expects means money came in unrecorded; less means a

@@ -31,6 +31,14 @@ export function startSyncLoop() {
   scheduleSync(2500)
 }
 
+/** What goes in the next batch. A row the server has refused outright goes to
+    the back: otherwise forty refused rows at the front would stop everything
+    behind them for good. The order of everything else is untouched, because two
+    edits of one record must reach the server in the order they were made. */
+export function pickBatch(outbox: OutboxRow[], size = BATCH): OutboxRow[] {
+  return [...outbox.filter((r) => !r.rejected), ...outbox.filter((r) => r.rejected)].slice(0, size)
+}
+
 function backoff(tries: number): number {
   return Math.min(MAX_DELAY, BASE_DELAY * Math.pow(2, Math.max(0, tries - 1)))
 }
@@ -53,7 +61,8 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
   let sent = 0
   let error = ''
   try {
-    const batch = s.outbox.slice(0, BATCH)
+    const batch = pickBatch(s.outbox)
+    const inBatch = new Set(batch.map((r) => r.id))
     const res = await postRows(apiUrl('/rows'), s.settings.token, batch)
     if (res.ok) {
       const done = new Set(res.accepted)
@@ -62,7 +71,7 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
         if (done.has(r.id)) { await dbDel('outbox', r.id); sent++; continue }
         const rej = res.rejected.find((x) => x.id === r.id)
         if (rej) {
-          const next = { ...r, tries: r.tries + 1, last_error: rej.error }
+          const next = { ...r, tries: r.tries + 1, last_error: rej.error, rejected: true }
           await dbPut('outbox', next)
           keep.push(next)
           error = rej.error
@@ -71,10 +80,10 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
       setState({ outbox: keep, sync_error: error })
     } else {
       error = res.error
-      const keep = getState().outbox.map((r, i) => (i < BATCH ? { ...r, tries: r.tries + 1, last_error: error } : r))
-      await Promise.all(keep.slice(0, BATCH).map((r) => dbPut('outbox', r)))
+      const keep = getState().outbox.map((r) => (inBatch.has(r.id) ? { ...r, tries: r.tries + 1, last_error: error } : r))
+      await Promise.all(keep.filter((r) => inBatch.has(r.id)).map((r) => dbPut('outbox', r)))
       setState({ outbox: keep, sync_error: error })
-      scheduleSync(backoff(keep[0]?.tries || 1))
+      scheduleSync(backoff(keep.find((r) => inBatch.has(r.id))?.tries || 1))
     }
   } catch (e) {
     error = describe(e)

@@ -10,6 +10,7 @@ import { isoDate } from './bn'
 import { setLang, t, type Lang } from './i18n'
 import type { RemindWhen } from './remind'
 import type { UpdateState } from './update'
+import type { Enquiry } from './enquiries'
 
 export interface Settings {
   endpoint: string
@@ -33,6 +34,9 @@ export interface Settings {
   owner_bn: string
   runs_shop: boolean
   runs_sites: boolean
+  /* The Google AI key typed into Settings. Lives only in this phone's storage;
+     never built into the APK, never synced, never in a backup. */
+  ai_key: string
 }
 
 /* Baked in at build time so the phone syncs the moment it is installed —
@@ -48,16 +52,23 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_sync: true, onboarded: false, toured: false, update_url: '', update_checked_at: '',
   chips_taken: 0, chips_expanded: 0,
   theme: 'system', text_scale: 1,
-  lang: 'bn', remind: 'day', owner_bn: '', runs_shop: true, runs_sites: true,
+  lang: 'bn', remind: 'day', owner_bn: '', runs_shop: true, runs_sites: true, ai_key: '',
 }
 
-export interface OutboxRow { id: ID; tab: string; mode: 'append' | 'upsert'; values: (string | number | boolean)[]; tries: number; last_error: string; created_at: string }
+export interface OutboxRow {
+  id: ID; tab: string; mode: 'append' | 'upsert'; values: (string | number | boolean)[]; tries: number; last_error: string; created_at: string
+  /* The server answered and refused this row (as opposed to the network failing). */
+  rejected?: boolean
+}
 
 /* Every line the model writes comes in both languages: _bn is what his phone
    shows, _en is the same sentence for an English screen. English is optional
    everywhere — a brief written before this existed still renders, in Bengali. */
 export interface Brief {
   generated_at: string
+  /* Who wrote the words: the model, or the plain rule-chosen headline.
+     Absent on a brief from the PC job, which always has a model's words. */
+  by?: 'model' | 'rule'
   headline_bn?: string
   headline_en?: string
   cards?: { label_bn: string; label_en?: string; value: string; sub_bn?: string; sub_en?: string; status?: Status }[]
@@ -84,12 +95,16 @@ export interface State {
   sync_error: string
   online: boolean
   update: UpdateState | null
+  /* What the public website has sent, and which of it he has already looked at. */
+  enquiries: Enquiry[]
+  enquiries_seen: string[]
 }
 
 let state: State = {
   ready: false, masters: [], entries: [], outbox: [], settings: DEFAULT_SETTINGS,
   brief: null, brief_fetched_at: null, syncing: false, sync_error: '',
   online: typeof navigator === 'undefined' ? true : navigator.onLine, update: null,
+  enquiries: [], enquiries_seen: [],
 }
 
 const listeners = new Set<() => void>()
@@ -115,13 +130,15 @@ export function useStore<T>(sel: (s: State) => T): T {
 /* ---- boot ---- */
 
 export async function boot() {
-  const [masters, entries, outbox, settings, brief, brief_fetched_at] = await Promise.all([
+  const [masters, entries, outbox, settings, brief, brief_fetched_at, enquiries, enquiries_seen] = await Promise.all([
     dbAll<AnyMaster>('masters'),
     dbAll<Entry>('entries'),
     dbAll<OutboxRow>('outbox'),
     kvGet<Settings>('settings', DEFAULT_SETTINGS),
     kvGet<Brief | null>('brief', null),
     kvGet<string | null>('brief_fetched_at', null),
+    kvGet<Enquiry[]>('enquiries', []),
+    kvGet<string[]>('enquiries_seen', []),
   ])
   setState({
     ready: true,
@@ -129,10 +146,17 @@ export async function boot() {
     entries: entries.sort((a, b) => (a.date < b.date ? -1 : 1)),
     outbox,
     settings: { ...DEFAULT_SETTINGS, ...settings },
-    brief, brief_fetched_at,
+    brief, brief_fetched_at, enquiries, enquiries_seen,
   })
   // The language has to be live before the first render, not after it.
   setLang(state.settings.lang)
+  // Jobs deleted before deletion reached the server were never told. Once,
+  // send them up marked deleted so the dashboard stops counting them.
+  const gone = masters.filter((m) => m.deleted && m.kind === 'project')
+  if (gone.length && !(await kvGet<boolean>('deleted_jobs_sent', false))) {
+    await queue(gone.map(rowForMaster))
+    await kvSet('deleted_jobs_sent', true)
+  }
   if (typeof window !== 'undefined') {
     window.addEventListener('online', () => setState({ online: true }))
     window.addEventListener('offline', () => setState({ online: false }))

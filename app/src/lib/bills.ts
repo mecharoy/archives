@@ -17,6 +17,9 @@ import { uid } from './db'
 import { saveMaster, saveEntries, getState } from './store'
 import { scheduleSync } from './sync'
 import type { Bill, MoneyEntry } from './model'
+import { isMonthly, nextDue } from './monthly'
+
+export { nextMonth } from './monthly'
 
 /** Not yet paid. A paid one is kept, not deleted — it is his own history. */
 export const isOpen = (b: Bill) => !b.paid_on
@@ -50,17 +53,6 @@ export function billTotals(all: Bill[], personal?: boolean, today = isoDate()) {
   return { total, overdue, week: thisWeek, count: open.length, next: open[0] || null }
 }
 
-/** The same day next month, pulled back when that month is short. */
-export function nextMonth(iso: string): string {
-  const [y, m, d] = iso.split('-').map(Number)
-  const year = m === 12 ? y + 1 : y
-  const month = m === 12 ? 1 : m + 1
-  const last = new Date(Date.UTC(year, month, 0)).getUTCDate()
-  const day = Math.min(d, last)
-  const p = (x: number) => String(x).padStart(2, '0')
-  return `${year}-${p(month)}-${p(day)}`
-}
-
 export function blankBill(personal: boolean): Bill {
   return {
     id: uid(), kind: 'bill', name_bn: '', to_bn: '', amount: 0,
@@ -89,11 +81,13 @@ export async function payBill(b: Bill, opts: { mode?: string; date?: string } = 
   }
   await saveEntries([row])
 
-  if (b.repeat === 'monthly') {
-    // It comes round again, and the one just paid is kept as history.
+  if (isMonthly(b.repeat)) {
+    // It comes round again, and the one just paid is kept as history. The day
+    // he means (the 31st) survives a short month (see monthly.ts).
+    const next = nextDue(b.due_date, b.repeat)
     await saveMaster({ ...b, paid_on: date, updated_at: new Date().toISOString() })
     await saveMaster({ ...blankBill(Boolean(b.personal)), name_bn: b.name_bn, to_bn: b.to_bn,
-      amount: b.amount, due_date: nextMonth(b.due_date), repeat: 'monthly', note: b.note })
+      amount: b.amount, due_date: next.due_date, repeat: next.repeat, note: b.note })
   } else {
     await saveMaster({ ...b, paid_on: date, updated_at: new Date().toISOString() })
   }

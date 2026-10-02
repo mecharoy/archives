@@ -7,7 +7,12 @@ const browser = await chromium.launch(process.env.PW_CHROMIUM ? { executablePath
 const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
 const errors = []
 page.on('pageerror', (e) => errors.push('PAGEERROR: ' + e.message))
-page.on('console', (m) => { if (m.type() === 'error') errors.push('CONSOLE: ' + m.text()) })
+// The pretend-Google answers a revoked key with a real 403, which the browser logs; that one is the point of the test.
+// The pretend Worker 404s what it does not know, and the browser logs that too.
+const PRETEND = ['https://generativelanguage.googleapis.com', 'https://worker.test']
+page.on('console', (m) => {
+  if (m.type() === 'error' && !PRETEND.some((o) => (m.location().url || '').startsWith(o))) errors.push('CONSOLE: ' + m.text())
+})
 
 const log = []
 const step = async (name, fn) => {
@@ -583,6 +588,181 @@ await step('backup writes a file', async () => {
   await page.locator('.topbar .iconbtn').nth(1).click()
   await tap('ব্যাকআপ')
   await page.waitForTimeout(200)
+})
+
+/* ---- the AI key: typed in, tested, kept on the phone and nowhere else ----
+   Google is pretended here, as everything else is: the suite must not need a
+   real key or the network. A key containing "REVOKED" is answered the way
+   Google answers a leaked one. */
+
+// Built at run time so no line of this file looks like a real key to a secret scanner.
+const KEY_PREFIX = ['AI', 'za', 'Sy'].join('')
+const GOOD_KEY = KEY_PREFIX + 'GOODKEY0123456789abcdefghijklmn'.padEnd(33, 'x')
+const BAD_KEY = KEY_PREFIX + 'REVOKEDKEY0123456789abcdefghijk'.padEnd(33, 'x')
+const GOOGLE = 'https://generativelanguage.googleapis.com'
+const cors = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*', 'access-control-allow-methods': 'GET,POST,OPTIONS' }
+await page.route(GOOGLE + '/**', (route) => {
+  const req = route.request()
+  if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
+  const key = req.headers()['x-goog-api-key'] || ''
+  if (/REVOKED/.test(key)) {
+    return route.fulfill({ status: 403, headers: cors, contentType: 'application/json',
+      body: JSON.stringify({ error: { code: 403, message: 'Your API key was reported as leaked. Please use another API key.', status: 'PERMISSION_DENIED' } }) })
+  }
+  return route.fulfill({ status: 200, headers: cors, contentType: 'application/json', body: JSON.stringify({ models: [] }) })
+})
+const sentElsewhere = []
+page.on('request', (r) => {
+  if (r.url().startsWith(GOOGLE)) return
+  if (r.url().includes(KEY_PREFIX) || (r.postData() || '').includes(KEY_PREFIX)) sentElsewhere.push(r.url())
+})
+
+const openAiPage = async () => {
+  await home()
+  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.pick', { hasText: 'এআই কী' }).click()
+  await page.locator('input.input').waitFor({ timeout: 4000 })
+}
+
+await step('ai key: the page is in settings and says none is entered', async () => {
+  await home()
+  await page.locator('.topbar .iconbtn').nth(1).click()
+  const row = await page.locator('.pick', { hasText: 'এআই কী' }).innerText()
+  if (!/বসানো নেই/.test(row)) throw new Error('the row did not say no key is entered: ' + row)
+  await page.locator('.pick', { hasText: 'এআই কী' }).click()
+  await page.locator('input.input').waitFor({ timeout: 4000 })
+  const type = await page.locator('input.input').getAttribute('type')
+  if (type !== 'password') throw new Error('the key box shows the key openly: ' + type)
+})
+
+await step('ai key: a revoked key is named as the key, with Google\'s own words', async () => {
+  await page.locator('input.input').fill(BAD_KEY)
+  await tap('পরীক্ষা করুন')
+  await page.getByText('গুগল এই কী নিচ্ছে না').first().waitFor({ timeout: 6000 })
+  const body = await page.locator('.scroll').first().innerText()
+  if (!/leaked/.test(body)) throw new Error('Google\'s reason is not shown: ' + body.slice(0, 300))
+  if (body.includes(BAD_KEY)) throw new Error('the key is printed back on the screen')
+})
+
+await step('ai key: a good key passes the test and is saved', async () => {
+  await page.locator('input.input').fill(`  GEMINI_API_KEY="${GOOD_KEY}"  `)   // pasted the way people paste it
+  await tap('পরীক্ষা করুন')
+  await page.getByText('কী ঠিক আছে').first().waitFor({ timeout: 6000 })
+  await tap('সেভ করুন')
+  await page.getByText('কী সেভ হয়েছে').first().waitFor({ timeout: 4000 })
+  const kept = await page.locator('input.input').inputValue()
+  if (kept !== GOOD_KEY) throw new Error('the pasted wrapper was not stripped: ' + kept)
+})
+
+await step('ai key: it lives in the phone\'s own storage', async () => {
+  const stored = await page.evaluate(async () => (await import('/src/lib/db.ts')).kvGet('settings', null))
+  if (!stored || stored.ai_key !== GOOD_KEY) throw new Error('the key was not kept on the phone')
+})
+
+await step('ai key: it is not in a backup', async () => {
+  const json = await page.evaluate(async () => (await import('/src/lib/backup.ts')).buildJson())
+  if (json.includes(KEY_PREFIX)) throw new Error('the backup carries the key')
+  if (!/"ai_key": ""/.test(json)) throw new Error('the backup does not blank the key field')
+})
+
+await step('ai key: it went to Google and nowhere else', async () => {
+  if (sentElsewhere.length) throw new Error('the key was sent to: ' + sentElsewhere.join(', '))
+})
+
+await step('ai key: removing it clears it', async () => {
+  await tap('কী মুছে দিন')
+  await page.getByText('কী মুছে ফেলা হয়েছে').first().waitFor({ timeout: 4000 })
+  await pressBack()
+  await page.waitForTimeout(300)
+  const row = await page.locator('.pick', { hasText: 'এআই কী' }).innerText()
+  if (!/বসানো নেই/.test(row)) throw new Error('the row still says a key is entered: ' + row)
+  const stored = await page.evaluate(async () => (await import('/src/lib/db.ts')).kvGet('settings', null))
+  if (stored && stored.ai_key) throw new Error('the key is still stored')
+})
+
+/* ---- the website link: enquiries arrive, and an item can be kept off the site ----
+   A pretend Worker: it hands back two enquiries (one with markup in it, which
+   must be shown as text) and accepts whatever the phone sends. */
+
+const WORKER = 'https://worker.test'
+const ENQUIRIES = [
+  { id: 'enq-aaaa-0001', received_at: new Date(Date.now() - 5 * 60000).toISOString(), name: 'Mitali Das', phone: '87942 55183', email: '', location: 'Agartala', service: 'plumbing', message: 'Bathroom fitting quote please', locale: 'en' },
+  { id: 'enq-bbbb-0002', received_at: new Date(Date.now() - 3 * 3600000).toISOString(), name: 'Rana <b>Sen</b>', phone: '+91 98300 12345', email: '', location: '', service: '', message: '<img src=x onerror="window.__pwned=1">', locale: 'bn' },
+]
+await page.route(WORKER + '/**', async (route) => {
+  const req = route.request()
+  const u = new URL(req.url())
+  const j = (status, body) => route.fulfill({ status, headers: cors, contentType: 'application/json', body: JSON.stringify(body) })
+  if (req.method() === 'OPTIONS') return route.fulfill({ status: 204, headers: cors })
+  if (u.pathname === '/enquiries') return j(200, { ok: true, enquiries: ENQUIRIES })
+  if (u.pathname === '/rows') {
+    const body = JSON.parse(req.postData() || '{}')
+    return j(200, { ok: true, accepted: (body.rows || []).map((r) => r.id), rejected: [] })
+  }
+  return j(404, { ok: false, error: 'not found' })
+})
+
+await step('enquiries: the phone is pointed at the server', async () => {
+  await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ endpoint: 'https://worker.test', token: 'smoke-device-token-0123456789' }))
+  await home()
+  await page.evaluate(async () => (await import('/src/lib/enquiries.ts')).fetchEnquiries())
+  await page.waitForTimeout(300)
+})
+
+await step('enquiries: home says two people wrote', async () => {
+  await page.getByText(/ওয়েবসাইটে .* জন লিখেছেন/).first().waitFor({ timeout: 5000 })
+  const text = await page.locator('.bigbtn', { hasText: 'ওয়েবসাইটে' }).innerText()
+  if (!/২|2/.test(text)) throw new Error('the count is not two: ' + text)
+})
+
+await step('enquiries: the screen shows them with numbers to ring', async () => {
+  await page.locator('.bigbtn', { hasText: 'ওয়েবসাইটে' }).click()
+  await page.getByText('Mitali Das').waitFor({ timeout: 5000 })
+  const hrefs = await page.locator('a[href^="tel:"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  if (!hrefs.includes('tel:+918794255183')) throw new Error('a ten-digit number did not get +91: ' + hrefs.join(' '))
+  if (!hrefs.includes('tel:+919830012345')) throw new Error('a +91 number was altered: ' + hrefs.join(' '))
+  const wa = await page.locator('a[href^="https://wa.me/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+  if (!wa.includes('https://wa.me/918794255183')) throw new Error('the WhatsApp link is wrong: ' + wa.join(' '))
+  if ((await page.locator('.badge', { hasText: 'নতুন' }).count()) !== 2) throw new Error('both should be marked new')
+})
+
+await step('enquiries: what a stranger typed is shown as text, never run', async () => {
+  const body = await page.locator('.scroll').first().innerText()
+  if (!body.includes('<b>Sen</b>')) throw new Error('markup in a name was interpreted: ' + body.slice(0, 200))
+  if (!body.includes('<img src=x')) throw new Error('markup in a message was interpreted')
+  if (await page.evaluate(() => window.__pwned)) throw new Error('a script in an enquiry ran')
+  if ((await page.locator('.scroll img').count()) > 0) throw new Error('an image was created from a message')
+})
+
+await step('enquiries: once seen, home stops announcing them', async () => {
+  await pressBack()
+  await page.waitForTimeout(500)
+  if (await page.locator('.bigbtn', { hasText: 'ওয়েবসাইটে' }).count()) throw new Error('the card is still there after he looked')
+})
+
+await step('enquiries: the all-features screen can reach them again', async () => {
+  await home()
+  await tap('সব কিছু')
+  await tap('ওয়েবসাইটের অনুসন্ধান')
+  await page.getByText('Mitali Das').waitFor({ timeout: 4000 })
+  if ((await page.locator('.badge', { hasText: 'নতুন' }).count()) !== 0) throw new Error('they are still marked new')
+})
+
+await step('website: an item can be kept off the site, and the choice goes up', async () => {
+  await home()
+  await tap('সব কিছু')
+  await tap('মালের তালিকা')
+  await page.locator('.rowlist .pick', { hasText: 'সিমেন্ট' }).first().click()
+  await page.getByText('ওয়েবসাইটে দেখাবে?').waitFor({ timeout: 4000 })
+  const on = await page.locator('.chip.on', { hasText: 'হ্যাঁ' }).count()
+  if (!on) throw new Error('an item should be shown on the site by default')
+  await page.locator('.chip', { hasText: /^না$/ }).click()
+  await tap('সেভ করুন')
+  await page.waitForTimeout(400)
+  const sent = await page.evaluate(async () => (await import('/src/lib/store.ts')).getState().outbox.concat([]).filter((r) => r.tab === 'Items'))
+  const hidden = sent.some((r) => r.values[6] === true)
+  const flushed = await page.evaluate(async () => (await import('/src/lib/db.ts')).dbAll('masters').then((ms) => ms.some((m) => m.kind === 'item' && m.web_hidden === true)))
+  if (!hidden && !flushed) throw new Error('the hidden flag was not saved or sent: ' + JSON.stringify(sent).slice(0, 200))
 })
 
 console.log(log.join('\n'))

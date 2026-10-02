@@ -73,9 +73,11 @@ const prompt = readFileSync(join(ROOT, 'nightly/prompt.md'), 'utf8')
 
 let key = ''
 if (LIVE) {
+  // A live run is a developer's check, never part of the app: the key comes from
+  // the environment or a file outside the repository, and is not built into anything.
   const f = join(homedir(), '.site-khata', 'gemini.env')
-  if (existsSync(f)) key = (readFileSync(f, 'utf8').match(/GEMINI_API_KEY=(\S+)/) || [])[1] || ''
-  if (!key) { console.log('no key in ' + f); process.exit(1) }
+  key = process.env.GEMINI_API_KEY || (existsSync(f) ? (readFileSync(f, 'utf8').match(/GEMINI_API_KEY=(\S+)/) || [])[1] || '' : '')
+  if (!key) { console.log('no key: set GEMINI_API_KEY, or put GEMINI_API_KEY=... in ' + f); process.exit(1) }
 }
 
 let sentPrompt = ''
@@ -115,6 +117,83 @@ if (!LIVE) {
   ck('a note may sharpen status', brief.projects[0].status !== 'ok')
   const { real } = anonymize({ summary: { projects: [{ id: 'a', name_bn: 'X' }] }, computed: {} })
   ck('restore leaves unknown labels alone', restoreNames('[W9] and [J1]', real) === '[W9] and X')
+  ck('the brief says its words came from the model', brief.by === 'model', String(brief.by))
+
+  /* ---------- what a small model does to the labels ---------- */
+
+  ck('a Bengali-digit label is read as the label', restoreNames('[W১] ও [ w 1 ] ও ［W1］', new Map([['[W1]', 'X']])) === 'X ও X ও X')
+  ck('a label of another kind is left as it was', restoreNames('[Z1]', new Map([['[W1]', 'X']])) === '[Z1]')
+
+  // Built at run time so no line of this file looks like a real key to a secret scanner.
+  const KEY = ['AI', 'za', 'Sy', 'TESTKEY0123456789abcdefghijklm'.padEnd(33, 'x')].join('')
+  const answer = (over) => ({
+    model: 'stub',
+    json: {
+      headline_bn: '[S1]-এর রডের টাকার দিন পেরিয়েছে', headline_en: '[S1] is past the date for the steel',
+      project_notes: [{ id: 'p1', status: 'warn', note_bn: '[J1]-এ খরচ কাজের আগে', note_en: 'At [J1] spending is ahead of the work' }],
+      alerts: [], todo_bn: ['[S1]-কে ফোন করুন'], todo_en: ['Call [S1]'],
+      ...over,
+    },
+  })
+  const prompts = []
+  const scripted = (...replies) => async (p) => {
+    prompts.push(p)
+    const next = replies[Math.min(prompts.length - 1, replies.length - 1)]
+    if (next instanceof Error) throw next
+    return next
+  }
+  const go = (ask, extra = {}) => makeBrief({ SQL, schemaSql, rows, prompt, key: KEY, ask, ...extra })
+
+  let o = await go(scripted(answer({ headline_bn: '[ S১ ]-এর রডের টাকার দিন পেরিয়েছে', headline_en: 'Past the date for the steel at ［S1］' })))
+  ck('label variants are put back into real names', o.brief.headline_bn.startsWith('শর্মা ট্রেডার্স') && o.brief.headline_en.includes('শর্মা ট্রেডার্স'), o.brief.headline_bn)
+  ck('and none is left in the brief', !/[\[［]\s*[A-Za-z]\s*[0-9০-৯]+\s*[\]］]/.test(JSON.stringify(o.brief)))
+
+  prompts.length = 0
+  o = await go(scripted(answer({ headline_bn: '[S9]-এর রডের টাকার দিন পেরিয়েছে', headline_en: '[S9] is past the date' })))
+  ck('a label the phone never issued is refused', !JSON.stringify(o.brief).includes('[S9]'))
+  ck('and the plain headline stands in for it', o.brief.headline_en.length > 0 && o.brief.by === 'model')
+  ck('the model was shown what was wrong and asked again', prompts.length === 2 && /unknown label \[S9\]/.test(prompts[1]))
+
+  /* ---------- a second chance ---------- */
+
+  prompts.length = 0
+  const wrong = answer({ headline_bn: 'দোকানে ৯৯,৯৯৯ টাকা বাকি', headline_en: 'The shops are owed ₹99,999' })
+  o = await go(scripted(wrong, answer()))
+  ck('an answer with a drop is asked for again', prompts.length === 2)
+  ck('the second prompt says exactly what was wrong', /invented figure 99999/.test(prompts[1]))
+  ck('and carries the model\'s own earlier reply', prompts[1].includes('YOUR PREVIOUS REPLY'))
+  ck('and still carries no real name', !/রহিম|গোপাল|শর্মা|রায়বাড়ি|সুবীর|নিতাই/.test(prompts[1]))
+  ck('the better second answer is the one published', o.brief.headline_en === 'শর্মা ট্রেডার্স is past the date for the steel', o.brief.headline_en)
+
+  prompts.length = 0
+  o = await go(scripted(answer(), wrong))
+  ck('a clean first answer is not asked again', prompts.length === 1)
+
+  prompts.length = 0
+  o = await go(scripted(wrong, wrong))
+  ck('a second answer that is no better is not used', o.log.some((l) => /no better/.test(l)))
+  ck('and the brief is still true', o.brief.headline_en.length > 0 && !/99,?999/.test(JSON.stringify(o.brief)))
+
+  prompts.length = 0
+  o = await go(scripted(wrong, new Error('boom')))
+  ck('a second try that fails keeps the first', o.model === 'stub' && !!o.brief.headline_en)
+
+  /* ---------- the model is gone ---------- */
+
+  const { GeminiError } = await import('../nightly/gemini.mjs')
+  o = await go(scripted(new GeminiError('key', 'gemini-3.8-flash 403 Your API key was reported as leaked.')))
+  ck('a dead key still yields a true brief', o.brief.cards.length >= 4 && !!o.brief.headline_en)
+  ck('the brief says it was computed, not written', o.brief.by === 'rule', String(o.brief.by))
+  ck('the reason is passed up as the key', o.modelError && o.modelError.kind === 'key')
+  ck('and no model is credited', o.model === '')
+
+  o = await go(scripted(new Error(`fetch to https://x/?key=${KEY} failed`)))
+  ck('a stray error never carries the key into the log', !o.log.join('\n').includes(KEY))
+  ck('nor into the reason', !JSON.stringify(o.modelError).includes(KEY))
+
+  o = await makeBrief({ SQL, schemaSql, rows, prompt, key: '' })
+  ck('no key at all is a computed brief with no error', o.brief.by === 'rule' && o.modelError === null)
+  ck('and it never called a model', o.model === '')
 } else {
   console.log('\n' + JSON.stringify({ headline_en: brief.headline_en, headline_bn: brief.headline_bn, notes: brief.projects.map((p) => [p.status, p.note_en]), alerts: brief.alerts, todo_en: brief.todo_en }, null, 2))
   ck('model answered', !!out.model, 'no model')

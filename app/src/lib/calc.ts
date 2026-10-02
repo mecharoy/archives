@@ -68,11 +68,15 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
   const at_finish = pct_done > 2 ? cost / (pct_done / 100) : null
   const profit = at_finish != null && budget > 0 ? budget - at_finish : null
 
+  /* The same rule as nightly/compute.mjs projectStatus, which colours the
+     card on the brief — so a job is never red on one screen and green on the
+     next. Spending ahead of the work, or work that has cost more than it
+     earned (CPI under 1), is the warning; well ahead / CPI under 0.9 is red. */
   let status: ProjectTotals['status'] = 'ok'
   let flag_bn = t('ঠিক আছে')
   const gap = pct_spent - pct_done
-  if (budget > 0 && gap > 15) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
-  else if (budget > 0 && gap > 6) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
+  if (budget > 0 && (gap > 15 || (cpi != null && cpi < 0.9))) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
+  else if (budget > 0 && (gap > 6 || (cpi != null && cpi < 1))) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
   else if (budget > 0 && gap < -10) { flag_bn = t('খরচ কম, কাজ এগিয়ে') }
 
   return { project_id: p.id, labour, material, other, cost, received, pct_done, pct_spent, earned, cpi, at_finish, profit, status, flag_bn }
@@ -142,7 +146,10 @@ export function cashState(entries: Entry[], openingAmount: number, openingDate: 
     if (e.kind === 'attendance') { out += (e.amount || 0) + (e.advance || 0); continue }
     if (e.kind === 'stock') {
       const s = e as StockEntry
-      if ((s.dir === 'in' || s.dir === 'transfer') && s.paid && isCash(s)) out += s.amount || 0
+      // Only buying moves cash. Sending goods from the shop to a site (and
+      // taking them back) is the same goods changing hands inside his own
+      // business — nothing leaves his pocket, so nothing is taken from the till.
+      if (s.dir === 'in' && s.paid) out += s.amount || 0
       if (s.dir === 'sale' && s.paid) inc += s.amount || 0
       continue
     }
@@ -159,8 +166,6 @@ export function cashState(entries: Entry[], openingAmount: number, openingDate: 
   }
   return { anchor_date, anchor_amount, computed: anchor_amount + inc - out, in_since: inc, out_since: out }
 }
-
-function isCash(_s: StockEntry): boolean { return true }
 
 /* ---- dues ---- */
 
@@ -249,14 +254,21 @@ export function duesSplit(entries: Entry[]) {
 
 export interface StockLevel { item_id: ID; qty: number; value: number; rate: number }
 
+/** Oldest first, and for two rows on one day, the one written first first.
+    A phone hands its rows back in id order, which is random, so anything that
+    depends on "the latest" must sort rather than trust the order it was given. */
+const inOrder = (a: Entry, b: Entry) =>
+  a.date < b.date ? -1 : a.date > b.date ? 1 : a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id < b.id ? -1 : 1
+
 /** Shop stock: bought in without a project, less sales and transfers out. */
 export function shopStock(entries: Entry[], items: Item[]): StockLevel[] {
-  const stock = liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]
+  const stock = (liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]).sort(inOrder)
   const map = new Map<ID, { qty: number; rate: number }>()
   const anchors = new Map<ID, string>()
+  // Counts in order, so of two counts on one day the later-written stands.
   for (const s of stock) if (s.dir === 'count' && !s.project_id) {
-    const prev = anchors.get(s.item_id)
-    if (!prev || s.date >= prev) { anchors.set(s.item_id, s.date); map.set(s.item_id, { qty: s.qty, rate: s.rate || 0 }) }
+    anchors.set(s.item_id, s.date)
+    map.set(s.item_id, { qty: s.qty, rate: s.rate || 0 })
   }
   for (const s of stock) {
     if (s.project_id && s.dir !== 'transfer') continue
@@ -299,16 +311,20 @@ export function projectBurn(p: Project, entries: Entry[], coeffs: Coeff[], pctDo
 
 /* ---- activity ---- */
 
+/* Both of these count what he wrote and still stands. A day he cancelled, and
+   the mirror row that cancelled it, are not "writing the day down" — and the
+   server's figure (summary.js) leaves them out the same way, so the phone and
+   the brief never disagree about whether he has gone quiet. */
 export function entriesInLastDays(entries: Entry[], n: number): number {
   const from = addDays(isoDate(), -(n - 1))
   const batches = new Set<string>()
-  for (const e of entries) if (e.date >= from) batches.add(e.batch)
+  for (const e of liveEntries(entries)) if (e.date >= from) batches.add(e.batch)
   return batches.size
 }
 
 export function lastEntryDate(entries: Entry[]): string | null {
   let best: string | null = null
-  for (const e of entries) if (!best || e.date > best) best = e.date
+  for (const e of liveEntries(entries)) if (!best || e.date > best) best = e.date
   return best
 }
 

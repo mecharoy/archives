@@ -141,7 +141,8 @@ for (let attempt = 1; attempt <= 2 && !written; attempt++) {
 
 let words = { headline: null, notes: new Map(), alerts: [], todo_bn: [], todo_en: [], dropped: [] }
 if (written) {
-  words = check(written, summary, ids)
+  // The model was shown the computed half too; a figure repeated from it is a quote.
+  words = check(written, summary, ids, { extra: payload.computed })
   for (const d of words.dropped) say('dropped — ' + d)
 }
 if (!words.headline) {

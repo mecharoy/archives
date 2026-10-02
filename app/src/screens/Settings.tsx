@@ -11,7 +11,7 @@ import { money, toBn, num, isoDate, dateBn, agoBn } from '../lib/bn'
 import type { Project, Worker, Item, Party, Stage, Coeff, Bill } from '../lib/model'
 import { flush, testEndpoint } from '../lib/sync'
 import { fetchBrief } from '../lib/brief'
-import { hasAiKey, makePhoneBrief } from '../lib/aiBrief'
+import { makePhoneBrief, setAiKey, testAiKey, explainAiError, aiStatus, type AiStatus } from '../lib/aiBrief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
 import { restoreFromServer } from '../lib/restore'
 import { seedHouse, HOUSE } from '../lib/seed'
@@ -28,7 +28,7 @@ import {
 } from '../lib/update'
 import { BUILD_CODE, BUILD_NAME } from '../lib/buildinfo'
 
-type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update'
+type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update' | 'ai'
 
 export function Settings({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -51,6 +51,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
   if (page === 'remind') return <RemindPage s={s} onBack={() => setPage(null)} />
   if (page === 'reset') return <ResetPage onBack={() => setPage(null)} />
   if (page === 'update') return <UpdatePage s={s} onBack={() => setPage(null)} />
+  if (page === 'ai') return <AiPage s={s} onBack={() => setPage(null)} />
 
   const miss = chipMissRate({ taken: s.settings.chips_taken, expanded: s.settings.chips_expanded })
 
@@ -67,6 +68,8 @@ export function Settings({ onBack }: { onBack: () => void }) {
         <div className="rowlist">
           <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? t('জোড়া লাগানো আছে') : t('শুধু ফোনে রাখা হচ্ছে')}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('sync')} />
+          <Pick title="এআই কী (রাতের হিসাব)" sub={s.settings.ai_key.trim() ? t('বসানো আছে') : t('বসানো নেই')}
+            right={<Icon name="fwd" size={18} />} onClick={() => setPage('ai')} />
           <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={<Icon name="fwd" size={18} />} onClick={() => setPage('backup')} />
           <Pick title="টাকার তাগাদা" sub={REMIND_LABEL[s.settings.remind]} right={<Icon name="fwd" size={18} />} onClick={() => setPage('remind')} />
           <Pick title="নিজের খরচের পাসকোড" sub={s.settings.pin_hash ? t('দেওয়া আছে') : t('দেওয়া নেই')} right={<Icon name="lock" size={18} />} onClick={() => setPin(true)} />
@@ -257,6 +260,99 @@ function UpdatePage({ s, onBack }: { s: State; onBack: () => void }) {
   )
 }
 
+/* ---------- the AI key ---------- */
+
+/* The phone writes the sentences in the nightly brief by asking Google's free
+   AI. The key it needs is typed here, once, and kept in this phone's storage
+   only. It is not in the APK, so unpacking the APK finds nothing — which is the
+   whole point: a key inside a public file gets found and cancelled. */
+function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
+  const [key, setKey] = useState(s.settings.ai_key)
+  const [show, setShow] = useState(false)
+  const [busy, setBusy] = useState('')
+  const [result, setResult] = useState<{ ok: boolean; message: string; detail: string } | null>(null)
+  const [status, setStatus] = useState<AiStatus | null>(null)
+  const toast = useToast()
+  useEffect(() => { void aiStatus().then(setStatus) }, [busy])
+
+  const saved = !!s.settings.ai_key.trim()
+
+  return (
+    <>
+      <TopBar title="এআই কী" onBack={onBack} />
+      <div className="scroll">
+        <p className="hint" style={{ marginTop: '1rem' }}>
+          {t("রাতের হিসাবের কথাগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।")}
+        </p>
+        <p className="small muted">
+          {t("কী-টা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।")}
+        </p>
+        <Field label="গুগল এআই কী">
+          <input className="input" value={key} onChange={(e) => { setKey(e.target.value); setResult(null) }}
+            type={show ? 'text' : 'password'} autoCapitalize="off" autoCorrect="off" spellCheck={false}
+            placeholder="AIza…" autoComplete="off" />
+        </Field>
+        <button className="btn quiet small" onClick={() => setShow(!show)}>{show ? t('লুকান') : t('দেখান')}</button>
+        <p className="small muted" style={{ marginTop: '.6rem' }}>{t('বিনামূল্যে নতুন কী:')} aistudio.google.com/apikey</p>
+
+        {result && (
+          <div className="card" style={{ marginTop: '.8rem' }}>
+            <strong style={{ color: result.ok ? 'var(--ok)' : 'var(--crit)' }}>{result.message}</strong>
+            {result.detail && <p className="small muted" style={{ marginTop: '.3rem', wordBreak: 'break-word' }}>{result.detail}</p>}
+          </div>
+        )}
+
+        <div className="actionbar" style={{ borderTop: 0, padding: '.8rem 0 1rem' }}>
+          <button className="btn ghost" disabled={!!busy || !key.trim()} onClick={async () => {
+            setBusy('test')
+            setResult(await testAiKey(key))
+            setBusy('')
+          }}>{busy === 'test' ? t('দেখছি…') : t('পরীক্ষা করুন')}</button>
+          <button className="btn primary" disabled={!!busy || !key.trim()} onClick={async () => {
+            setBusy('save')
+            setKey(await setAiKey(key))
+            setBusy('')
+            toast.show(t('কী সেভ হয়েছে'))
+          }}>{t('সেভ করুন')}</button>
+        </div>
+
+        {saved && (
+          <button className="btn quiet small" disabled={!!busy} onClick={async () => {
+            setKey(await setAiKey(''))
+            setResult(null)
+            toast.show(t('কী মুছে ফেলা হয়েছে'))
+          }}>{t('কী মুছে দিন')}</button>
+        )}
+
+        <div className="divider" />
+        <div className="card">
+          <div className="spread">
+            <span>{t('সবশেষ চেষ্টা')}</span>
+            <span className="small muted">{status ? agoBn(status.at) : t('এখনও হয়নি')}</span>
+          </div>
+          {status && status.ok && <p className="small muted" style={{ marginTop: '.4rem' }}>{tf('{0} দিয়ে লেখা হয়েছে', status.model)}</p>}
+          {status && !status.ok && (
+            <p className="small" style={{ marginTop: '.4rem', color: 'var(--crit)' }}>
+              {explainAiError(status.error ? status.error.kind : 'other')}
+            </p>
+          )}
+          {status && !status.ok && status.error && status.error.detail && (
+            <p className="small muted" style={{ marginTop: '.2rem', wordBreak: 'break-word' }}>{status.error.detail}</p>
+          )}
+          <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || !saved}
+            onClick={async () => {
+              setBusy('make')
+              const err = await makePhoneBrief()
+              setBusy('')
+              toast.show(err || t('রাতের হিসাব এসে গেছে'))
+            }}>{busy === 'make' ? t('আনছি…') : t('এখনই তৈরি করুন')}</button>
+        </div>
+      </div>
+      {toast.msg && <Toast text={toast.msg} />}
+    </>
+  )
+}
+
 /* ---------- sync ---------- */
 
 function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
@@ -265,6 +361,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [busy, setBusy] = useState('')
   const [confirmRestore, setConfirmRestore] = useState(false)
   const toast = useToast()
+  const hasKey = !!s.settings.ai_key.trim()
 
   const save = async () => {
     await saveSettings({ endpoint: endpoint.trim(), token: token.trim() })
@@ -314,14 +411,14 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
             <span>{t("রাতের হিসাব")}</span>
             <span className="small muted">{s.brief ? agoBn(s.brief.generated_at) : t('এখনও আসেনি')}</span>
           </div>
-          {hasAiKey() && <p className="small muted" style={{ marginTop: '.4rem' }}>{t('এই ফোনেই তৈরি হয় — রোজ সন্ধের পর একবার।')}</p>}
-          <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || (!hasAiKey() && !s.settings.endpoint)}
+          {hasKey && <p className="small muted" style={{ marginTop: '.4rem' }}>{t('এই ফোনেই তৈরি হয় — রোজ সন্ধের পর একবার।')}</p>}
+          <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || (!hasKey && !s.settings.endpoint)}
             onClick={async () => {
               setBusy('brief')
-              const err = hasAiKey() ? await makePhoneBrief() : await fetchBrief(false)
+              const err = hasKey ? await makePhoneBrief() : await fetchBrief(false)
               setBusy('')
               toast.show(err || t('রাতের হিসাব এসে গেছে'))
-            }}>{busy === 'brief' ? t('আনছি…') : hasAiKey() ? t('এখনই তৈরি করুন') : t('এখন আনুন')}</button>
+            }}>{busy === 'brief' ? t('আনছি…') : hasKey ? t('এখনই তৈরি করুন') : t('এখন আনুন')}</button>
         </div>
 
         <p className="sectionlabel">{t("নতুন ফোনে")}</p>
@@ -498,6 +595,13 @@ export function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
             <div className="chips">{units.map((u) => <Chip key={u} on={edit.unit_bn === u} onClick={() => setEdit({ ...edit, unit_bn: u })}>{u}</Chip>)}</div>
           </Field>
           <Field label="শেষ দর"><NumField value={edit.last_rate} onChange={(v) => setEdit({ ...edit, last_rate: v })} decimal /></Field>
+          <Field label="ওয়েবসাইটে দেখাবে?">
+            <div className="chips">
+              <Chip on={!edit.web_hidden} onClick={() => setEdit({ ...edit, web_hidden: false })}>{t('হ্যাঁ')}</Chip>
+              <Chip on={!!edit.web_hidden} onClick={() => setEdit({ ...edit, web_hidden: true })}>{t('না')}</Chip>
+            </div>
+            <p className="small muted" style={{ marginTop: '.4rem' }}>{t('ওয়েবসাইটে শুধু নাম আর "আছে / নেই" দেখায় — কত আছে বা কত দাম, কিছুই না।')}</p>
+          </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
             onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
         </Sheet>

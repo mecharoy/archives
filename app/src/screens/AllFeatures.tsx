@@ -28,6 +28,7 @@ const SECTIONS: { label: string; tone: string; items: Item[] }[] = [
       { icon: 'shop', title: 'দোকানের মজুত', sub: 'মাল ঢোকা, বিক্রি, গোনা', to: 'shop' },
       { icon: 'book', title: 'মালের তালিকা', sub: 'নাম, একক, শেষ দর', to: 'items' },
       { icon: 'contactbook', title: 'দোকান ও খদ্দের', sub: 'সরবরাহকারী, খদ্দের', to: 'parties' },
+      { icon: 'phone', title: 'ওয়েবসাইটের অনুসন্ধান', sub: 'যাঁরা সাইটে লিখেছেন, ফোন নম্বর সহ', to: 'enquiries' },
     ],
   },
   {

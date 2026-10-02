@@ -45,11 +45,18 @@ export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bil
     })),
   ].sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0))
   for (const d of rows) {
-    const fire = addDays(d.due_date, -before)
-    if (fire < today) continue                       // already gone by
-    const at = fromIso(fire)
+    if (d.due_date < today) continue                 // already gone by
+    let at = fromIso(addDays(d.due_date, -before))
     at.setHours(hour, 0, 0, 0)
-    if (at.getTime() <= Date.now()) continue
+    if (at.getTime() <= Date.now()) {
+      /* The morning it should have fired has already passed — he wrote the date
+         down late (rent due tomorrow, entered this afternoon, "a day before"
+         was this morning). Skipping it would mean no reminder at all, so it
+         falls back to the morning of the day itself, if that is still ahead. */
+      at = fromIso(d.due_date)
+      at.setHours(hour, 0, 0, 0)
+      if (at.getTime() <= Date.now()) continue
+    }
     const s = getState()
     const who = d.party_id ? (s.masters.find((m) => m.id === d.party_id) as { name_bn?: string } | undefined)?.name_bn || '' : ''
     out.push({

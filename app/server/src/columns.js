@@ -26,7 +26,8 @@ export const COLUMNS = {
     "unit_bn",
     "last_rate",
     "active",
-    "updated_at"
+    "updated_at",
+    "web_hidden"
   ],
   "Parties": [
     "id",

@@ -423,7 +423,7 @@ export function dashboardHtml() {
           '<span class="bn nm">' + esc(r.name_bn) + (r.to_bn ? ' <span class="sub">to ' + esc(r.to_bn) + '</span>' : '') + '</span>' +
           '<span class="sx"><span class="pill ' + (r.overdue ? 'crit' : r.days_away <= 7 ? 'warn' : 'ok') + '">' + when + '</span></span>' +
           '<span class="num amt">' + money(r.amount) + '</span>' +
-          '<span class="sub sx">' + r.due_date + (r.repeat === 'monthly' ? '  ·  every month' : '') +
+          '<span class="sub sx">' + r.due_date + (String(r.repeat).indexOf('monthly') === 0 ?'  ·  every month' : '') +
             (r.personal ? '' : '  ·  business') + '</span>' +
           '</div>';
       }).join('');

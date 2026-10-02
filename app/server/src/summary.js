@@ -13,10 +13,32 @@
    `last_28_days`, never "this month", so nobody mistakes it for a calendar
    month that resets on the 1st. */
 
-const WEEK = "date('now','localtime','-6 day')"        // last 7 days, today included
-const PREV_FROM = "date('now','localtime','-13 day')"  // the 7 before that
-const PREV_TO = "date('now','localtime','-7 day')"
-const M28 = "date('now','localtime','-27 day')"        // four whole weeks
+import { shopStockValue } from './stock.js'
+
+/* Every date here is a Kolkata date, whatever zone this code runs in. A
+   Cloudflare Worker runs on UTC, where it is still "yesterday" until half past
+   five in the morning in India — so asking SQLite or JavaScript for "today"
+   would put every overdue bill, every week boundary and every "nothing
+   written in three days" check a day behind for those hours. The windows are
+   therefore worked out here, once, as plain YYYY-MM-DD literals. */
+const IST_MS = 5.5 * 3600000
+export const istDate = (daysAgo = 0) => new Date(Date.now() + IST_MS - daysAgo * 86400000).toISOString().slice(0, 10)
+
+/* A reversal is a mirrored row that points at the one it cancels. For anything
+   that asks "what is the latest state" or "did this happen", both halves have
+   to be left out — summing is different: the mirror carries a negative amount,
+   so sums net out on their own and need no filter. */
+const LIVE = (table) =>
+  `COALESCE(reverses,'') = '' AND id NOT IN (SELECT reverses FROM ${table} WHERE household_id = ?1 AND COALESCE(reverses,'') <> '')`
+
+/* Every entry that still stands, from all five books, as (batch, date). */
+const LIVE_ROWS = `(
+  SELECT batch, date FROM day        WHERE household_id = ?1 AND ${LIVE('day')}
+  UNION ALL SELECT batch, date FROM attendance WHERE household_id = ?1 AND ${LIVE('attendance')}
+  UNION ALL SELECT batch, date FROM stock      WHERE household_id = ?1 AND ${LIVE('stock')}
+  UNION ALL SELECT batch, date FROM money      WHERE household_id = ?1 AND ${LIVE('money')}
+  UNION ALL SELECT batch, date FROM progress   WHERE household_id = ?1 AND ${LIVE('progress')}
+)`
 
 async function one(db, sql, ...args) {
   const row = await db.prepare(sql).bind(...args).first()
@@ -42,14 +64,12 @@ const n = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : 0)
 
 /** Payments land on the oldest bill for that party first, exactly as in the
     app's calc.ts, so both sides answer the same question the same way. */
-function net(rows, settlements, dir) {
+function net(rows, settlements, dir, today, week) {
   const pot = new Map()
   for (const s of settlements) {
     if (s.dir !== dir) continue
     pot.set(s.party_id, n(pot.get(s.party_id)) + n(s.amount))
   }
-  const today = new Date().toISOString().slice(0, 10)
-  const week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
   let total = 0, overdue = 0, inWeek = 0
   for (const r of rows) {
     let amount = n(r.amount)
@@ -69,22 +89,31 @@ function net(rows, settlements, dir) {
 const round = (v) => Math.round(n(v) * 100) / 100
 
 export async function buildSummary(db, hid) {
+  const WEEK = `'${istDate(6)}'`        // last 7 days, today included
+  const PREV_FROM = `'${istDate(13)}'`  // the 7 before that
+  const PREV_TO = `'${istDate(7)}'`
+  const M28 = `'${istDate(27)}'`        // four whole weeks
+  const TODAY = istDate(0)
+  const IN_WEEK = istDate(-7)           // "this week" on a due date: the next seven days
+
   const [
     projects, stages, progress, lastCount, openRows, settlements,
-    thisWeek, prevWeek, activity, stock,
+    thisWeek, prevWeek, activity, stockRows, itemRows,
     heads, suppliers, workmen, goods, personalRows, personalTotals, counts, billRows,
   ] = await Promise.all([
-    all(db, 'SELECT id, name_bn, client_bn, ptype, budget, area_sqft, start_date, plan_days, status FROM projects WHERE household_id = ?1 ORDER BY status, name_bn', hid),
+    all(db, 'SELECT id, name_bn, client_bn, ptype, budget, area_sqft, start_date, plan_days, status FROM projects WHERE household_id = ?1 AND COALESCE(status,\'\') <> \'deleted\' ORDER BY status, name_bn', hid),
     all(db, 'SELECT project_type, seq, name_bn, weight FROM stages WHERE household_id = ?1 ORDER BY project_type, seq', hid),
     all(db, 'SELECT id, project_id, stage_seq, state, reverses FROM progress WHERE household_id = ?1', hid),
+    // A count that was later cancelled is not "the last count".
     one(db, `SELECT cash_counted, cash_computed, date FROM day
-             WHERE household_id = ?1 AND cash_counted IS NOT NULL
+             WHERE household_id = ?1 AND cash_counted IS NOT NULL AND ${LIVE('day')}
              ORDER BY date DESC, created_at DESC LIMIT 1`, hid),
     // Open bills, and the payments that close them. The netting is done in
     // JavaScript with exactly the rule the phone uses — oldest bill first —
     // so the dashboard and his screen can never disagree about what he owes.
+    // A purchase that was cancelled (and the row that cancelled it) is owed to nobody.
     all(db, `SELECT party_id, amount, COALESCE(NULLIF(due_date,''), date) AS due_date, dir
-             FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale')
+             FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale') AND ${LIVE('stock')}
              ORDER BY due_date`, hid),
     all(db, `SELECT party_id, dir, COALESCE(SUM(amount),0) AS amount
              FROM money WHERE household_id = ?1 AND personal = 0 AND head_bn = ?2
@@ -93,19 +122,26 @@ export async function buildSummary(db, hid) {
     periodTotals(db, hid, `date >= ${WEEK}`),
     periodTotals(db, hid, `date >= ${PREV_FROM} AND date < ${PREV_TO}`),
 
+    // "Written" means a batch of entries that still stands — from any book, the
+    // same as the phone counts it — so a man who only runs the shop is not
+    // reported as silent, and a day he cancelled is not a day he wrote.
     one(db, `SELECT
-               (SELECT COUNT(*) FROM day WHERE household_id = ?1
-                 AND date >= date('now','localtime','-2 day')) AS last3,
-               (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1 AND date >= ${WEEK}) AS days_week,
-               (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1
+               (SELECT COUNT(DISTINCT batch) FROM ${LIVE_ROWS}
+                 WHERE date >= '${istDate(2)}') AS last3,
+               (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1 AND ${LIVE('day')} AND date >= ${WEEK}) AS days_week,
+               (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1 AND ${LIVE('day')}
                  AND date >= ${PREV_FROM} AND date < ${PREV_TO}) AS days_prev,
-               (SELECT MAX(date) FROM day WHERE household_id = ?1) AS last_date,
+               (SELECT MAX(date) FROM ${LIVE_ROWS}) AS last_date,
                (SELECT COUNT(*) FROM projects WHERE household_id = ?1 AND status = 'active') AS active,
                (SELECT COUNT(*) FROM workers WHERE household_id = ?1 AND active = 1) AS men`, hid),
-    one(db, `SELECT
-               COALESCE(SUM(CASE WHEN project_id = '' AND dir = 'in' THEN amount ELSE 0 END), 0)
-             - COALESCE(SUM(CASE WHEN dir IN ('sale','transfer') THEN amount ELSE 0 END), 0) AS value
-             FROM stock WHERE household_id = ?1`, hid),
+
+    // The shelf. Valued in JavaScript by stock.js — the same rule as the
+    // phone's own count — because "bought into the shop" is a row with NO
+    // project, which a database stores as NULL, and a count replaces the
+    // book rather than adding to it. Neither is a sum a SQL query gets right.
+    all(db, `SELECT id, item_id, project_id, dir, qty, rate, date, created_at, reverses
+             FROM stock WHERE household_id = ?1 AND dir IN ('in','sale','transfer','count')`, hid),
+    all(db, 'SELECT id, last_rate FROM items WHERE household_id = ?1', hid),
 
     /* ---- the four breakdowns, over the week ---- */
 
@@ -177,13 +213,13 @@ export async function buildSummary(db, hid) {
                  AND personal = 1 AND head_bn = '${DRAWING_HEAD}' AND date >= ${M28}) AS drawn_28`, hid),
 
     one(db, `SELECT
-               (SELECT COUNT(*) FROM day WHERE household_id = ?1) AS days,
+               (SELECT COUNT(*) FROM day WHERE household_id = ?1 AND ${LIVE('day')}) AS days,
                (SELECT COUNT(*) FROM attendance WHERE household_id = ?1) AS attendance,
                (SELECT COUNT(*) FROM stock WHERE household_id = ?1) AS stock,
                (SELECT COUNT(*) FROM money WHERE household_id = ?1) AS money,
                (SELECT COUNT(*) FROM money WHERE household_id = ?1 AND personal = 1) AS personal,
                (SELECT COUNT(*) FROM progress WHERE household_id = ?1) AS progress,
-               (SELECT MIN(date) FROM day WHERE household_id = ?1) AS first_date`, hid),
+               (SELECT MIN(date) FROM day WHERE household_id = ?1 AND ${LIVE('day')}) AS first_date`, hid),
 
     /* Payments he has written down himself — rent, a fee, a promise to a
        person. Unpaid ones only: a paid one is history, not a warning. */
@@ -249,7 +285,7 @@ export async function buildSummary(db, hid) {
         mandays: round(t.mandays_week),
       },
       stage_now_bn: currentStage(p, stages, progress),
-      days_running: p.start_date ? daysBetween(p.start_date) : null,
+      days_running: p.start_date ? daysBetween(p.start_date, TODAY) : null,
       flag_bn: budget <= 0 ? 'বাজেট দেওয়া নেই'
         : gap > 15 ? 'খরচ কাজের অনেক আগে'
         : gap > 6 ? 'খরচ কাজের থেকে এগিয়ে'
@@ -274,8 +310,9 @@ export async function buildSummary(db, hid) {
   const counted = lastCount.cash_counted == null ? null : n(lastCount.cash_counted)
   const computed = lastCount.cash_computed == null ? null : n(lastCount.cash_computed)
 
-  const dues = net(openRows.filter((r) => r.dir === 'in' || r.dir === 'transfer'), settlements, 'paid')
-  const owed = net(openRows.filter((r) => r.dir === 'sale'), settlements, 'received')
+  const dues = net(openRows.filter((r) => r.dir === 'in' || r.dir === 'transfer'), settlements, 'paid', TODAY, IN_WEEK)
+  const owed = net(openRows.filter((r) => r.dir === 'sale'), settlements, 'received', TODAY, IN_WEEK)
+  const stockValue = shopStockValue(stockRows, itemRows)
 
   const spendWeek = n(thisWeek.wages) + n(thisWeek.material) + n(thisWeek.other)
   const spendPrev = n(prevWeek.wages) + n(prevWeek.material) + n(prevWeek.other)
@@ -284,10 +321,10 @@ export async function buildSummary(db, hid) {
     generated_at: new Date().toISOString(),
     period: {
       unit: 'week',
-      from: isoDaysAgo(6),
-      to: isoDaysAgo(0),
-      prev_from: isoDaysAgo(13),
-      prev_to: isoDaysAgo(7),
+      from: istDate(6),
+      to: TODAY,
+      prev_from: istDate(13),
+      prev_to: istDate(7),
     },
     business: {
       cash_counted: counted,
@@ -301,7 +338,7 @@ export async function buildSummary(db, hid) {
       receivable_total: round(owed.total),
       receivable_overdue: round(owed.overdue),
       receivable_this_week: round(owed.week),
-      shop_stock_value: round(stock.value),
+      shop_stock_value: round(stockValue),
       // "this week" on a spend means the last seven days.
       spend_this_week: round(spendWeek),
       wages_this_week: round(thisWeek.wages),
@@ -317,6 +354,9 @@ export async function buildSummary(db, hid) {
       days_entered_this_week: n(activity.days_week),
       days_entered_prev_week: n(activity.days_prev),
       last_entry_date: activity.last_date || null,
+      // How long he has been quiet, worked out here so nobody downstream has to
+      // subtract two dates — a model quoting this is quoting a figure, not doing sums.
+      days_since_last_entry: activity.last_date ? daysBetween(activity.last_date, TODAY) : null,
       active_projects: n(activity.active),
       workers_active: n(activity.men),
     },
@@ -341,7 +381,7 @@ export async function buildSummary(db, hid) {
     },
     /* Dates he has set for himself. Overdue first, because a missed rent day
        is the one thing on this page that costs him a relationship. */
-    bills: billList(billRows),
+    bills: billList(billRows, TODAY, IN_WEEK),
     /* His own book, kept apart from the business exactly as the app keeps it.
        Drawings are a transfer out of the business, not a household expense,
        so they are reported separately and never added to `spent`. */
@@ -372,9 +412,7 @@ export async function buildSummary(db, hid) {
 }
 
 /** Bills he has written down, split into the two books and the three urgencies. */
-function billList(rows) {
-  const today = new Date().toISOString().slice(0, 10)
-  const week = new Date(Date.now() + 7 * 86400000).toISOString().slice(0, 10)
+function billList(rows, today, week) {
   const shape = (r) => ({
     name_bn: r.name_bn, to_bn: r.to_bn || null, amount: round(r.amount),
     due_date: r.due_date, repeat: r.repeat || 'once',
@@ -406,8 +444,7 @@ async function periodTotals(db, hid, where) {
         WHERE household_id = ?1 AND ${where} AND dir = 'received' AND personal = 0) AS received`, hid)
 }
 
-const isoDaysAgo = (d) => new Date(Date.now() - d * 86400000).toISOString().slice(0, 10)
-const daysBetween = (from) => Math.max(0, Math.round((Date.now() - Date.parse(from + 'T00:00:00Z')) / 86400000))
+const daysBetween = (from, today) => Math.max(0, Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 86400000))
 
 /** Stage weights, with reversed rows cancelled. Half counts half. */
 function stagePercent(project, stages, progress) {

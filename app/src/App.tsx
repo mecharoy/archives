@@ -10,6 +10,7 @@ import { Estimator } from './screens/Estimator'
 import { Settings, ProjectsPage, WorkersPage, ItemsPage, PartiesPage, StagesPage, CashPage } from './screens/Settings'
 import { History } from './screens/History'
 import { Payments } from './screens/Payments'
+import { Enquiries } from './screens/Enquiries'
 import { Onboarding } from './screens/Onboarding'
 import { Tour, type Stop } from './ui/Tour'
 import { goBack } from './lib/back'
@@ -29,7 +30,7 @@ import type { Draft } from './lib/draft'
 export type Screen =
   | 'home' | 'day' | 'work' | 'money' | 'all'
   | 'shop' | 'personal' | 'estimate' | 'settings' | 'history' | 'payments'
-  | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash'
+  | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'enquiries'
 
 /* Five stops, in the order he will use them. Kept short on purpose: a tour
    he skips teaches nothing, and the app is meant to be obvious without one. */
@@ -210,6 +211,7 @@ export function App() {
       {screen === 'parties' && <PartiesPage s={state} onBack={back} />}
       {screen === 'stages' && <StagesPage s={state} onBack={back} />}
       {screen === 'cash' && <CashPage s={state} onBack={back} />}
+      {screen === 'enquiries' && <Enquiries onBack={back} />}
       {/* Only once, only on the home screen, and only after setup — a tour
           that opens over a half-finished form is worse than none. */}
       {screen === 'home' && showTour && (

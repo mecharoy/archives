@@ -33,6 +33,7 @@ export function parseBrief(raw: unknown): Brief | null {
   const actual = numbers(sc.actual)
   return {
     generated_at,
+    by: o.by === 'rule' ? 'rule' : o.by === 'model' ? 'model' : undefined,
     headline_bn: str(o.headline_bn),
     headline_en: str(o.headline_en),
     cards: arr(o.cards).slice(0, 6).map((c) => {
@@ -77,6 +78,19 @@ export function briefIsStale(b: Brief | null): boolean {
   return briefAgeHours(b) > STALE_HOURS
 }
 
+/** Which of two briefs should the phone keep? One with a model's words beats
+    a computed-only one while that one is fresh; otherwise the newer wins. So a
+    dead key or a night offline can never replace a good brief with a bare one,
+    and a brief that is merely older can never replace one written tonight. */
+export function shouldReplace(existing: Brief | null, incoming: Brief): boolean {
+  if (!existing) return true
+  const hadWords = existing.by !== 'rule'
+  const hasWords = incoming.by !== 'rule'
+  if (hasWords && !hadWords) return true
+  if (!hasWords && hadWords) return briefIsStale(existing)
+  return Date.parse(incoming.generated_at) >= Date.parse(existing.generated_at)
+}
+
 export async function fetchBrief(silent = true): Promise<string> {
   const s = getState()
   // Served beside the data it describes; an explicit URL is only an override.
@@ -94,6 +108,8 @@ export async function fetchBrief(silent = true): Promise<string> {
     if (!res.ok) return tf('ব্রিফ পাওয়া গেল না ({0})', res.status)
     const parsed = parseBrief(await res.json())
     if (!parsed) return t('ব্রিফের ফাইলটা ঠিক নেই')
+    // Never let an older or emptier file replace what the phone already holds.
+    if (!shouldReplace(getState().brief, parsed)) return ''
     const at = new Date().toISOString()
     await kvSet('brief', parsed)
     await kvSet('brief_fetched_at', at)

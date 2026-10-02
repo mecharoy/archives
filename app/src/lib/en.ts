@@ -844,4 +844,47 @@ export const EN: Record<string, string> = {
   'নজর দিন': 'Watch this',
   'খবর': 'Note',
   'আজ যা করবেন': 'To do today',
+
+  /* ---- the website link ---- */
+  'ওয়েবসাইটের অনুসন্ধান': 'Website enquiries',
+  'যাঁরা সাইটে লিখেছেন, ফোন নম্বর সহ': 'People who wrote on the site, with their number',
+  'ওয়েবসাইটে {0} জন লিখেছেন': '{0} wrote on the website',
+  'ফোন নম্বর সহ — ফোন করুন': 'With a number — give them a call',
+  'এখনও ওয়েবসাইট থেকে কেউ লেখেনি।': 'Nobody has written from the website yet.',
+  'কেউ লিখলে এখানে ফোন নম্বর সহ দেখা যাবে — অ্যাপ খোলা থাকলে।': 'When someone writes, they show up here with their number — whenever the app is open.',
+  'যা চান: {0}': 'Wants: {0}',
+  'এলাকা: {0}': 'Area: {0}',
+  'ফোন করুন': 'Call',
+  'হোয়াটসঅ্যাপ': 'WhatsApp',
+  'সার্ভারে এখনও এই সুবিধা নেই': 'The server does not have this yet',
+  'ওয়েবসাইটে দেখাবে?': 'Show on the website?',
+  'ওয়েবসাইটে শুধু নাম আর "আছে / নেই" দেখায় — কত আছে বা কত দাম, কিছুই না।': 'The website shows only the name and "in stock / out of stock" — never how many, never the price.',
+
+  /* ---- the AI key ---- */
+  'এআই কী': 'AI key',
+  'এআই কী (রাতের হিসাব)': 'AI key (nightly brief)',
+  'বসানো আছে': 'Entered',
+  'বসানো নেই': 'Not entered',
+  'গুগল এআই কী': 'Google AI key',
+  'দেখান': 'Show',
+  'লুকান': 'Hide',
+  'বিনামূল্যে নতুন কী:': 'Free new key:',
+  'কী সেভ হয়েছে': 'Key saved',
+  'কী মুছে দিন': 'Remove key',
+  'কী মুছে ফেলা হয়েছে': 'Key removed',
+  'কী ঠিক আছে — গুগল নিচ্ছে': 'Key works — Google accepted it',
+  'সবশেষ চেষ্টা': 'Last try',
+  'এখনও হয়নি': 'Not yet',
+  '{0} দিয়ে লেখা হয়েছে': 'Written by {0}',
+  'রাতের হিসাবের কথাগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।':
+    "The phone has Google's free AI write the sentences in the nightly brief. Every number is the phone's own — the AI only writes sentences. Names never go to Google; short labels like [J1] and [W1] go instead.",
+  'কী-টা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।':
+    'The key stays on this phone only. It is never sent to the online ledger, put in a backup, or built into the app.',
+  'এখনও কোনো কী বসানো হয়নি': 'No key has been entered yet',
+  'গুগল এই কী নিচ্ছে না — ভুল, মেয়াদ শেষ, বা বাতিল হয়ে গেছে। aistudio.google.com/apikey থেকে নতুন কী নিন।':
+    'Google is not accepting this key — it is wrong, expired or cancelled. Make a new one at aistudio.google.com/apikey.',
+  'আজকের বিনামূল্যের সীমা শেষ — কাল আবার চলবে।': "Today's free limit is used up — it will work again tomorrow.",
+  'গুগলের সার্ভার এখন ব্যস্ত — একটু পরে আবার চেষ্টা হবে।': 'Google is busy right now — it will try again shortly.',
+  'গুগল এই হিসাব লিখতে রাজি হয়নি।': 'Google declined to write this brief.',
+  'এআই ঠিকমতো লিখতে পারেনি — একটু পরে আবার চেষ্টা হবে।': 'The AI could not write it properly — it will try again shortly.',
 }

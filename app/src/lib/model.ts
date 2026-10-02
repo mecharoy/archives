@@ -39,6 +39,8 @@ export interface Item extends Master {
   unit_bn: string
   last_rate: number | null
   active: boolean
+  /* Kept off the public website's list of what is in stock. Absent means shown. */
+  web_hidden?: boolean
 }
 
 export interface Party extends Master {
@@ -75,7 +77,7 @@ export interface Bill extends Master {
   to_bn: string          // who it goes to
   amount: number
   due_date: string       // YYYY-MM-DD
-  repeat: 'once' | 'monthly'
+  repeat: 'once' | 'monthly' | `monthly@${number}`   // monthly@31: the 31st, kept through a short month
   personal: boolean      // his own book, or the business
   paid_on: string        // '' while it is still owed
   note: string
@@ -174,7 +176,8 @@ export const PAY_MODES = ['নগদ', 'ব্যাংক', 'UPI', 'চেক']
 export const SHEET_COLUMNS: Record<string, string[]> = {
   Projects: ['id', 'name_bn', 'client_bn', 'ptype', 'area_sqft', 'budget', 'start_date', 'plan_days', 'status', 'updated_at'],
   Workers: ['id', 'name_bn', 'rate', 'phone', 'active', 'updated_at'],
-  Items: ['id', 'name_bn', 'unit_bn', 'last_rate', 'active', 'updated_at'],
+  // web_hidden is LAST: older phones send six values by position, and the server pads the rest.
+  Items: ['id', 'name_bn', 'unit_bn', 'last_rate', 'active', 'updated_at', 'web_hidden'],
   Parties: ['id', 'name_bn', 'ptype', 'terms_days', 'phone', 'updated_at'],
   Stages: ['id', 'project_type', 'seq', 'name_bn', 'weight', 'updated_at'],
   Coefficients: ['id', 'project_type', 'item_id', 'per_sqft', 'updated_at'],
@@ -211,6 +214,11 @@ export function rowForEntry(e: Entry): SheetRow {
 
 export function rowForMaster(m: AnyMaster): SheetRow {
   const tab = TAB_FOR_MASTER[m.kind]
-  const rec = m as unknown as Record<string, unknown>
+  const rec = { ...m } as unknown as Record<string, unknown>
+  /* Deleting a job takes it off every list on the phone, and the screen promises
+     it stops counting on the dashboard too. The sheet has no "deleted" column,
+     so the job goes up marked as such in the one column that can say it; the
+     server leaves it out of every figure and a restore keeps it hidden. */
+  if (m.deleted && m.kind === 'project') rec.status = 'deleted'
   return { tab, mode: 'upsert', values: SHEET_COLUMNS[tab].map((c) => cell(rec[c])) }
 }

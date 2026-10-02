@@ -7,6 +7,7 @@ import { MONEY_HEADS_PERSONAL, PAY_MODES, type Bill, type MoneyEntry } from '../
 import { rankHeads, amountChips } from '../lib/suggest'
 import { DRAWING_HEAD, liveEntries } from '../lib/calc'
 import { openBills, billTotals, blankBill, payBill, daysAway, isOverdue } from '../lib/bills'
+import { isMonthly } from '../lib/monthly'
 import { hashPin, checkPin } from '../lib/pin'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
@@ -189,11 +190,13 @@ function BillSheet({ bill, onClose, onSaved }: {
       </Field>
       <Field label="কত টাকা"><NumField value={b.amount} onChange={(v) => set({ amount: v ?? 0 })} /></Field>
       <Field label="কোন তারিখে">
-        <input className="input" type="date" value={b.due_date} onChange={(e) => set({ due_date: e.target.value })} />
+        {/* Moving the date starts the "day he means" again from the new date. */}
+        <input className="input" type="date" value={b.due_date}
+          onChange={(e) => set({ due_date: e.target.value, ...(isMonthly(b.repeat) ? { repeat: 'monthly' as const } : {}) })} />
       </Field>
       <div className="chips" style={{ margin: '-.5rem 0 .9rem' }}>
         {[0, 1, 7, 30].map((d) => (
-          <Chip key={d} on={b.due_date === addDays(isoDate(), d)} onClick={() => set({ due_date: addDays(isoDate(), d) })}>
+          <Chip key={d} on={b.due_date === addDays(isoDate(), d)} onClick={() => set({ due_date: addDays(isoDate(), d), ...(isMonthly(b.repeat) ? { repeat: 'monthly' as const } : {}) })}>
             {d === 0 ? t('আজ') : d === 1 ? t('কাল') : tf('{0} দিন পরে', toBn(d))}
           </Chip>
         ))}
@@ -201,7 +204,7 @@ function BillSheet({ bill, onClose, onSaved }: {
       <Field label="কতবার">
         <div className="chips">
           <Chip on={b.repeat === 'once'} onClick={() => set({ repeat: 'once' })}>{t('একবারই')}</Chip>
-          <Chip on={b.repeat === 'monthly'} onClick={() => set({ repeat: 'monthly' })} sub={t('প্রতি মাসে এই তারিখে')}>{t('প্রতি মাসে')}</Chip>
+          <Chip on={isMonthly(b.repeat)} onClick={() => set({ repeat: isMonthly(b.repeat) ? b.repeat : 'monthly' })} sub={t('প্রতি মাসে এই তারিখে')}>{t('প্রতি মাসে')}</Chip>
         </div>
       </Field>
       <button className="btn primary" disabled={!ok} style={{ marginTop: '.4rem', width: '100%' }} onClick={save}>

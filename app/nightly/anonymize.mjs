@@ -52,9 +52,31 @@ export function anonymize(payload) {
   return { payload: p, real }
 }
 
+/* A small model told to write "[W1]" will sometimes write "[W১]" (Bengali
+   digit), "[ W 1 ]", "［W1］" (full-width brackets) or "[w1]". All of those are
+   plainly the same label, so they are put back into the one canonical form
+   before anything else looks at the text. */
+const LOOSE = /[\[［]\s*([JCWSPjcwsp])\s*([0-9০-৯]{1,3})\s*[\]］]/g
+const BN_DIGIT = '০১২৩৪৫৬৭৮৯'
+const toAscii = (d) => String(BN_DIGIT.indexOf(d) >= 0 ? BN_DIGIT.indexOf(d) : d)
+
+/** Rewrite every label-shaped token in a value into canonical "[W1]" form. */
+export function normalizeLabels(value) {
+  if (typeof value === 'string') {
+    return value.replace(LOOSE, (_, kind, digits) => `[${kind.toUpperCase()}${[...digits].map(toAscii).join('')}]`)
+  }
+  if (Array.isArray(value)) return value.map(normalizeLabels)
+  if (value && typeof value === 'object') {
+    const out = {}
+    for (const k of Object.keys(value)) out[k] = normalizeLabels(value[k])
+    return out
+  }
+  return value
+}
+
 /** Put the real names back into every string the model wrote. */
 export function restoreNames(value, real) {
-  if (typeof value === 'string') return value.replace(LABEL, (m) => real.get(m) ?? m)
+  if (typeof value === 'string') return normalizeLabels(value).replace(LABEL, (m) => real.get(m) ?? m)
   if (Array.isArray(value)) return value.map((v) => restoreNames(v, real))
   if (value && typeof value === 'object') {
     const out = {}

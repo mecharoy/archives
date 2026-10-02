@@ -7,10 +7,12 @@ const worse = (a, c) => (c && (RANK[c] || 0) > (RANK[a] || 0) ? c : a)
 /**
  * @param base   skeleton(summary) from compute.mjs
  * @param words  check(...) output, with `headline` filled (model or plainHeadline)
+ * @param by     'model' when the model's words were used, 'rule' for a computed-only brief
  */
-export function assemble(base, words, generatedAt) {
+export function assemble(base, words, generatedAt, by) {
   return {
     generated_at: generatedAt,
+    ...(by ? { by } : {}),
     headline_bn: words.headline.bn,
     headline_en: words.headline.en,
     cards: base.cards,

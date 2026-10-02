@@ -3,14 +3,15 @@ import { Icon } from '../ui/kit'
 import { useStore, activeProjects, workers, stages, type State, type Brief } from '../lib/store'
 import { money, toBn, isoDate, agoBn, dayLabelBn, addDays } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
-import { hasAiKey, maybeMakeBrief } from '../lib/aiBrief'
+import { maybeMakeBrief } from '../lib/aiBrief'
 import { statusWord } from '../lib/i18n'
 import { cashState, projectTotals, entriesInLastDays, lastEntryDate, shopStock, duesSplit, receivablesSplit } from '../lib/calc'
 import { lastAttendance, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
 import { allItems } from '../lib/store'
 import { flush } from '../lib/sync'
-import { t, pick } from '../lib/i18n'
+import { t, tf, pick } from '../lib/i18n'
+import { fetchEnquiries } from '../lib/enquiries'
 import { UpdateCard, UpdateModal } from '../ui/UpdateCard'
 import type { Screen } from '../App'
 
@@ -31,19 +32,31 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
   const s = useStore((x) => x)
   const [refreshing, setRefreshing] = useState(false)
 
-  // With a Gemini key built in, the phone writes its own brief once a day
-  // (see aiBrief.ts) and checks again whenever the app comes back to the
-  // front. Without one, the brief comes from the server as before.
+  // The server's brief (written by the PC job) is always looked at; it only
+  // replaces what the phone holds when it is newer and has words. With a key
+  // in Settings the phone also writes its own once a day (see aiBrief.ts) and
+  // checks again whenever the app comes back to the front. Typing a key in
+  // Settings starts it at once, because this effect depends on the key.
+  const hasKey = !!s.settings.ai_key.trim()
+
+  /* Questions from the public website. Looked for whenever the app is opened
+     or comes back to the front; there is no push, so this is how he finds out. */
   useEffect(() => {
-    if (!hasAiKey()) {
-      if (s.settings.briefUrl || s.settings.endpoint) void fetchBrief()
-      return
-    }
+    void fetchEnquiries()
+    const onShow = () => { if (!document.hidden) void fetchEnquiries() }
+    document.addEventListener('visibilitychange', onShow)
+    return () => document.removeEventListener('visibilitychange', onShow)
+  }, [])
+  const newEnquiries = s.enquiries.filter((e) => !s.enquiries_seen.includes(e.id)).length
+
+  useEffect(() => {
+    if (s.settings.briefUrl || s.settings.endpoint) void fetchBrief()
+    if (!hasKey) return
     void maybeMakeBrief()
     const onShow = () => { if (!document.hidden) void maybeMakeBrief() }
     document.addEventListener('visibilitychange', onShow)
     return () => document.removeEventListener('visibilitychange', onShow)
-  }, []) // eslint-disable-line
+  }, [hasKey]) // eslint-disable-line
 
   const stale = briefIsStale(s.brief)
   const brief: Brief = useMemo(() => (s.brief && !stale ? s.brief : localBrief()), [s.brief, stale, s.entries, s.masters])
@@ -56,7 +69,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
 
   const refresh = async () => {
     setRefreshing(true)
-    await Promise.all([hasAiKey() ? maybeMakeBrief() : fetchBrief(false), flush(true)])
+    await Promise.all([fetchBrief(true), fetchEnquiries(), hasKey ? maybeMakeBrief() : Promise.resolve(), flush(true)])
     setRefreshing(false)
   }
 
@@ -102,6 +115,19 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           <button className="btn quiet" style={{ width: '100%', marginTop: '.6rem', minHeight: '3.4rem' }}
             onClick={() => onSameAsYesterday(sameDraft)}>
             {t('কালকের মতোই')} · {toBn(Object.keys(sameDraft.att).length)} {t('জন')}, {money(Object.values(sameDraft.att).reduce((a, x) => a + x.amount, 0))}
+          </button>
+        )}
+
+        {/* Only drawn when someone has written from the website and he has not
+            looked yet — a customer waiting for a call is worth a line here. */}
+        {newEnquiries > 0 && (
+          <button className="bigbtn" style={{ marginTop: '.6rem' }} onClick={() => onGo('enquiries')}>
+            <Icon name="phone" size={26} stroke={1.7} />
+            <span style={{ flex: 1 }}>
+              <span className="t" style={{ display: 'block' }}>{tf('ওয়েবসাইটে {0} জন লিখেছেন', toBn(newEnquiries))}</span>
+              <span className="s">{t('ফোন নম্বর সহ — ফোন করুন')}</span>
+            </span>
+            <Icon name="fwd" size={22} />
           </button>
         )}
 

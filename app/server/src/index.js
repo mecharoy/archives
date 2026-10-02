@@ -14,9 +14,10 @@
 import { COLUMNS, APPEND_TABS } from './columns.js'
 import { buildSummary } from './summary.js'
 import { dashboardHtml } from './dashboard.js'
+import { publicInventory } from './inventory.js'
 
 const TABLE_OF = Object.fromEntries(Object.keys(COLUMNS).map((t) => [t, t.toLowerCase()]))
-const BOOL_COLS = new Set(['paid', 'personal', 'active'])
+const BOOL_COLS = new Set(['paid', 'personal', 'active', 'web_hidden'])
 const MAX_ROWS = 200
 const MAX_BODY = 1_000_000
 
@@ -49,6 +50,12 @@ async function route(request, env, url, path) {
   if (path === '/brief.json' && m === 'GET') return getBrief(request, env, url)
   if (path === '/wipe' && m === 'POST') return wipe(request, env)
 
+  // --- the public website: its own scoped token, see isSite ---
+  if (path === '/public/inventory' && m === 'GET') return inventory(request, env)
+  if (path === '/enquiries' && m === 'POST') return postEnquiry(request, env)
+  // --- and the phone reads what the website sent ---
+  if (path === '/enquiries' && m === 'GET') return listEnquiries(request, env, url)
+
   // --- you ---
   if (path === '/brief' && (m === 'PUT' || m === 'POST')) return putBrief(request, env, url)
   if (path === '/export.csv' && m === 'GET') return exportCsv(request, env, url)
@@ -77,6 +84,24 @@ function bearer(request) {
 
 function isAdmin(request, env) {
   return sameToken(bearer(request), env.ADMIN_TOKEN || '')
+}
+
+/** The website's token. It can read the public inventory and post an enquiry,
+    and nothing else — it is not the device token and not the admin token, and
+    it lives only in the site's own server environment. With no SITE_TOKEN set
+    the website routes are simply off. */
+function isSite(request, env) {
+  return sameToken(bearer(request), env.SITE_TOKEN || '')
+}
+
+/** The household the website speaks for: named in SITE_HOUSEHOLD, or the only one there is. */
+async function siteHousehold(env) {
+  if (env.SITE_HOUSEHOLD) {
+    return (await env.DB.prepare('SELECT id, name FROM households WHERE id = ?1').bind(env.SITE_HOUSEHOLD).first()) || null
+  }
+  const res = await env.DB.prepare('SELECT id, name FROM households ORDER BY created_at LIMIT 2').all()
+  const rows = res.results || []
+  return rows.length === 1 ? rows[0] : null
 }
 
 /** A device token resolves to exactly one household and nothing else. */
@@ -192,6 +217,75 @@ async function summary(request, env, url) {
   return json({ ok: true, household: who.household.name, ...data })
 }
 
+/* ------------------------------------------------------------ the website */
+
+/** What is in stock, for the public site — names and yes/no, nothing more.
+    The shape is decided in inventory.js; this only fetches the rows. */
+async function inventory(request, env) {
+  if (!isSite(request, env)) return json({ ok: false, error: 'site token required' }, 401)
+  const hh = await siteHousehold(env)
+  if (!hh) return json({ ok: false, error: 'no household' }, 404)
+
+  const [stock, items, last] = await Promise.all([
+    env.DB.prepare(`SELECT id, item_id, project_id, dir, qty, rate, date, created_at, reverses
+                    FROM stock WHERE household_id = ?1 AND dir IN ('in','sale','transfer','count')`).bind(hh.id).all(),
+    env.DB.prepare('SELECT id, name_bn, active, web_hidden FROM items WHERE household_id = ?1').bind(hh.id).all(),
+    env.DB.prepare(`SELECT MAX(t) AS t FROM (
+                      SELECT MAX(received_at) AS t FROM stock WHERE household_id = ?1
+                      UNION ALL SELECT MAX(received_at) FROM items WHERE household_id = ?1)`).bind(hh.id).first(),
+  ])
+  const list = publicInventory(stock.results || [], items.results || [])
+  return json({
+    ok: true,
+    // When the phone last told the server anything about stock — the site says so,
+    // because a list is only as fresh as the last time the phone had signal.
+    updated_at: (last && last.t) || null,
+    items: list,
+  })
+}
+
+const PHONE_RE = /^[0-9+\-\s()]{6,20}$/
+const clamp = (v, max) => String(v == null ? '' : v).trim().slice(0, max)
+
+/** A question or call-back request from the website. */
+async function postEnquiry(request, env) {
+  if (!isSite(request, env)) return json({ ok: false, error: 'site token required' }, 401)
+  const text = await request.text()
+  if (text.length > 16_000) return json({ ok: false, error: 'too large' }, 413)
+  let b
+  try { b = JSON.parse(text) } catch { return json({ ok: false, error: 'bad json' }, 400) }
+  if (!b || typeof b !== 'object') return json({ ok: false, error: 'bad json' }, 400)
+
+  const name = clamp(b.name, 120)
+  const phone = clamp(b.phone, 20)
+  if (!name) return json({ ok: false, error: 'name required' }, 400)
+  if (!PHONE_RE.test(phone)) return json({ ok: false, error: 'phone looks wrong' }, 400)
+
+  const hh = await siteHousehold(env)
+  if (!hh) return json({ ok: false, error: 'no household' }, 404)
+
+  // The site names the enquiry, so a retry after a timeout cannot post it twice.
+  const given = clamp(b.id, 64)
+  const id = /^[A-Za-z0-9_-]{8,64}$/.test(given) ? given : 'q_' + hex(10)
+  await env.DB.prepare(
+    `INSERT OR IGNORE INTO enquiries (household_id, id, received_at, name, phone, email, location, service, message, locale)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)`
+  ).bind(hh.id, id, new Date().toISOString(), name, phone, clamp(b.email, 160), clamp(b.location, 160),
+    clamp(b.service, 80), clamp(b.message, 4000), clamp(b.locale, 5)).run()
+  return json({ ok: true, id })
+}
+
+/** What the website sent, newest first, for the phone. */
+async function listEnquiries(request, env, url) {
+  const who = await readerFor(request, env, url)
+  if (who.error) return json({ ok: false, error: who.error }, 401)
+  const res = await env.DB.prepare(
+    `SELECT id, received_at, name, phone, email, location, service, message, locale
+     FROM enquiries WHERE household_id = ?1 ORDER BY received_at DESC LIMIT 200`
+  ).bind(who.household.id).all()
+  return json({ ok: true, enquiries: res.results || [] })
+}
+
 /* --------------------------------------------------------------- brief */
 
 async function getBrief(request, env, url) {
@@ -250,6 +344,7 @@ async function wipe(request, env) {
     deleted += res.meta?.changes || 0
   }
   await env.DB.prepare('DELETE FROM briefs WHERE household_id = ?1').bind(household.id).run()
+  await env.DB.prepare('DELETE FROM enquiries WHERE household_id = ?1').bind(household.id).run()
   return json({ ok: true, household: household.name, deleted })
 }
 

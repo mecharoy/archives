@@ -10,13 +10,15 @@ import { SHEET_COLUMNS, type AnyMaster, type Entry } from './model'
 import { apiUrl, getState, boot } from './store'
 import { t, tf } from './i18n'
 
+/* Bills were missing from both of these, so a restored phone came back without
+   the dates he had written down for himself — rent, fees, promises. */
 const KIND_OF_TAB: Record<string, string> = {
   Projects: 'project', Workers: 'worker', Items: 'item', Parties: 'party',
-  Stages: 'stage', Coefficients: 'coeff',
+  Stages: 'stage', Coefficients: 'coeff', Bills: 'bill',
   Day: 'day', Attendance: 'attendance', Stock: 'stock', Money: 'money', Progress: 'progress',
 }
-const MASTER_TABS = new Set(['Projects', 'Workers', 'Items', 'Parties', 'Stages', 'Coefficients'])
-const BOOLS = new Set(['paid', 'personal', 'active'])
+const MASTER_TABS = new Set(['Projects', 'Workers', 'Items', 'Parties', 'Stages', 'Coefficients', 'Bills'])
+const BOOLS = new Set(['paid', 'personal', 'active', 'web_hidden'])
 const NUMBERS = new Set([
   'amount', 'qty', 'rate', 'days', 'advance', 'weight', 'per_sqft', 'budget',
   'area_sqft', 'plan_days', 'seq', 'stage_seq', 'pct', 'terms_days', 'last_rate',
@@ -49,17 +51,13 @@ export async function restoreFromServer(): Promise<RestoreResult> {
   const entries: Entry[] = []
 
   for (const [tab, rows] of Object.entries(data.tables)) {
-    const cols = SHEET_COLUMNS[tab]
-    const kind = KIND_OF_TAB[tab]
-    if (!cols || !kind || !Array.isArray(rows)) continue
-    const isMaster = MASTER_TABS.has(tab)
+    if (!Array.isArray(rows)) continue
 
     for (const values of rows) {
-      if (!Array.isArray(values)) continue
-      const rec: Record<string, unknown> = { kind }
-      cols.forEach((c, i) => { rec[c] = decode(c, values[i]) })
+      const got = recordFromRow(tab, values)
+      if (!got) continue
+      const { rec, isMaster } = got
       const id = String(rec.id || '')
-      if (!id) continue
 
       if (isMaster) {
         if (haveMasters.has(id)) continue
@@ -77,6 +75,20 @@ export async function restoreFromServer(): Promise<RestoreResult> {
   await dbPutMany('entries', entries)
   await boot()
   return { masters: masters.length, entries: entries.length, error: '' }
+}
+
+/** One row from the server, back into the shape the app keeps. Null for a row
+    that cannot be used (unknown tab, no id). Pure, so it can be tested. */
+export function recordFromRow(tab: string, values: unknown): { rec: Record<string, unknown>; isMaster: boolean } | null {
+  const cols = SHEET_COLUMNS[tab]
+  const kind = KIND_OF_TAB[tab]
+  if (!cols || !kind || !Array.isArray(values)) return null
+  const rec: Record<string, unknown> = { kind }
+  cols.forEach((c, i) => { rec[c] = decode(c, values[i]) })
+  if (!String(rec.id || '')) return null
+  // A job he deleted came up marked so; keep it hidden rather than resurrecting it.
+  if (kind === 'project' && rec.status === 'deleted') { rec.deleted = true; rec.status = 'done' }
+  return { rec, isMaster: MASTER_TABS.has(tab) }
 }
 
 function decode(col: string, v: unknown): unknown {

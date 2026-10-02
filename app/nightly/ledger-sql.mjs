@@ -12,7 +12,7 @@
 
 import { COLUMNS, APPEND_TABS } from '../server/src/columns.js'
 
-const BOOL_COLS = new Set(['paid', 'personal', 'active'])
+const BOOL_COLS = new Set(['paid', 'personal', 'active', 'web_hidden'])
 const TABLE_OF = Object.fromEntries(Object.keys(COLUMNS).map((t) => [t, t.toLowerCase()]))
 
 /** Same coercion as the Worker's `coerce`, so both sides store the same thing. */
@@ -59,8 +59,10 @@ export function openLedger(SQL, schemaSql, rows, hid = 'phone') {
   return { db: d1(raw), close: () => raw.close(), loaded, skipped }
 }
 
-/** Just enough of D1 for summary.js: prepare(sql).bind(...args).first() / .all(). */
-function d1(raw) {
+/** Just enough of D1 for summary.js and the Worker's own routes:
+    prepare(sql).bind(...args).first() / .all() / .run(), and batch([...]).
+    Exported so the tests can run the Worker's real fetch handler against it. */
+export function d1(raw) {
   const run = (sql, args) => {
     const stmt = raw.prepare(sql)
     try {
@@ -79,8 +81,15 @@ function d1(raw) {
         bind(...a) { args = a; return q },
         async first() { return run(sql, args)[0] || null },
         async all() { return { results: run(sql, args) } },
+        async run() { run(sql, args); return { meta: { changes: raw.getRowsModified() } } },
       }
       return q
+    },
+    // D1 runs a batch as one transaction; so does this.
+    async batch(stmts) {
+      raw.exec('BEGIN')
+      try { for (const s of stmts) await s.run(); raw.exec('COMMIT') } catch (e) { raw.exec('ROLLBACK'); throw e }
+      return []
     },
   }
 }

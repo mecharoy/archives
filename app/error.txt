@@ -130,3 +130,87 @@ Location: app/scripts/release.mjs
 Action: second attempt at releasing build 23.
 Cause: trash/ is git-ignored, so a fresh clone has no trash/ folder and renameSync cannot create it.
 Fix: mkdirSync(trash, { recursive: true }) before moving the previous APK aside.
+
+2026-10-01
+Problem: a python/bash heredoc patch for Settings.tsx aborted ("here-document delimited by end-of-file", then a Python SyntaxError) and applied nothing.
+Location: app/src/screens/Settings.tsx, src/screens/Home.tsx (adding the AI key page)
+Action: splicing a large Bengali block in with a shell heredoc.
+Cause: the Git Bash wrapper mangles heredocs that contain Bengali plus apostrophes/backslashes. Same cause as the 2026-08-28 entries; I repeated it.
+Fix: use the Edit tool (files are LF) for any change containing Bengali; keep shell heredocs to short ASCII-only patches.
+
+2026-10-01
+Problem: a probe script crashed with "SyntaxError: missing ) after argument list" on a line containing a regex /\/g.
+Location: a scratch script that bundled src/lib/calc.ts with vite
+Action: writing the audit harness prototype through a heredoc.
+Cause: the shell wrapper halved the backslashes inside the heredoc, so /\/g arrived as /\/g.
+Fix: write scripts with the Write tool; use pathToFileURL() instead of hand-escaping Windows paths.
+
+2026-10-01
+Problem: a node patch script reported MISS on a one-line string that was visibly present in model.ts.
+Location: app/src/lib/model.ts (Bill.repeat type)
+Action: patching several files in one node heredoc.
+Cause: not determined; the identical text matched through the Edit tool a minute later. The heredoc path is unreliable for exact-match splicing here.
+Fix: use the Edit tool for exact-match edits.
+
+2026-10-01
+Problem: (audit) cash in hand on the phone dropped whenever goods were sent from the shop to a site, and rose when they came back, so the cash-variance alert fired falsely.
+Location: app/src/lib/calc.ts cashState
+Action: cross-checking calc.ts against hand-computed figures in scripts/audit-check.mjs.
+Cause: a transfer is stored paid=true and was treated like a cash purchase.
+Fix: only dir 'in' moves cash. Transfers and returns are internal.
+
+2026-10-01
+Problem: (audit) the server's "stock in the shop" figure was minus the sales total, whatever was bought.
+Location: server/src/summary.js (shop_stock_value)
+Action: same audit.
+Cause: the SQL tested project_id = '', but the Worker stores an empty project as NULL, so no shop purchase ever matched. It also valued sales at the selling price and ignored physical counts.
+Fix: value the shelf in JavaScript (server/src/stock.js), the same rule as calc.ts shopStock; audit-check holds the two equal.
+
+2026-10-01
+Problem: (audit) a cancelled purchase still showed as owed, a cancelled cash count still counted as the last count, and a cancelled day still counted as a day written.
+Location: server/src/summary.js
+Action: same audit.
+Cause: a reversal is a mirror row pointing at the original; sums net out but "latest" and "owed" queries must leave both halves out, and the SQL did not.
+Fix: LIVE() filter on the dues, last-count and days-written queries.
+
+2026-10-01
+Problem: (audit) between midnight and 05:30 IST the server was a day behind: overdue bills, supplier dates and the week window were all wrong.
+Location: server/src/summary.js, nightly/compute.mjs (daysSince)
+Action: same audit, with the clock frozen at 01:30 IST.
+Cause: SQLite 'localtime' and Date().toISOString() are UTC on a Cloudflare Worker.
+Fix: every window is now an explicit Kolkata YYYY-MM-DD literal (istDate()), independent of the machine's zone; audit-check re-runs it under TZ=UTC.
+
+2026-10-01
+Problem: (audit) of two physical counts on one day, the winner depended on the (random) order the phone returned rows in.
+Location: app/src/lib/calc.ts shopStock
+Action: same audit.
+Cause: the loop kept whichever count it saw last; IndexedDB returns rows in random id order.
+Fix: sort stock rows by date, created_at, id before choosing "the latest".
+
+2026-10-01
+Problem: (audit) a rent bill due on the 31st slid to the 28th for ever after February.
+Location: app/src/lib/bills.ts nextMonth
+Action: same audit.
+Cause: next month was computed from the already pulled-back date.
+Fix: src/lib/monthly.ts keeps the day he means as repeat = 'monthly@31'.
+
+2026-10-01
+Problem: (audit) the "nothing written in three days" card, the loudest card, was cut off by the six-card limit when other cards were present; and "-0.4" printed as "₹-0"; and a job at CPI 0.95 was red instead of amber.
+Location: nightly/compute.mjs cards, groupIndian, projectStatus
+Action: same audit.
+Cause: the silence card was added last; groupIndian tested the sign before rounding; projectStatus had a dead branch (cpi < 0.9 and cpi < 1 both returned crit).
+Fix: silence card first and the quiet cards are cut instead; round before the sign test; cpi < 1 is amber.
+
+2026-10-01
+Problem: three `wrangler dev` trees were left running on port 8799, so curl hung and a second start logged "Ready" while health checks timed out.
+Location: app/server (local Worker for the server checks)
+Action: restarting the local Worker after adding SITE_TOKEN to .dev.vars.
+Cause: starting it with `( … &)` from the shell and again from a timed-out call left earlier instances alive; killing one PID just let its parent respawn workerd.
+Fix: start it once with run_in_background; to stop it, stop every node/workerd process whose command line mentions wrangler (Get-CimInstance Win32_Process), not a single PID.
+
+2026-10-01
+Problem: (audit) after a deleted job, the dashboard still counted it and a restored phone brought it back; a restored phone also lost every bill ("দিতে হবে") because the Bills tab was missing from the restore tables; and 40 refused rows at the front of the sync queue could stop everything behind them.
+Location: app/src/lib/model.ts rowForMaster, src/lib/restore.ts, src/lib/sync.ts, server/src/summary.js
+Action: cross-checking restore, deletion and the outbox.
+Cause: "deleted" was a phone-only flag with no column; KIND_OF_TAB/MASTER_TABS predated Bills; the outbox always sent the first forty rows, refused or not.
+Fix: a deleted job is sent with status 'deleted' (server leaves it out, restore keeps it hidden, once-only re-send for jobs deleted earlier); Bills added to restore; refused rows go to the back of the queue (pickBatch). Covered by scripts/audit-check.mjs.
