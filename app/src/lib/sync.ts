@@ -54,6 +54,12 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
     if (s.sync_error !== msg) setState({ sync_error: msg })
     return { sent: 0, error: msg }
   }
+  if (!s.settings.token.trim()) {
+    // No key yet: the helper pastes it at setup. Rows wait in the outbox untouched.
+    const msg = t('অনলাইন খাতার চাবি বসানো নেই')
+    if (s.sync_error !== msg) setState({ sync_error: msg })
+    return { sent: 0, error: msg }
+  }
   if (!s.online && !force) return { sent: 0, error: '' }
 
   running = true

@@ -499,6 +499,7 @@ export const EN: Record<string, string> = {
   'সার্ভার মানল না': 'The server refused it',
   'উত্তর বোঝা গেল না': 'Could not read the reply',
   'টোকেন মিলল না': 'Token did not match',
+  'অনলাইন খাতার চাবি বসানো নেই': 'The online ledger key is not set',
   'জোড়া লাগল না': 'Could not connect',
   'সময় শেষ': 'Timed out',
   'সময় শেষ, আবার চেষ্টা হবে': 'Timed out — it will try again',
