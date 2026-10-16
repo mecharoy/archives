@@ -354,3 +354,10 @@ Location: scripts/site-link-check.mjs line 140
 Action: agent ran the full suite after adding the handover checks.
 Cause: the check searched the whole reply, which includes updated_at, a clock time; any time with :20 or :40 in it (e.g. 12:40:05) matched.
 Fix: search only the list of goods (JSON.stringify(list)), not the timestamp.
+
+2026-10-17
+Problem: `keytool -printcert -jarfile app-release.apk` printed no Owner line, so it could not prove which key signed the APK.
+Location: android/app/build/outputs/apk/release/app-release.apk (plan 1, Task 5 Step 4)
+Action: checking the first build signed with the new key outside the repo.
+Cause: the APK carries only the newer APK signature (v2/v3); keytool reads only the old JAR (v1) signature.
+Fix: use `%LOCALAPPDATA%\Android\Sdk\build-tools\35.0.0\apksigner.bat verify --print-certs <apk>`; the new key shows "CN=Site Khata, O=Roy Choudhury Builders, C=IN", the old one had "OU=Family ... L=Kolkata".

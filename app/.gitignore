@@ -18,3 +18,4 @@ tsconfig.tsbuildinfo
 .claude/
 scripts/ui-report/
 scripts/.scratch*/
+android/keystore/
