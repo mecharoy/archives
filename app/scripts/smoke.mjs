@@ -176,6 +176,10 @@ await step('expenses: none today', async () => {
   await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 })
   await tap('আর কোনো খরচ নেই')
 })
+await step('money in: nobody paid today', async () => {
+  await page.getByText('আজ কেউ টাকা দিয়েছেন?').waitFor({ timeout: 3000 })
+  await page.getByText('না', { exact: true }).first().click()
+})
 await step('progress: mark half', async () => {
   await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 })
   await page.getByText('অর্ধেক হয়েছে').first().click()

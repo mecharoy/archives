@@ -1,6 +1,7 @@
-import { useMemo } from 'react'
-import { Icon, TopBar } from '../ui/kit'
-import { useStore, nameOf, type Brief } from '../lib/store'
+import { useMemo, useState } from 'react'
+import { Icon, TopBar, Toast, useToast } from '../ui/kit'
+import { ReceivedSheet } from './Received'
+import { useStore, nameOf, activeProjects, type Brief } from '../lib/store'
 import { money, dayLabelBn } from '../lib/bn'
 import { localBrief, briefIsStale, monthSpend } from '../lib/brief'
 import { cashState, duesSplit, isLate, dueLabel } from '../lib/calc'
@@ -19,6 +20,8 @@ export function Money({ onBack, onGo }: { onBack: () => void; onGo: (s: Screen) 
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const spend = useMemo(() => monthSpend(s.entries), [s.entries])
   const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
+  const [receiving, setReceiving] = useState(false)
+  const toast = useToast()
 
   return (
     <>
@@ -68,12 +71,15 @@ export function Money({ onBack, onGo }: { onBack: () => void; onGo: (s: Screen) 
 
         <p className="sectionlabel">{t('এই খাতার কাজ')}</p>
         <div className="tilegrid">
+          {activeProjects(s).length > 0 && <Tile icon="wallet" title="টাকা পেলাম" sub="কাজের টাকা এল" onClick={() => setReceiving(true)} />}
           <Tile icon="wallet" title="টাকা দেওয়া-নেওয়া" sub="বাকি মেটানো, পাওনা তোলা" onClick={() => onGo('payments')} />
           <Tile icon="lock" title="নিজের খরচ" sub="আলাদা খাতা" onClick={() => onGo('personal')} />
           <Tile icon="calc" title="হাতের টাকা গোনা" sub="নতুন করে বসানো" onClick={() => onGo('cash')} />
           <Tile icon="clock" title="পুরোনো হিসাব" sub="দেখা ও সংশোধন" onClick={() => onGo('history')} />
         </div>
       </div>
+      {receiving && <ReceivedSheet s={s} onClose={() => setReceiving(false)} onDone={(msg) => { setReceiving(false); toast.show(msg) }} />}
+      {toast.msg && <Toast text={toast.msg} />}
     </>
   )
 }

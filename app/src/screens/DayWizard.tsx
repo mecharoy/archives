@@ -4,18 +4,19 @@ import { useStore, getState, activeProjects, workers, allWorkers, items, parties
 import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
 import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
-import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, cashAfterDay, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
+import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, cashAfterDay, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, recvTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, attendanceDone, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
 import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
 import { ContactPicker } from './Settings'
+import { ReceivedForm } from './Received'
 import { HOUSE } from '../lib/seed'
 import { scheduleSync } from '../lib/sync'
 import { t, tf, okWord } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 
-type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'returned' | 'expense' | 'progress' | 'personal' | 'inventory' | 'cash' | 'review'
+type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'returned' | 'expense' | 'received' | 'progress' | 'personal' | 'inventory' | 'cash' | 'review'
 
 const QUESTION: Record<StepId, string> = {
   project: 'কোন কাজ?',
@@ -24,6 +25,7 @@ const QUESTION: Record<StepId, string> = {
   material: 'মাল এসেছে?',
   returned: 'কোনো মাল ফেরত এল?',
   expense: 'আর কোনো খরচ?',
+  received: 'আজ কেউ টাকা দিয়েছেন?',
   progress: 'কাজ কতদূর?',
   personal: 'নিজের কোনো খরচ?',
   inventory: 'দোকানে মাল তুললেন?',
@@ -84,7 +86,9 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
        of the way; a screen with nothing to add is one extra tap, not a lost
        record. Personal spending is asked of everyone; putting goods into the
        shop only of a man who runs one. */
-    if (hasWork) list.push('material', 'returned', 'expense', 'progress')
+    /* Money that came in is asked right after what went out, and before the count — so a payment he
+       received is in the book before the cash box is compared with it. */
+    if (hasWork) list.push('material', 'returned', 'expense', 'received', 'progress')
     list.push('personal')
     if (s.settings.runs_shop) list.push('inventory')
     list.push('cash', 'review')
@@ -140,6 +144,7 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       {step === 'material' && <StepMaterial s={s} draft={draft} patch={patch} next={next} />}
       {step === 'returned' && <StepReturned s={s} draft={draft} patch={patch} next={next} />}
       {step === 'expense' && <StepExpense s={s} draft={draft} patch={patch} next={next} />}
+      {step === 'received' && <StepReceived s={s} draft={draft} patch={patch} next={next} />}
       {step === 'progress' && <StepProgress s={s} draft={draft} patch={patch} next={next} />}
       {step === 'personal' && <StepExpense s={s} draft={draft} patch={patch} next={next} field="pexps" personal startAsk question={QUESTION.personal} hint="ঘরের বা নিজের খরচ — কাজের হিসাবে ধরা হবে না।" />}
       {step === 'inventory' && <StepMaterial s={s} draft={draft} patch={patch} next={next} field="invs" toShop startAsk question={QUESTION.inventory} hint="দোকানের জন্য মাল তুললে এখানে লিখুন — সাইটের হিসাবে যাবে না।" />}
@@ -792,6 +797,42 @@ function StepExpense({ s, draft, patch, next, field = 'exps', personal = false, 
   )
 }
 
+/* ---------- 5½. money that came in ---------- */
+
+function StepReceived({ s, draft, patch, next }: StepProps) {
+  const lines = draft.recv ?? []
+  const [adding, setAdding] = useState(false)
+  if (adding) {
+    return <ReceivedForm s={s} defaultProject={draft.project_id} onBack={() => setAdding(false)}
+      onAdd={(r) => { patch({ recv: [...lines, r] }); setAdding(false) }} />
+  }
+  return (
+    <>
+      <div className="scroll">
+        <h2 className="question">{t(QUESTION.received)}</h2>
+        <p className="hint">{t('কোনো কাজের অগ্রিম বা কিস্তি — নগদ হোক বা অনলাইনে।')}</p>
+        {lines.length > 0 && (
+          <div className="card" style={{ marginBottom: '.9rem' }}>
+            {lines.map((r) => (
+              <div key={r.key} className="review-row">
+                <span><span className="t">{nameOf(s, r.project_id)}</span><span className="k">{r.mode === 'UPI' ? t('অনলাইনে (UPI)') : t(r.mode)}</span></span>
+                <span className="v num">{money(r.amount)}</span>
+                <button className="iconbtn" onClick={() => patch({ recv: lines.filter((x) => x.key !== r.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
+              </div>
+            ))}
+            <div className="total"><span className="k">{t('মোট পেলেন')}</span><span className="v num">{money(recvTotal(draft))}</span></div>
+          </div>
+        )}
+        <div className="yesno">
+          <button onClick={next}>{t('না')}</button>
+          <button className="on" onClick={() => setAdding(true)}>{lines.length ? t('আরও টাকা') : t('হ্যাঁ')}</button>
+        </div>
+      </div>
+      {lines.length > 0 && <div className="actionbar"><button className="btn primary" onClick={next}>{t('এগিয়ে যান')}</button></div>}
+    </>
+  )
+}
+
 /* ---------- 6. progress ---------- */
 
 function StepProgress({ s, draft, patch, next }: StepProps) {
@@ -946,6 +987,17 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
           </button>}
           <div className="total"><span className="k">{t("আজকের মোট খরচ")}</span><span className="v num">{money(dayTotal(draft) - retTotal(draft))}</span></div>
         </div>}
+
+        {/* Money in is never netted against the day's spending: it is the job's income, shown on its own. */}
+        {has('received') && (
+          <div className="card">
+            <button className="review-row" onClick={() => onJump('received')}>
+              <span><span className="t">{t('টাকা পেলাম')}</span><span className="k">{(draft.recv?.length ?? 0) ? draft.recv!.map((r) => nameOf(s, r.project_id)).join(', ') : t('কিছু নেই')}</span></span>
+              <span className="v num">{money(recvTotal(draft))}</span>
+              <Icon name="fwd" size={16} />
+            </button>
+          </div>
+        )}
 
         {/* His own book and the shop, kept apart from the job's cost above —
             personal spending never touches a job, and goods put into the shop

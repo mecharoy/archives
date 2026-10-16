@@ -6,7 +6,7 @@
 import type { ID, Presence, Entry, DayEntry, AttendanceEntry, StockEntry, MoneyEntry, ProgressEntry } from './model'
 import { kvGet, kvSet, kvDel, uid } from './db'
 import { isoDate } from './bn'
-import { cashState } from './calc'
+import { cashState, JOB_PAY_HEAD } from './calc'
 
 export interface DraftAtt { presence: Presence; rate: number; amount: number; advance: number }
 export interface DraftMat { key: string; item_id: ID; qty: number; rate: number; party_id: ID | ''; due_date: string; paid: boolean; photo_id: ID | '' }
@@ -15,6 +15,9 @@ export interface DraftExp { key: string; head_bn: string; amount: number; mode: 
    job's material cost — the exact reverse of sending it out — so a rate is all
    it needs beyond the item and quantity. */
 export interface DraftRet { key: string; item_id: ID; qty: number; rate: number }
+/* Money that came in for a job today. Its own job, not the day's: a customer of another site can pay
+   on the evening he is writing this one. Cash, or online (stored as 'UPI', which cash never counts). */
+export interface DraftRecv { key: string; project_id: ID; amount: number; mode: 'নগদ' | 'UPI' }
 
 export interface Draft {
   batch: ID
@@ -26,6 +29,7 @@ export interface Draft {
   exps: DraftExp[]
   pexps: DraftExp[]
   invs: DraftMat[]
+  recv?: DraftRecv[]
   progress: { stage_seq: number; state: 'half' | 'done' } | null
   cash_counted: number | null
   cash_computed: number | null
@@ -50,7 +54,7 @@ export function newDraft(date = isoDate(), project_id: ID | '' = ''): Draft {
 /* Older drafts saved before these fields existed are read back missing them;
    fill the gaps so nothing downstream trips over an undefined list. */
 export function normalizeDraft(d: Draft): Draft {
-  return { ...d, rets: d.rets ?? [], pexps: d.pexps ?? [], invs: d.invs ?? [] }
+  return { ...d, rets: d.rets ?? [], pexps: d.pexps ?? [], invs: d.invs ?? [], recv: d.recv ?? [] }
 }
 
 /* One half-written day per DATE. There used to be a single slot, so starting yesterday from History
@@ -93,9 +97,12 @@ export function cashAfterDay(entries: Entry[], d: Draft, openingAmount: number, 
 
 export function draftIsEmpty(d: Draft): boolean {
   return !Object.keys(d.att).length && !d.mats.length && !(d.rets?.length) && !d.exps.length
-    && !(d.pexps?.length) && !(d.invs?.length) && !d.progress && d.cash_counted == null
+    && !(d.pexps?.length) && !(d.invs?.length) && !(d.recv?.length) && !d.progress && d.cash_counted == null
 }
 
+export function recvTotal(d: Draft): number {
+  return (d.recv ?? []).reduce((a, r) => a + r.amount, 0)
+}
 export function retTotal(d: Draft): number {
   return (d.rets ?? []).reduce((a, r) => a + r.qty * r.rate, 0)
 }
@@ -152,6 +159,9 @@ export function buildEntries(d: Draft): Entry[] {
      own ‘মাল এসেছে’, so it lands in the shop count and its supplier dues. */
   for (const m of (d.invs ?? [])) {
     out.push({ id: uid(), kind: 'stock', batch: d.batch, date: d.date, project_id: '', created_at: now, item_id: m.item_id, dir: 'in', qty: m.qty, rate: m.rate, amount: round(m.qty * m.rate), party_id: m.party_id, due_date: m.due_date, paid: m.paid, photo_id: m.photo_id } as StockEntry)
+  }
+  for (const r of (d.recv ?? [])) {
+    out.push({ id: uid(), kind: 'money', batch: d.batch, date: d.date, project_id: r.project_id, created_at: now, head_bn: JOB_PAY_HEAD, dir: 'received', amount: r.amount, party_id: '', mode: r.mode, note: '', personal: false, photo_id: '' } as MoneyEntry)
   }
   if (d.progress) {
     out.push({ id: uid(), kind: 'progress', ...base, stage_seq: d.progress.stage_seq, state: d.progress.state, pct: 0 } as ProgressEntry)

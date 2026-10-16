@@ -15,6 +15,9 @@ export const DRAWING_HEAD = 'ব্যবসা থেকে নেওয়া'
 export const SETTLE_HEAD = 'বাকি মেটানো'
 /* An old balance from the paper khata (see model.ts StockDir). Two dirs of their own, so every sum
    that asks for 'in' or 'sale' leaves them out without being told; only the dues below read them. */
+/* Money a customer paid him for a job — an advance, a stage payment. Not SETTLE_HEAD, which every job
+   total skips: this is the job's own income, and the job's "received" is built from it. */
+export const JOB_PAY_HEAD = 'কাজের টাকা'
 export const OPENING_GET = 'opening_get'
 export const OPENING_OWE = 'opening_owe'
 
