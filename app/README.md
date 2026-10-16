@@ -15,22 +15,23 @@ account, no spreadsheet, and nothing for your father to register for.
 
 ## The APK
 
-    dist-apk/SiteKhata-1.0.apk
+    npm run release -- "যা বদলাল" "What changed"
 
-Signed, `minSdk 24` (Android 7 and up), 7 MB. Copy it to the phone and open it;
-Android will ask once about installing from an unknown source. It needs no
-account, no login, and no internet to run.
+builds `dist-apk/SiteKhata-1.0.apk` and the `latest.json` the phone reads. Install
+only the newest build. Never install an older committed one.
 
-To rebuild:
+Signed, `minSdk 24` (Android 7 and up). Android will ask once about installing
+from an unknown source. It needs no account, no login, and no internet to run.
 
-    npm install
-    npm run apk        # web build → cap sync → gradle assembleRelease
+The APK carries the server's address but **never the device key**. The key is
+pasted once on the phone: on the first screen (**অনলাইন খাতার চাবি আছে?**) or later at
+সেটিংস → অনলাইন খাতা. It is saved on the phone and survives every update.
+`npm run release` refuses to build if `VITE_SYNC_TOKEN` is set, or if a key, a hash
+or any secret this machine holds turns up in the bundle.
 
-The signing keystore is committed at `android/keystore/sitekhata.jks`
-(password `sitekhata`). That is deliberate: the app is sideloaded inside one
-family, and losing the key would mean no update could ever install over the
-copy already on his phone. It guards the upgrade path, not the data. If this
-ever goes to Play, generate a fresh key and keep it out of git.
+The signing key lives outside the repo, at `%USERPROFILE%\.site-khata\keystore\`.
+Its password is in `%USERPROFILE%\.gradle\gradle.properties`. Keep both in two
+places. Losing them means no update can install over the copy on his phone.
 
 ---
 
@@ -45,9 +46,9 @@ sends. Totals are computed once on the server from the stored rows; judgement
 comes from the nightly brief. A bug in the app can lose an entry; it cannot
 produce a wrong number.
 
-Your father signs in to nothing. The APK carries a device token baked in at
-build time that can append to his household and read it back — and that is all
-it can do. Publishing the brief, exporting, and reading across households need
+Your father signs in to nothing. His phone holds a device key, pasted once at
+setup (never built into the public APK), that can append to his household and
+read it back — and that is all it can do. Publishing the brief, exporting, and reading across households need
 an admin token that is never inside the app.
 
 **It works with none of that connected.** With no endpoint configured it is a
@@ -67,14 +68,13 @@ npx wrangler secret put ADMIN_TOKEN
 npx wrangler deploy
 ```
 
-Create his household, then build his APK with the values baked in so he types
-nothing at all:
+Create his household, then build the APK with the server's address baked in:
 
 ```bash
-VITE_SYNC_ENDPOINT=https://site-khata.<you>.workers.dev \
-VITE_SYNC_TOKEN=<device token> \
-npm run apk
+VITE_SYNC_ENDPOINT=https://site-khata.<you>.workers.dev npm run release -- "…" "…"
 ```
+
+then paste his device key on the phone at setup.
 
 Free tier covers this many times over: 100k Worker requests/day and 5M D1 row
 reads, 100k writes, 5 GB. A busy day here is about fifty writes.
@@ -419,7 +419,8 @@ excluded rather than guessed at.
 **পুরোনো হিসাব** — every day, and corrections. Nothing is ever edited or
 deleted: a correction writes the mirror-image row, so the ledger stays
 append-only and the history of what he believed at the time survives. The
-Worker has no delete route at all.
+only route that deletes is `/wipe`, and it needs the reset code, which only the
+server holds.
 
 **Cash** is rebuilt from the last physical count, never from an opening balance
 typed once in March, so a bad count fixes itself the next time he counts.
@@ -431,9 +432,9 @@ typed once in March, so a bad count fixes itself the next time he counts.
 সেটিংস → **সব মুছে নতুন করে শুরু** wipes the phone and, if asked, the household
 on the server with it. It is the only operation in the app that destroys rather
 than appends, so it is the only one behind a code. The code is nowhere in the
-bundle — the app carries its SHA-256 hash and the Worker holds its own copy as
-the `RESET_CODE` secret, so wiping the server needs the code even from a phone
-whose token has been pulled out of the APK. The server goes first: if it
+bundle — the app carries no copy and no hash of it; the Worker checks it against
+its `RESET_CODE` secret and pauses after a wrong one, so wiping the server needs
+the code even from someone who holds the device key. The server goes first: if it
 refuses, the phone keeps its rows rather than leaving him with nothing
 anywhere. The household and its device token survive a wipe, so the phone in
 his hand keeps working and simply starts again from empty.
@@ -448,12 +449,12 @@ his hand keeps working and simply starts again from empty.
 | Half-finished entry lost | The draft is persisted on every keystroke and resumed whatever date it carries |
 | Stale brief passed off as today's | 36-hour staleness check, an explicit badge, and a local fallback |
 | A malformed nightly file breaks the screen | Whitelisted, clamped and type-checked before anything renders |
-| Someone extracts the device token from the APK | It reads and appends to one household only — it cannot publish a brief, export, reach another household, or delete anything |
+| Someone extracts the device token from the APK | The APK carries no device key; it is pasted on the phone, and `release` refuses a bundle that holds one |
 | Phone lost | Everything already sent is on the server: install the APK on the new phone and tap **অনলাইন থেকে ফিরিয়ে আনুন**. Plus সেটিংস → ব্যাকআপ writes the whole ledger to Documents as CSV or JSON, and `GET /export.csv` does the same from your side |
 | Bengali vs ASCII digits | Amounts use a custom keypad, and every text field accepts either |
 | A paid-off bill keeps showing as owed | Payments net against the oldest due for that party, and reminders are rebuilt from scratch on every change |
 | Paying a bill counted as a second expense | A settlement carries its own head, which every cost total skips while the cash still moves |
-| The reset code extracted from the APK | Only its hash ships; the server keeps its own copy and refuses a wipe without it |
+| The reset code extracted from the APK | The APK carries no copy or hash of the code; the server checks it and pauses after a wrong one |
 | IST date rolling over wrongly | Local `YYYY-MM-DD` everywhere, never `toISOString()` |
 
 ---

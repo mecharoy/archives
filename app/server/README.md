@@ -36,14 +36,13 @@ curl -s -X POST https://site-khata.<you>.workers.dev/admin/households \
 # → { "household": { "id": "h_…" }, "device_token": "…" }
 ```
 
-Build his APK with those two values baked in, so he installs it and it simply
-works — no URL to type, no token, no account:
+Build the APK with the address baked in. The device token is **not** built in:
+the APK is public, so the token is pasted once on his phone at setup (first
+screen, or সেটিংস → অনলাইন খাতা), and it survives every update:
 
 ```bash
 cd ..
-VITE_SYNC_ENDPOINT=https://site-khata.<you>.workers.dev \
-VITE_SYNC_TOKEN=<device token> \
-npm run apk
+VITE_SYNC_ENDPOINT=https://site-khata.<you>.workers.dev npm run release -- "…" "…"
 ```
 
 Open `https://site-khata.<you>.workers.dev/` in your own browser, paste the
@@ -66,6 +65,7 @@ app is around fifty writes. Unlike some free tiers it does not pause when idle.
 | `PUT /brief?household=` | admin | Publish tonight's brief |
 | `GET /export.csv?household=` | admin | Every tab, as one CSV |
 | `POST /admin/households` | admin | Create a household, get its device token |
+| `POST /wipe` | device + reset code | Erase the household's rows (`dry: true` only checks the code) |
 | `GET /` | — | The dashboard; the token is typed into the page |
 | `GET /public/inventory` | site | What the shop has, as names and in stock / out — no quantities, prices or ids |
 | `POST /enquiries` | site | A question or call-back request from the website |
@@ -128,14 +128,12 @@ The schema is generated from the app's own column definition by
 - **A retried write cannot duplicate a day.** Every row carries its own id and
   the primary key is `(household_id, id)`, so the database itself drops the
   second copy. There is no bookkeeping to get wrong.
-- **The device token is extractable from the APK.** Anyone who pulled the
-  installed app apart could read that one household and append junk to it. They
-  could not read any other household, publish a brief, or delete history. Given
-  the APK exists on two phones inside one family, that is the right trade;
-  if it ever stops being, rotate the token by creating a new household and
-  rebuilding.
-- **Nothing is ever deleted.** Corrections arrive as mirrored rows. The Worker
-  has no delete route at all.
+- **The APK is public and carries no device key.** Each phone has its key pasted
+  at setup. Whoever holds a key can read that one household and append to it,
+  nothing more: not another household, not the brief, not history. If a key
+  leaks, give the household a new one in D1; the old one stops working.
+- **Nothing is deleted by ordinary use.** Corrections arrive as mirrored rows.
+  The only route that deletes is `/wipe`, and it needs the `RESET_CODE` secret.
 
 ## Testing
 
