@@ -367,6 +367,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
 function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [endpoint, setEndpoint] = useState(s.settings.endpoint)
   const [token, setToken] = useState(s.settings.token)
+  const [showToken, setShowToken] = useState(false)
   const [busy, setBusy] = useState('')
   const [confirmRestore, setConfirmRestore] = useState(false)
   const toast = useToast()
@@ -390,8 +391,9 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
         </Field>
         <Field label="গোপন টোকেন">
           <input className="input" value={token} onChange={(e) => setToken(e.target.value)}
-            autoCapitalize="off" spellCheck={false} />
+            type={showToken ? 'text' : 'password'} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
         </Field>
+        <button className="btn quiet small" onClick={() => setShowToken(!showToken)}>{showToken ? t('লুকান') : t('দেখান')}</button>
         <div className="actionbar" style={{ borderTop: 0, padding: '.2rem 0 1rem' }}>
           <button className="btn ghost" disabled={!!busy} onClick={async () => {
             setBusy('test')

@@ -73,6 +73,22 @@ const store = (page, fn, arg) => page.evaluate(async ([src, a]) => {
   await ctx.close()
 }
 
+/* ---- 2. Settings hides the key ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('settings: the key box hides what is typed', async () => {
+    await store(page, async (m) => { await m.saveSettings({ onboarded: true, toured: true, endpoint: 'https://worker.test', token: 'handover-good-token' }) })
+    await page.goto(ORIGIN)
+    await page.getByLabel('সেটিংস').click()
+    await page.getByText('অনলাইন খাতা').first().click()
+    const box = page.locator('.field', { hasText: 'গোপন টোকেন' }).locator('input')
+    if ((await box.getAttribute('type')) !== 'password') throw new Error('the key is shown in plain text')
+    await page.getByRole('button', { name: 'দেখান' }).click()
+    if ((await box.getAttribute('type')) !== 'text') throw new Error('দেখান did not show it')
+  })
+  await ctx.close()
+}
+
 console.log(log.join('\n'))
 await browser.close()
 await server.close()
