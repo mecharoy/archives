@@ -7,7 +7,7 @@
      npm run release -- "যা বদলাল" "What changed"
 
    It bumps the build number in build.gradle, builds the web bundle with the
-   endpoint and token baked in, assembles the signed APK, copies it into
+   endpoint baked in (never the device key), assembles the signed APK, copies it into
    dist-apk, and writes the latest.json beside it that the phone reads. The
    previous APK is moved to trash/ rather than overwritten, because it is out
    on a phone somewhere.
@@ -15,9 +15,10 @@
    Nothing is pushed. Check the diff, then commit — the phone only ever sees
    what is on the branch. */
 
-import { readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, statSync, mkdirSync, readdirSync } from 'fs'
+import { readFileSync, writeFileSync, copyFileSync, renameSync, existsSync, statSync, mkdirSync } from 'fs'
 import { execFileSync } from 'child_process'
 import { join } from 'path'
+import { findSecrets, knownSecrets } from './_secret-scan.mjs'
 
 const APP = process.cwd()
 const GRADLE = join(APP, 'android/app/build.gradle')
@@ -68,11 +69,15 @@ writeFileSync(GRADLE, before
   .replace(/versionName\s+"[^"]*"/, `versionName "${name}"`))
 console.log(`\n→ build ${code}  (${name})\n`)
 
-/* ---- 2. the bundle, with his credentials in it ---- */
+/* ---- 2. the bundle: the server's address, never the device key ---- */
 
-if (!process.env.VITE_SYNC_ENDPOINT || !process.env.VITE_SYNC_TOKEN) {
-  console.error('VITE_SYNC_ENDPOINT and VITE_SYNC_TOKEN must be set, or the APK ships unable to sync.')
-  console.error('Both are readable out of the previous APK if you need them back.')
+if (!process.env.VITE_SYNC_ENDPOINT) {
+  console.error('VITE_SYNC_ENDPOINT must be set, or the APK ships not knowing its server.')
+  process.exit(1)
+}
+if (process.env.VITE_SYNC_TOKEN) {
+  console.error('VITE_SYNC_TOKEN is set. A public build must not carry the device key —')
+  console.error('the helper pastes it on the phone at setup. Unset it and run again.')
   process.exit(1)
 }
 
@@ -85,17 +90,19 @@ run('npm', ['run', 'build'])
 
 /* The APK is published from a public repository, so anything inside the bundle
    is public. A Google key found there is cancelled within days — that is how
-   the last one died. Refuse to go on if one is in the build. */
-const walk = (dir) => readdirSync(dir, { withFileTypes: true }).flatMap((e) =>
-  e.isDirectory() ? walk(join(dir, e.name)) : [join(dir, e.name)])
-for (const f of walk(join(APP, 'dist'))) {
-  if (/\.(js|css|html|json|map|txt)$/i.test(f) && /AIza[0-9A-Za-z_-]{20,}/.test(readFileSync(f, 'utf8'))) {
-    console.error(`\n✗ a Google API key is inside the built bundle (${f}). It would be published with the APK. Nothing was released.`)
-    process.exit(1)
-  }
+   the last one died. Refuse to go on if a key, a hash or a secret this machine
+   holds is in it. */
+const refuse = (where) => {
+  const hits = findSecrets(where, knownSecrets())
+  if (!hits.length) return
+  for (const h of hits) console.error(`✗ ${h.what} in ${h.file}`)
+  console.error('It would be published with the APK. Nothing was released.')
+  process.exit(1)
 }
+refuse(join(APP, 'dist'))
 
 run('npx', ['cap', 'sync', 'android'])
+refuse(join(APP, 'android/app/src/main/assets/public'))
 
 /* ---- 3. the signed APK ---- */
 

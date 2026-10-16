@@ -39,10 +39,12 @@ export interface Settings {
   ai_key: string
 }
 
-/* Baked in at build time so the phone syncs the moment it is installed —
-   he never types a URL or a token. Left empty, the app is simply offline-only.
-     VITE_SYNC_ENDPOINT=https://site-khata.you.workers.dev \
-     VITE_SYNC_TOKEN=<device token> npm run apk                              */
+/* The address is baked in at build time; the device key is not. A public APK
+   carries no key (`npm run release` refuses one), so the helper pastes it once
+   on the first screen or in সেটিংস, and the saved copy outlives every update.
+   VITE_SYNC_TOKEN is honoured only for a private test build. Left empty, the
+   app is simply offline-only.
+     VITE_SYNC_ENDPOINT=https://site-khata.you.workers.dev npm run release  */
 const BUILT_IN_ENDPOINT = (import.meta.env.VITE_SYNC_ENDPOINT as string | undefined)?.trim() || ''
 const BUILT_IN_TOKEN = (import.meta.env.VITE_SYNC_TOKEN as string | undefined)?.trim() || ''
 
