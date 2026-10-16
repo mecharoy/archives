@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, PhoneField, useToast, Toast } from '../ui/kit'
 import { useStore, getState, activeProjects, workers, allWorkers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
-import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
+import { money, toBn, dayLabelBn, dateBn, isoDate, num } from '../lib/bn'
 import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
 import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, cashAfterDay, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, recvTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, attendanceDone, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
@@ -11,6 +11,8 @@ import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
 import { ContactPicker } from './Settings'
 import { ReceivedForm } from './Received'
+import { defaultDueDays, dueFrom } from '../lib/dues'
+import { DueChips } from '../ui/DueChips'
 import { HOUSE } from '../lib/seed'
 import { scheduleSync } from '../lib/sync'
 import { t, tf, okWord } from '../lib/i18n'
@@ -409,14 +411,12 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
     setSub('qty')
   }
 
-  const commitLine = (paid: boolean, party_id: ID | '', photo_id: ID | '') => {
+  const commitLine = (paid: boolean, party_id: ID | '', photo_id: ID | '', days: number) => {
     if (!cur) return
-    const p = parties(s).find((x) => x.id === party_id)
-    const terms = p?.terms_days ?? 0
     const line: DraftMat = {
       ...cur, qty: Number(qty) || 0, rate: Number(rate) || 0, paid, party_id,
-      // Terms unknown (0): no date. The bill is owed, but not late tomorrow.
-      due_date: paid || terms <= 0 ? '' : addDays(draft.date, terms), photo_id,
+      // Every credit purchase gets a date: the supplier's own days, or what he picked (a week by default).
+      due_date: paid ? '' : dueFrom(draft.date, days), photo_id,
     }
     patch({ [field]: [...draft[field], line] })
     setCur(null); setSub('ask')
@@ -518,9 +518,11 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
 
 function RateStep({ s, item, last, rate, setRate, qty, defaultParty, date, onBack, onDone }: {
   s: State; date: string; item?: Item; last: ReturnType<typeof lastPurchase>; rate: string; setRate: (v: string) => void
-  qty: number; defaultParty: ID | ''; onBack: () => void; onDone: (paid: boolean, party: ID | '', photo: ID | '') => void
+  qty: number; defaultParty: ID | ''; onBack: () => void; onDone: (paid: boolean, party: ID | '', photo: ID | '', days: number) => void
 }) {
-  const [party, setParty] = useState<ID | ''>(defaultParty)
+  const [party, setPartyRaw] = useState<ID | ''>(defaultParty)
+  const [dueDays, setDueDays] = useState<number | null>(null)
+  const setParty = (id: ID | '') => { setPartyRaw(id); setDueDays(null) }
   const [paid, setPaid] = useState<boolean | null>(null)
   const [photo, setPhoto] = useState<ID | ''>('')
   const [allParties, setAllParties] = useState(false)
@@ -562,12 +564,11 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, date, onBac
           <button className={paid === true ? 'on' : ''} onClick={() => setPaid(true)}>{t("হ্যাঁ, দিয়েছি")}</button>
           <button className={paid === false ? 'on' : ''} onClick={() => setPaid(false)}>{t("না, বাকি")}</button>
         </div>
+        {paid === false && !party && (
+          <p className="small" style={{ marginTop: '.5rem', color: 'var(--warn)' }}>{t('বাকিতে কিনলে দোকানের নাম দিন।')}</p>
+        )}
         {paid === false && (
-          <p className="hint" style={{ marginTop: '.7rem' }}>
-            {partyObj?.terms_days
-              ? tf('{0} — {1} দিনের মধ্যে, অর্থাৎ {2}।', partyObj.name_bn, toBn(partyObj.terms_days), dateBn(addDays(date, partyObj.terms_days), false))
-              : t('হিসাবে বাকি হিসেবে থাকবে।')}
-          </p>
+          <DueChips question="কবে দিতে হবে?" days={dueDays ?? defaultDueDays(partyObj?.terms_days ?? 0)} onChange={setDueDays} own={partyObj?.terms_days} from={date} />
         )}
 
         <button className="btn quiet small" style={{ marginTop: '1rem' }}
@@ -579,7 +580,8 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, date, onBac
       </div>
       <div className="actionbar">
         <button className="btn ghost" onClick={onBack}>{t("ফিরে")}</button>
-        <button className="btn primary" disabled={!rateNum || paid === null} onClick={() => onDone(paid === true, party, photo)}>{t("যোগ করুন")}</button>
+        <button className="btn primary" disabled={!rateNum || paid === null || (paid === false && !party)}
+          onClick={() => onDone(paid === true, party, photo, dueDays ?? defaultDueDays(partyObj?.terms_days ?? 0))}>{t("যোগ করুন")}</button>
       </div>
       {allParties && (
         <Sheet title="সব দোকান" onClose={() => setAllParties(false)}>
@@ -1234,9 +1236,8 @@ export function NewPartySheet({ onClose, onCreated, kind = 'supplier' }: { onClo
       {/* The person is almost certainly already in his phone. The mark inside
           the box fills both this and the name above in one tap. */}
       <Field label="ফোন (ইচ্ছে হলে)"><PhoneField value={phone} onChange={setPhone} onBook={() => setBook(true)} /></Field>
-      {kind === 'supplier' && (
-        <Field label="কত দিনের বাকিতে দেয় (না জানলে ০)"><NumField value={terms} onChange={setTerms} /></Field>
-      )}
+      {/* Customers have agreed days too: they fill in the date on a credit sale the way a shop's terms do. */}
+      <Field label={kind === 'supplier' ? 'কত দিনের বাকিতে দেয় (না জানলে ০)' : 'কত দিনে টাকা দেয় (না জানলে ০)'}><NumField value={terms} onChange={setTerms} /></Field>
       <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem', width: '100%' }}>{t("যোগ করুন")}</button>
     </Sheet>
   )

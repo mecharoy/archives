@@ -12,6 +12,8 @@ import { capture } from '../lib/photo'
 import { t, tf } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import { useOnce } from '../lib/once'
+import { defaultDueDays, dueFrom } from '../lib/dues'
+import { DueChips } from '../ui/DueChips'
 
 type Flow = null | 'in' | 'sale' | 'count' | 'transfer'
 
@@ -135,6 +137,9 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
   const [showAll, setShowAll] = useState(false)
   const [newItem, setNewItem] = useState(false)
   const [newParty, setNewParty] = useState(false)
+  // null: follow the party's own days (or a week). A tap on a chip pins it.
+  const [dueDays, setDueDays] = useState<number | null>(null)
+  const choose = (id: ID | '') => { setParty(id); setDueDays(null) }
 
   const all = items(s)
   const ranked = rankItems(s.entries, '')
@@ -162,15 +167,14 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
     if (!item) return
     const q = Number(qty) || 0
     const r = Number(rate) || 0
-    const p = list.find((x) => x.id === party)
     const credit = (flow === 'in' || flow === 'sale') && paid === false
     const e: StockEntry = {
       id: uid(), kind: 'stock', batch: uid(), date,
       project_id: flow === 'transfer' ? project : '', created_at: new Date().toISOString(),
       item_id: item.id, dir: flow, qty: q, rate: r, amount: Math.round(q * r * 100) / 100,
       party_id: flow === 'transfer' ? '' : party,
-      // No terms known (0) means no date: the bill is owed, but it is not late tomorrow morning.
-      due_date: credit && (p?.terms_days ?? 0) > 0 ? addDays(date, p!.terms_days) : '',
+      // Every credit row gets a date — the party's own days, or the one he picked (a week by default).
+      due_date: credit ? dueFrom(date, days) : '',
       paid: flow === 'in' || flow === 'sale' ? paid !== false : true, photo_id: photo,
     }
     await saveEntries([e])
@@ -180,6 +184,8 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
   }
 
   const unit = item?.unit_bn || ''
+  const partyObj = list.find((x) => x.id === party)
+  const days = dueDays ?? defaultDueDays(partyObj?.terms_days ?? 0)
 
   return (
     <>
@@ -281,9 +287,9 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
               <>
                 <h2 className="question">{flow === 'sale' ? t('কাকে বিক্রি?') : t('কার কাছ থেকে?')}</h2>
                 <div className="chips">
-                  {topParties.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(party === p.id ? '' : p.id)}>{p.name_bn}</Chip>)}
+                  {topParties.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => choose(party === p.id ? '' : p.id)}>{p.name_bn}</Chip>)}
                   <Chip onClick={() => setNewParty(true)}>{t("+ নতুন")}</Chip>
-                  {flow === 'sale' && <Chip on={party === ''} onClick={() => setParty('')}>{t("খুচরো খদ্দের")}</Chip>}
+                  {flow === 'sale' && <Chip on={party === ''} onClick={() => choose('')}>{t("খুচরো খদ্দের")}</Chip>}
                 </div>
                 {(flow === 'in' || flow === 'sale') && (
                   <>
@@ -296,6 +302,13 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
                       <p className="small muted" style={{ marginTop: '.5rem' }}>
                         {t('বাকিতে বিক্রি হলে খদ্দেরের নাম দিন — নইলে কার কাছে পাওনা তা আর মনে থাকবে না।')}
                       </p>
+                    )}
+                    {/* A bill with nobody to pay is a bill nobody pays: credit from a shop needs the shop's name. */}
+                    {paid === false && flow === 'in' && !party && (
+                      <p className="small" style={{ marginTop: '.5rem', color: 'var(--warn)' }}>{t('বাকিতে কিনলে দোকানের নাম দিন।')}</p>
+                    )}
+                    {paid === false && (
+                      <DueChips question={flow === 'sale' ? 'কবে দেবে?' : 'কবে দিতে হবে?'} days={days} onChange={setDueDays} own={partyObj?.terms_days} from={date} />
                     )}
                     <button className="btn quiet small" style={{ marginTop: '1rem' }}
                       onClick={async () => { const id = await capture(); if (id) setPhoto(id) }}>
@@ -322,10 +335,10 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
           </div>
           <div className="actionbar">
             <button className="btn primary"
-              disabled={((flow === 'in' || flow === 'sale') && paid === null) || (flow === 'transfer' && !project)}
+              disabled={((flow === 'in' || flow === 'sale') && paid === null) || (flow === 'transfer' && !project) || (flow === 'in' && paid === false && !party)}
               onClick={commitOnce}>{t("সেভ করুন")}</button>
           </div>
-          {newParty && <NewPartySheet kind={kind} onClose={() => setNewParty(false)} onCreated={(p) => { setParty(p.id); setNewParty(false) }} />}
+          {newParty && <NewPartySheet kind={kind} onClose={() => setNewParty(false)} onCreated={(p) => { choose(p.id); setNewParty(false) }} />}
         </>
       )}
     </>

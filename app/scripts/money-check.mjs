@@ -34,7 +34,13 @@ async function fresh(extra = {}) {
     const m = await import('/src/lib/store.ts')
     const bn = await import('/src/lib/bn.ts')
     await m.saveMaster({ id: 'p1', kind: 'project', name_bn: 'রায়বাড়ি', client_bn: '', ptype: 'বাড়ি', area_sqft: null, budget: 1000000, start_date: bn.isoDate(), plan_days: null, status: extra.jobStatus || 'active', updated_at: new Date().toISOString() })
-    await m.saveSettings({ onboarded: true, toured: true, runs_shop: false, runs_sites: true, opening_cash: 10000, opening_date: bn.isoDate() })
+    if (extra.shop) {
+      const now = new Date().toISOString()
+      await m.saveMaster({ id: 'i1', kind: 'item', name_bn: 'পাইপ', unit_bn: 'পিস', last_rate: 100, active: true, updated_at: now })
+      await m.saveMaster({ id: 'c1', kind: 'party', name_bn: 'হালদার', ptype: 'client', terms_days: 0, phone: '', updated_at: now })
+      await m.saveMaster({ id: 's1', kind: 'party', name_bn: 'শর্মা', ptype: 'supplier', terms_days: 15, phone: '', updated_at: now })
+    }
+    await m.saveSettings({ onboarded: true, toured: true, runs_shop: !!extra.shop, runs_sites: true, opening_cash: 10000, opening_date: bn.isoDate() })
   }, extra)
   await page.goto(ORIGIN)
   await page.locator('.headline').waitFor({ timeout: 6000 })
@@ -134,6 +140,55 @@ const finishDay = async (page) => {
     if (b.received !== 2000) throw new Error('job received is ' + b.received)
     if (b.cash !== 10000) throw new Error('cash in hand moved to ' + b.cash)
     if (b.rows[0]?.mode !== 'UPI') throw new Error('stored mode is ' + b.rows[0]?.mode)
+  })
+  await ctx.close()
+}
+
+/* ---- B5, B9: every credit sale and purchase gets a date; a credit purchase needs a supplier ---- */
+const lastStock = (page, dir) => page.evaluate(async (dir) => {
+  const m = await import('/src/lib/store.ts'); const bn = await import('/src/lib/bn.ts')
+  const e = m.getState().entries.filter((x) => x.kind === 'stock' && x.dir === dir).pop()
+  return { due: e?.due_date, party: e?.party_id, today: bn.isoDate(), in7: bn.addDays(bn.isoDate(), 7), in15: bn.addDays(bn.isoDate(), 15) }
+}, dir)
+const toWho = async (page, tile, qty, rate) => {
+  await tap(page, tile)
+  await tap(page, 'পাইপ', true)
+  await pad(page, qty); await tap(page, 'এগিয়ে যান')
+  await pad(page, rate); await tap(page, 'এগিয়ে যান')
+}
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await step('shop: a customer can be given credit days, like a supplier', page, async () => {
+    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
+    await toWho(page, 'বিক্রি হয়েছে', ['২'], ['১', '০', '০'])
+    await tap(page, '+ নতুন', true)
+    await page.getByText('কত দিনে টাকা দেয় (না জানলে ০)').waitFor({ timeout: 3000 })
+    await page.locator('.sheet .iconbtn, .sheet [aria-label="বন্ধ করুন"]').first().click().catch(() => page.keyboard.press('Escape'))
+  })
+  await step('shop: a credit sale to a customer with no agreed days falls due in a week', page, async () => {
+    await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
+    await toWho(page, 'বিক্রি হয়েছে', ['২'], ['১', '০', '০'])
+    await tap(page, 'হালদার', true)
+    await tap(page, 'না, বাকি')
+    await page.getByText('কবে দেবে?').waitFor({ timeout: 3000 })
+    await page.locator('.actionbar .btn.primary').click()
+    await page.waitForTimeout(400)
+    const r = await lastStock(page, 'sale')
+    if (r.due !== r.in7) throw new Error('due ' + r.due + ', not ' + r.in7)
+  })
+  await step('shop: a credit purchase cannot be saved without a supplier', page, async () => {
+    await toWho(page, 'মাল এসেছে', ['৫'], ['৮', '০'])
+    await tap(page, 'না, বাকি')
+    if (await page.locator('.actionbar .btn.primary').isEnabled()) throw new Error('a credit purchase with no supplier could be saved')
+  })
+  await step("shop: with the supplier picked it falls due on the supplier's own days", page, async () => {
+    await tap(page, 'শর্মা', true)
+    await page.getByText('কবে দিতে হবে?').waitFor({ timeout: 3000 })
+    await page.locator('.actionbar .btn.primary').click()
+    await page.waitForTimeout(400)
+    const r = await lastStock(page, 'in')
+    if (r.party !== 's1' || r.due !== r.in15) throw new Error('party ' + r.party + ', due ' + r.due + ', not ' + r.in15)
   })
   await ctx.close()
 }

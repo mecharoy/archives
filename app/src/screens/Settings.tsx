@@ -694,7 +694,7 @@ export function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
           {list.map((p) => (
             <Pick key={p.id} title={p.name_bn}
-              sub={(p.ptype === 'supplier' ? tf('{0} দিনের বাকি', toBn(p.terms_days)) : t('খদ্দের')) + (p.phone ? ' · ' + p.phone : '')}
+              sub={(p.ptype === 'supplier' ? tf('{0} দিনের বাকি', toBn(p.terms_days)) : p.terms_days ? tf('খদ্দের · {0} দিনে দেয়', toBn(p.terms_days)) : t('খদ্দের')) + (p.phone ? ' · ' + p.phone : '')}
               onClick={() => setEdit(p)} />
           ))}
         </div>
@@ -716,6 +716,9 @@ export function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
               <Chip on={edit.ptype === 'client'} onClick={() => setEdit({ ...edit, ptype: 'client' })}>{t("খদ্দের")}</Chip>
             </div>
           </Field>
+          {edit.ptype === 'client' && (
+            <Field label="কত দিনে টাকা দেয় (না জানলে ০)"><NumField value={edit.terms_days} onChange={(v) => setEdit({ ...edit, terms_days: v ?? 0 })} /></Field>
+          )}
           {edit.ptype === 'supplier' && (
             <Field label="কত দিনের বাকিতে দেয়"><NumField value={edit.terms_days} onChange={(v) => setEdit({ ...edit, terms_days: v ?? 0 })} /></Field>
           )}
