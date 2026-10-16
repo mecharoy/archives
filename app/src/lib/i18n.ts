@@ -48,8 +48,18 @@ export function pick(bn?: string, en?: string): string {
 
 /** For a string built at runtime: t2('… {0} …', x). Bengali template is key. */
 export function tf(bn: string, ...args: (string | number | undefined)[]): string {
-  return args.reduce<string>((s, a, i) => s.split(`{${i}}`).join(a == null ? '' : String(a)), t(bn))
+  const out = args.reduce<string>((s, a, i) => s.split(`{${i}}`).join(a == null ? '' : String(a)), t(bn))
+  return current === 'en' ? fixPlurals(out) : out
 }
+
+/** English only: "1 days" -> "1 day". The templates carry the plural; one of anything must not. */
+const SINGULAR: Record<string, string> = { days: 'day', men: 'man', kinds: 'kind', jobs: 'job', items: 'item', entries: 'entry', rows: 'row' }
+export function fixPlurals(s: string): string {
+  return s.replace(/(^|[^\d.,])1 (days|men|kinds|jobs|items|entries|rows)\b/g, (_m, pre, w) => `${pre}1 ${SINGULAR[w]}`)
+}
+
+/** The word on a plain confirm button. (The dictionary's 'ঠিক আছে' is the status "On track".) */
+export const okWord = (): string => (current === 'en' ? 'OK' : 'ঠিক আছে')
 
 /** One plain word for a status, so a badge is never an empty pill. */
 export function statusWord(st?: string): string {

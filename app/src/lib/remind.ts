@@ -45,7 +45,7 @@ export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bil
     })),
   ].sort((a, b) => (a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0))
   for (const d of rows) {
-    if (d.due_date < today) continue                 // already gone by
+    if (!d.due_date || d.due_date < today) continue  // no date to remind about, or already gone by
     let at = fromIso(addDays(d.due_date, -before))
     at.setHours(hour, 0, 0, 0)
     if (at.getTime() <= Date.now()) {
@@ -80,14 +80,19 @@ export async function reschedule(): Promise<{ ok: boolean; count: number; error:
   const when = s.settings.remind
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
-    const perm = await LocalNotifications.requestPermissions()
-    if (perm.display !== 'granted') return { ok: false, count: 0, error: 'মনে করিয়ে দেওয়ার অনুমতি দেওয়া হয়নি' }
+    const rows = plan(s.entries, when, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[])
+    // The permission box appears when there is something to be reminded of — not on the first screen of a
+    // new install, where it has nothing to do with anything he has done yet.
+    if ((await LocalNotifications.checkPermissions()).display !== 'granted') {
+      if (!rows.length) return { ok: true, count: 0, error: '' }
+      const perm = await LocalNotifications.requestPermissions()
+      if (perm.display !== 'granted') return { ok: false, count: 0, error: 'মনে করিয়ে দেওয়ার অনুমতি দেওয়া হয়নি' }
+    }
 
     const pending = await LocalNotifications.getPending()
     const mine = pending.notifications.filter((x) => x.id >= ID_BASE && x.id < ID_BASE + 1000)
     if (mine.length) await LocalNotifications.cancel({ notifications: mine.map((x) => ({ id: x.id })) })
 
-    const rows = plan(s.entries, when, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[])
     if (rows.length) {
       await LocalNotifications.schedule({
         notifications: rows.map((r) => ({

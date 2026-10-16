@@ -6,6 +6,7 @@
 import type { ID, Presence, Entry, DayEntry, AttendanceEntry, StockEntry, MoneyEntry, ProgressEntry } from './model'
 import { kvGet, kvSet, kvDel, uid } from './db'
 import { isoDate } from './bn'
+import { cashState } from './calc'
 
 export interface DraftAtt { presence: Presence; rate: number; amount: number; advance: number }
 export interface DraftMat { key: string; item_id: ID; qty: number; rate: number; party_id: ID | ''; due_date: string; paid: boolean; photo_id: ID | '' }
@@ -32,6 +33,8 @@ export interface Draft {
   step: number
   started_at: string
   from_yesterday: boolean
+  /* The crew has been pre-ticked once. Remembered here, not in the screen, so unticking everyone and coming back does not tick them again. */
+  att_seeded?: boolean
 }
 
 export const DAYS_FOR: Record<Presence, number> = { full: 1, half: 0.5, ot: 1.5 }
@@ -50,10 +53,43 @@ export function normalizeDraft(d: Draft): Draft {
   return { ...d, rets: d.rets ?? [], pexps: d.pexps ?? [], invs: d.invs ?? [] }
 }
 
+/* One half-written day per DATE. There used to be a single slot, so starting yesterday from History
+   overwrote the day he was halfway through today, and "today" then opened yesterday's. The old slot is
+   still read once so a day typed before this update is not lost. */
 const KEY = 'draft'
-export const loadDraft = () => kvGet<Draft | null>(KEY, null)
-export const saveDraft = (d: Draft) => kvSet(KEY, d)
-export const clearDraft = () => kvDel(KEY)
+const INDEX = 'draft_dates'
+const keyFor = (date: string) => 'draft:' + date
+
+/** With a date: that day's draft. Without: today's if there is one, else the newest other. */
+export async function loadDraft(date?: string): Promise<Draft | null> {
+  if (date) return kvGet<Draft | null>(keyFor(date), null)
+  const dates = await kvGet<string[]>(INDEX, [])
+  const pick = dates.includes(isoDate()) ? isoDate() : [...dates].sort().reverse()[0]
+  if (pick) { const d = await kvGet<Draft | null>(keyFor(pick), null); if (d) return d }
+  return kvGet<Draft | null>(KEY, null)
+}
+export async function saveDraft(d: Draft) {
+  await kvSet(keyFor(d.date), d)
+  const dates = await kvGet<string[]>(INDEX, [])
+  if (!dates.includes(d.date)) await kvSet(INDEX, [...dates, d.date])
+}
+export async function clearDraft(date?: string) {
+  if (date) {
+    await kvDel(keyFor(date))
+    const dates = await kvGet<string[]>(INDEX, [])
+    if (dates.includes(date)) await kvSet(INDEX, dates.filter((x) => x !== date))
+  }
+  const old = await kvGet<Draft | null>(KEY, null)
+  if (old && (!date || old.date === date)) await kvDel(KEY)
+}
+
+/** What the book says is in his pocket once THIS day is saved, by the same rules as the real book
+    (cash purchases and cash expenses, wages and advances; not credit, not UPI) and counted only from
+    his last physical count. */
+export function cashAfterDay(entries: Entry[], d: Draft, openingAmount: number, openingDate: string): number {
+  const rows = buildEntries({ ...d, cash_counted: null, cash_computed: null })
+  return Math.round(cashState([...entries, ...rows], openingAmount, openingDate).computed)
+}
 
 export function draftIsEmpty(d: Draft): boolean {
   return !Object.keys(d.att).length && !d.mats.length && !(d.rets?.length) && !d.exps.length

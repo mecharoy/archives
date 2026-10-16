@@ -14,7 +14,7 @@ function csvCell(v: unknown): string {
 }
 
 const TAB_OF: Record<string, string> = {
-  project: 'Projects', worker: 'Workers', item: 'Items', party: 'Parties', stage: 'Stages', coeff: 'Coefficients',
+  project: 'Projects', worker: 'Workers', item: 'Items', party: 'Parties', stage: 'Stages', coeff: 'Coefficients', bill: 'Bills',
   day: 'Day', attendance: 'Attendance', stock: 'Stock', money: 'Money', progress: 'Progress',
 }
 
@@ -27,7 +27,8 @@ export async function buildCsv(): Promise<string> {
   for (const m of [...masters, ...entries] as unknown as Record<string, unknown>[]) {
     const tab = TAB_OF[String(m.kind)]
     if (!tab) continue
-    ;(rows[tab] ||= []).push(m)
+    // A job he deleted goes out marked as such (as it does to the server), not as a live one.
+    ;(rows[tab] ||= []).push(m.kind === 'project' && m.deleted ? { ...m, status: 'deleted' } : m)
   }
   const out: string[] = []
   for (const [tab, cols] of Object.entries(SHEET_COLUMNS)) {
@@ -36,7 +37,8 @@ export async function buildCsv(): Promise<string> {
     for (const r of rows[tab] || []) out.push(cols.map((c) => csvCell(r[c])).join(','))
     out.push('')
   }
-  return out.join('\n')
+  // The byte-order mark is what tells Excel this is UTF-8; without it Bengali opens as mojibake.
+  return '\uFEFF' + out.join('\n')
 }
 
 export async function buildJson(): Promise<string> {

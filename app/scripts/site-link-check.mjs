@@ -229,5 +229,64 @@ ck('a wipe with the code works', r.json.ok, true)
 r = await call(ENV2, 'GET', '/enquiries', { token: DEV })
 ck('and takes the enquiries with it', r.json.enquiries.length, 0)
 
+/* ---------- the reset code is checked here, and checking is not deleting ---------- */
+
+{
+  const rawW = fresh()
+  const envW = { DB: d1(rawW), ADMIN_TOKEN: ADMIN, SITE_TOKEN: SITE, RESET_CODE: RESET }
+  const mk = await call(envW, 'POST', '/admin/households', { token: ADMIN, body: { name: 'Wipe shop' } })
+  const dev = mk.json.device_token
+  await call(envW, 'POST', '/rows', { body: { token: dev, rows: [row('Money', { id: 'm1', batch: 'b', date: '2026-09-01', project_id: '', head_bn: 'x', dir: 'paid', amount: 5, party_id: '', mode: 'নগদ', note: '', personal: false, photo_id: '', created_at: 't' })] } })
+  const count = async () => (await call(envW, 'GET', '/pull', { token: dev })).json.tables.Money.length
+  let r = await call(envW, 'POST', '/wipe', { body: { token: dev, code: RESET, dry: true } })
+  ck('a dry wipe with the right code says yes', r.json.ok === true && r.json.dry === true, true)
+  ck('and deletes nothing', await count(), 1)
+  const t0 = Date.now()
+  r = await call(envW, 'POST', '/wipe', { body: { token: dev, code: 'not-the-code', dry: true } })
+  ck('a dry wipe with a wrong code is refused', r.status, 403)
+  ck('and only after a pause, so guessing is slow', Date.now() - t0 >= 1400, true)
+  r = await call(envW, 'POST', '/wipe', { body: { token: dev, code: '123456' } })
+  ck('a six-digit guess does not wipe', r.status, 403)
+  ck('and nothing was deleted by it', await count(), 1)
+}
+
+/* ---------- one row the database refuses must not stop the rest ---------- */
+
+{
+  // A database that has not been migrated yet: no web_hidden column, so an Items row cannot be stored.
+  const rawP = new SQL.Database()
+  rawP.exec(schema.replace(/web_hidden[^,)]*,?/i, ''))
+  const envP = { DB: d1(rawP), ADMIN_TOKEN: ADMIN, SITE_TOKEN: SITE, RESET_CODE: RESET }
+  const mk = await call(envP, 'POST', '/admin/households', { token: ADMIN, body: { name: 'Old schema shop' } })
+  const dev = mk.json.device_token
+  const wage = row('Attendance', { id: 'a1', batch: 'b', date: '2026-09-01', project_id: '', worker_id: 'w', presence: 'full', days: 1, rate: 700, amount: 700, advance: 0, created_at: 't' })
+  const bad = row('Items', { id: 'i1', name_bn: 'মাল', unit_bn: 'পিস', last_rate: 5, active: true, updated_at: 't', web_hidden: true }, 'upsert')
+  const r = await call(envP, 'POST', '/rows', { body: { token: dev, rows: [wage, bad] } })
+  ck('one refused row does not fail the request', r.status, 200)
+  ck('the good row is stored and acknowledged', r.json.accepted.includes(wage.id), true)
+  ck('the refused one is named, so the phone moves it to the back', r.json.rejected.map((x) => x.id).includes(bad.id), true)
+  ck('and the wage really is in the database', rawP.exec('SELECT COUNT(*) FROM attendance')[0].values[0][0], 1)
+}
+
+/* ---------- the public form: Bengali digits, a real length, a cap ---------- */
+
+{
+  const rawQ = fresh()
+  const envQ = { DB: d1(rawQ), ADMIN_TOKEN: ADMIN, SITE_TOKEN: SITE, RESET_CODE: RESET }
+  const mk = await call(envQ, 'POST', '/admin/households', { token: ADMIN, body: { name: 'Form shop' } })
+  const post = (b) => call(envQ, 'POST', '/enquiries', { token: SITE, body: b })
+  let r = await post({ name: 'অনিমেষ', phone: '৯৮৭৬৫৪৩২১০' })
+  ck('a number typed in Bengali digits is accepted', r.status, 200)
+  const listed = (await call(envQ, 'GET', '/enquiries', { token: mk.json.device_token })).json
+  ck('and stored as digits that can be dialled', listed.enquiries[0] && listed.enquiries[0].phone, '9876543210')
+  r = await post({ name: 'x', phone: '------' })
+  ck('six dashes are not a phone number', r.status, 400)
+  r = await post({ name: 'x', phone: '12345' })
+  ck('five digits are not either', r.status, 400)
+  for (let i = 0; i < 30; i++) await post({ name: 'n' + i, phone: '98765432' + String(10 + i) })
+  r = await post({ name: 'late', phone: '9876543299' })
+  ck('past thirty in an hour the answer is "later"', r.status, 429)
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

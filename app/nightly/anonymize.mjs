@@ -12,6 +12,12 @@
 
 const LABEL = /\[([JCWSP])(\d{1,3})\]/g
 
+/* The wording of a bill that names nobody: the app's own heads and the commonest dates. */
+const GENERIC_BILLS = new Set([
+  'বাজার', 'ওষুধ', 'পড়াশোনা', 'যাতায়াত', 'বিদ্যুৎ বিল', 'ফোন', 'অনুষ্ঠান', 'অন্যান্য',
+  'ঘরভাড়া', 'বাড়ি ভাড়া', 'দোকান ভাড়া', 'ভাড়া', 'ইস্কুলের মাইনে', 'স্কুলের বেতন', 'বিদ্যুৎ', 'জলের বিল', 'ইন্টারনেট', 'কিস্তি', 'ট্যাক্স',
+])
+
 export function anonymize(payload) {
   const p = structuredClone(payload)
   const real = new Map()          // "[W1]" -> "রহিম"
@@ -41,6 +47,9 @@ export function anonymize(payload) {
   for (const r of br.workers || []) r.name_bn = label('W', r.name_bn)
   for (const b of (s.bills && s.bills.list) || []) {
     if (b.to_bn) b.to_bn = label('P', b.to_bn)
+    // What a bill is called is free text and can carry a name ("ছেলের স্কুল", "রমেশদা"). Only the ordinary
+    // heads keep their wording; anything else goes as a plain "a payment".
+    if (!GENERIC_BILLS.has(String(b.name_bn || '').trim())) b.name_bn = 'একটা দেনা'
     delete b.note
   }
   const c = p.computed || {}

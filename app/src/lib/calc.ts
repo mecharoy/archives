@@ -67,7 +67,10 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
   const budget = p.budget || 0
   const pct_spent = budget > 0 ? (cost / budget) * 100 : 0
   const earned = (pct_done / 100) * budget
-  const cpi = cost > 0 && budget > 0 ? earned / cost : null
+  /* Cost-per-work needs some work to compare against. Before a stage is marked, earned is 0 and
+     cpi is 0 for the very first wage paid — which painted every new job red on its first day.
+     The same 2% gate as at_finish. */
+  const cpi = cost > 0 && budget > 0 && pct_done > 2 ? earned / cost : null
   const at_finish = pct_done > 2 ? cost / (pct_done / 100) : null
   const profit = at_finish != null && budget > 0 ? budget - at_finish : null
 
@@ -77,7 +80,10 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
      earned (CPI under 1), is the warning; well ahead / CPI under 0.9 is red. */
   let status: ProjectTotals['status'] = 'ok'
   let flag_bn = t('ঠিক আছে')
-  const gap = pct_spent - pct_done
+  /* "Spending is ahead of the work" is only a statement when the work is being measured. A job with no
+     stages can never show progress, so every rupee would read as "ahead". */
+  const measured = stagesFor(p, stages).length > 0
+  const gap = measured ? pct_spent - pct_done : 0
   if (budget > 0 && (gap > 15 || (cpi != null && cpi < 0.9))) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
   else if (budget > 0 && (gap > 6 || (cpi != null && cpi < 1))) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
   else if (budget > 0 && gap < -10) { flag_bn = t('খরচ কম, কাজ এগিয়ে') }
@@ -142,16 +148,27 @@ export interface CashState {
 /** Cash is rebuilt from the last physical count, not from an opening balance
     typed once in March. A wrong count fixes itself the next time he counts. */
 export function cashState(entries: Entry[], openingAmount: number, openingDate: string): CashState {
-  const days = liveEntries(entries).filter((e) => e.kind === 'day' && (e as DayEntry).cash_counted != null) as DayEntry[]
+  /* A cancelled row and the row that cancelled it are both left out: the money never moved, and a row
+     and its mirror added in floating point leave 0.0000000000004 behind. */
+  const live = liveEntries(entries)
+  const days = live.filter((e) => e.kind === 'day' && (e as DayEntry).cash_counted != null) as DayEntry[]
   days.sort(inOrder)
   const last = days[days.length - 1]
   const anchor_date = last ? last.date : openingDate
   const anchor_amount = last ? (last.cash_counted as number) : openingAmount
 
+  /* What the count already includes. A count made at the end of a day includes that day — everything
+     written up to the moment of the count, which is the whole of its own batch (they share an instant).
+     What is written later the SAME day, a payment after he counted, is new. The opening balance is the
+     cash at the START of its day, so that day's own rows count against it. */
+  const inside = (e: Entry) => (last
+    ? e.date < last.date || (e.date === last.date && e.created_at <= last.created_at)
+    : e.date < openingDate)
+
   let inc = 0
   let out = 0
-  for (const e of entries) {
-    if (e.date <= anchor_date) continue
+  for (const e of live) {
+    if (inside(e)) continue
     if (e.kind === 'attendance') { out += (e.amount || 0) + (e.advance || 0); continue }
     if (e.kind === 'stock') {
       const s = e as StockEntry
@@ -178,7 +195,10 @@ export function cashState(entries: Entry[], openingAmount: number, openingDate: 
 
 /* ---- dues ---- */
 
+/* due_date is '' when nobody gave one (a new shop whose terms he does not know). Such a bill is owed, and
+   is cleared in the order it was written, but it is never overdue and never "due this week". */
 export interface Due { party_id: ID; date: string; due_date: string; amount: number; item_id: ID; entry_id: ID; created_at: string }
+export const isLate = (d: { due_date: string }, today = isoDate()) => !!d.due_date && d.due_date < today
 
 /* A due is opened by an unpaid row and closed by a payment to that party —
    never by editing the original row, which stays exactly as it was written.
@@ -220,12 +240,12 @@ const paise = (x: number) => Math.round(x * 100) / 100
    paid), that order changed the total. It is now the same on every phone and
    on the server (summary.js uses the same four keys). */
 const oldestFirst = (a: Due, b: Due) =>
-  a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1
+  (a.due_date || a.date) < (b.due_date || b.date) ? -1 : (a.due_date || a.date) > (b.due_date || b.date) ? 1
     : a.date < b.date ? -1 : a.date > b.date ? 1
       : a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1
         : a.entry_id < b.entry_id ? -1 : a.entry_id > b.entry_id ? 1 : 0
 
-const dueOf = (s: StockEntry): Due => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || s.date, amount: s.amount, item_id: s.item_id, entry_id: s.id, created_at: s.created_at })
+const dueOf = (s: StockEntry): Due => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || '', amount: s.amount, item_id: s.item_id, entry_id: s.id, created_at: s.created_at })
 
 /** What he still owes his suppliers. */
 export function openDues(entries: Entry[]): Due[] {
@@ -253,8 +273,8 @@ export function receivablesSplit(entries: Entry[]) {
   const week = addDays(today, 7)
   return {
     all,
-    overdue: all.filter((d) => d.due_date < today).reduce((a, d) => a + d.amount, 0),
-    thisWeek: all.filter((d) => d.due_date >= today && d.due_date <= week).reduce((a, d) => a + d.amount, 0),
+    overdue: all.filter((d) => isLate(d, today)).reduce((a, d) => a + d.amount, 0),
+    thisWeek: all.filter((d) => d.due_date && d.due_date >= today && d.due_date <= week).reduce((a, d) => a + d.amount, 0),
     total: all.reduce((a, d) => a + d.amount, 0),
   }
 }
@@ -270,8 +290,8 @@ export function duesSplit(entries: Entry[]) {
   const all = openDues(entries)
   const today = isoDate()
   const week = addDays(today, 7)
-  const overdue = all.filter((d) => d.due_date < today).reduce((a, d) => a + d.amount, 0)
-  const thisWeek = all.filter((d) => d.due_date >= today && d.due_date <= week).reduce((a, d) => a + d.amount, 0)
+  const overdue = all.filter((d) => isLate(d, today)).reduce((a, d) => a + d.amount, 0)
+  const thisWeek = all.filter((d) => d.due_date && d.due_date >= today && d.due_date <= week).reduce((a, d) => a + d.amount, 0)
   const total = all.reduce((a, d) => a + d.amount, 0)
   return { all, overdue, thisWeek, total }
 }
@@ -290,16 +310,18 @@ const inOrder = (a: Entry, b: Entry) =>
 export function shopStock(entries: Entry[], items: Item[]): StockLevel[] {
   const stock = (liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]).sort(inOrder)
   const map = new Map<ID, { qty: number; rate: number }>()
-  const anchors = new Map<ID, string>()
+  const anchors = new Map<ID, StockEntry>()
   // Counts in order, so of two counts on one day the later-written stands.
   for (const s of stock) if (s.dir === 'count' && !s.project_id) {
-    anchors.set(s.item_id, s.date)
+    anchors.set(s.item_id, s)
     map.set(s.item_id, { qty: s.qty, rate: s.rate || 0 })
   }
   for (const s of stock) {
     if (s.project_id && s.dir !== 'transfer') continue
-    const anchor = anchors.get(s.item_id)
-    if (anchor && s.date <= anchor) continue
+    // Inside the count: written on an earlier day, or on its day no later than the count itself.
+    // A sale rung up AFTER the morning count, the same day, is new.
+    const a = anchors.get(s.item_id)
+    if (a && (s.date < a.date || (s.date === a.date && s.created_at <= a.created_at))) continue
     const cur = map.get(s.item_id) || { qty: 0, rate: 0 }
     if (s.dir === 'in' && !s.project_id) { cur.qty += s.qty; cur.rate = s.rate || cur.rate }
     else if (s.dir === 'sale') cur.qty -= s.qty
@@ -346,6 +368,35 @@ export function entriesInLastDays(entries: Entry[], n: number): number {
   const batches = new Set<string>()
   for (const e of liveEntries(entries)) if (e.date >= from) batches.add(e.batch)
   return batches.size
+}
+
+/** What went out on the business's work in these rows: wages and advances, material bought for a job, and
+    other site expenses. Goods put into the shop are stock, not spending; his own spending and the settling of
+    an old bill (counted when the goods came) are not the day's cost. One definition, so the day's review,
+    History and the month's figure on the home screen stop giving three answers to "what did I spend". */
+export function outlay(rows: Entry[]): number {
+  let t = 0
+  for (const e of rows) {
+    if (e.kind === 'attendance') t += (e.amount || 0) + (e.advance || 0)
+    else if (e.kind === 'stock' && (e.dir === 'in' || e.dir === 'transfer') && e.project_id) t += e.amount || 0
+    else if (e.kind === 'money' && e.dir === 'paid' && !e.personal && e.head_bn !== SETTLE_HEAD) t += e.amount || 0
+  }
+  return t
+}
+
+/** On how many DIFFERENT days he wrote something that still stands, in the last n days (today included).
+    Three sales at the counter one evening are one day, not three. */
+export function daysWritten(entries: Entry[], n: number): number {
+  const today = isoDate()
+  const from = addDays(today, -(n - 1))
+  return new Set(liveEntries(entries).filter((e) => e.date >= from && e.date <= today).map((e) => e.date)).size
+}
+
+/** Has the shop ever had anything in it, or sold or sent anything out? An empty shelf after that is a
+    sold-out shop, not a shop nobody has started. */
+export function shopEverHandled(entries: Entry[]): boolean {
+  return liveEntries(entries).some((e) => e.kind === 'stock'
+    && ((e.dir === 'in' && !e.project_id) || e.dir === 'sale' || e.dir === 'transfer' || (e.dir === 'count' && !e.project_id)))
 }
 
 export function lastEntryDate(entries: Entry[]): string | null {

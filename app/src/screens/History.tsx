@@ -3,7 +3,7 @@ import { Icon, TopBar, Pick, Sheet, useToast, Toast, Empty } from '../ui/kit'
 import { useStore, saveEntries, nameOf, type State } from '../lib/store'
 import { money, toBn, num, dateBn, dayLabelBn, isoDate, addDays } from '../lib/bn'
 import type { Entry } from '../lib/model'
-import { liveEntries } from '../lib/calc'
+import { liveEntries, outlay } from '../lib/calc'
 import { reversalOf, newDraft, type Draft } from '../lib/draft'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
@@ -64,15 +64,7 @@ export function History({ onBack, onEnterDate }: { onBack: () => void; onEnterDa
   )
 }
 
-function dayCost(rows: Entry[]): number {
-  let t = 0
-  for (const e of rows) {
-    if (e.kind === 'attendance') t += e.amount
-    else if (e.kind === 'stock' && (e.dir === 'in' || e.dir === 'transfer')) t += e.amount
-    else if (e.kind === 'money' && e.dir === 'paid' && !e.personal) t += e.amount
-  }
-  return t
-}
+const dayCost = outlay
 
 function DayDetail({ s, date, onCorrected }: { s: State; date: string; onCorrected: (m: string) => void }) {
   const rows = liveEntries(s.entries).filter((e) => e.date === date)
@@ -132,7 +124,7 @@ function describe(s: State, e: Entry): string {
 function label(e: Entry): string {
   switch (e.kind) {
     case 'attendance': return e.presence === 'half' ? t('আধা দিন') : e.presence === 'ot' ? t('ওভারটাইম') : t('পুরো দিন')
-    case 'stock': return e.dir === 'in' ? (e.paid ? t('কেনা') : t('বাকিতে কেনা')) : e.dir === 'sale' ? t('বিক্রি') : e.dir === 'transfer' ? t('কাজে পাঠানো') : t('গোনা')
+    case 'stock': return e.dir === 'in' ? (e.paid ? t('কেনা') : t('বাকিতে কেনা')) : e.dir === 'sale' ? t('বিক্রি') : e.dir === 'transfer' ? (e.qty < 0 ? t('কাজ থেকে ফেরত') : t('কাজে পাঠানো')) : t('গোনা')
     case 'money': return e.personal ? t('নিজের খাতা') : e.mode
     case 'progress': return e.state === 'done' ? t('ধাপ শেষ') : t('অর্ধেক')
     default: return ''

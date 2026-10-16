@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Icon } from '../ui/kit'
 import { useStore, activeProjects, workers, stages, type State, type Brief } from '../lib/store'
-import { money, toBn, isoDate, agoBn, dayLabelBn, addDays } from '../lib/bn'
+import { money, toBn, isoDate, agoBn, dayLabelBn, addDays, daysBetween } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
 import { maybeMakeBrief } from '../lib/aiBrief'
 import { statusWord } from '../lib/i18n'
-import { cashState, projectTotals, entriesInLastDays, lastEntryDate, shopStock, duesSplit, receivablesSplit } from '../lib/calc'
-import { lastAttendance, lastDayFor, rankProjects } from '../lib/suggest'
+import { cashState, projectTotals, daysWritten, lastEntryDate, shopStock, shopEverHandled, duesSplit, receivablesSplit } from '../lib/calc'
+import { lastAttendance, lastAttendanceDay, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
 import { allItems } from '../lib/store'
 import { flush } from '../lib/sync'
@@ -256,7 +256,9 @@ function StockSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   return (
     <BookCard tone="stock" icon="shop" title="মজুত" onOpen={() => onGo('shop')}>
       {levels.length === 0 ? (
-        <p className="booknote">{t('এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।')}</p>
+        <p className="booknote">{shopEverHandled(s.entries)
+          ? t('দোকানের সব মাল শেষ। নতুন মাল তুললে ‘মাল এসেছে’ থেকে লিখুন।')
+          : t('এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।')}</p>
       ) : (
         <>
           <div className="miniline">
@@ -298,7 +300,8 @@ function MoneySummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
 function SyncLine({ s }: { s: State }) {
   const pending = s.outbox.length
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-  const days = entriesInLastDays(s.entries, 7)
+  const days = daysWritten(s.entries, 7)
+  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
   return (
     <>
       <div className="divider" />
@@ -313,7 +316,7 @@ function SyncLine({ s }: { s: State }) {
         </span>
       </div>
       <p className="small muted">
-        {t('গত সাত দিনে')} {toBn(days)} {t('দিন হিসাব লেখা হয়েছে')} · {t('হাতে')} {money(cash.computed)}
+        {t('গত সাত দিনে')} {toBn(days)} {t('দিন হিসাব লেখা হয়েছে')}{counted ? ` · ${t('হাতে')} ${money(cash.computed)}` : ''}
         {s.sync_error ? ` · ${s.sync_error}` : ''}
       </p>
     </>
@@ -357,8 +360,11 @@ export function buildSameAsYesterday(s: State): Draft | null {
   if (!pid) return null
   const prev = lastDayFor(s.entries, pid)
   if (!prev) return null
-  const att = lastAttendance(s.entries, pid)
-  if (!att.size) return null
+  // The crew of the last day BEFORE today, and only if that was recent: offering "the same as yesterday"
+  // for a crew last seen last week would tick men who may long since have gone.
+  const att = lastAttendance(s.entries, pid, isoDate())
+  const seen = lastAttendanceDay(s.entries, pid, isoDate())
+  if (!att.size || !seen || daysBetween(seen, isoDate()) > 3) return null
   const men = workers(s)
   const d = newDraft(isoDate(), pid)
   d.from_yesterday = true
@@ -368,9 +374,7 @@ export function buildSameAsYesterday(s: State): Draft | null {
     d.att[wid] = { presence, rate: w.rate, amount: w.rate * DAYS_FOR[presence], advance: 0 }
   }
   if (!Object.keys(d.att).length) return null
-  const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-  const wages = Object.values(d.att).reduce((a, x) => a + x.amount, 0)
-  d.cash_counted = Math.round(cash.computed - wages)
+  // No cash count is invented here: a count is something he does with the money in his hand.
   d.step = 999
   return d
 }

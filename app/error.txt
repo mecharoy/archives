@@ -263,3 +263,80 @@ Location: scripts/large-check.mjs
 Action: timing the home-screen figures at 13k to 98k rows.
 Cause: wall-clock timings on a busy PC and V8 garbage-collection steps make single doublings jumpy (a 3.7 ms step to 20 ms and back to linear).
 Fix: judge the log-log slope from the first measurable size to the last (limit 1.5; a loop inside a loop is 2) with best-of-nine timings, and keep the check out of npm test (npm run large).
+
+2026-10-02
+Problem: a brand-new install said "nothing has been written for 3 days" (red, as the headline) the first time it was opened.
+Location: src/lib/brief.ts localBrief, nightly/compute.mjs cards() and plainHeadline(), nightly/prompt.md
+Action: the owner opened build 24 and 25 for the first time.
+Cause: "silence" was defined as zero entries in three days, which is also true of a book that has never been written in. My own tests encoded it (an empty ledger "must shout"), and every generated ledger was well populated, so nothing noticed.
+Fix: silence needs a last entry to be silent since; a new book gets "write the first day's entry". Tests changed to say so; the smoke test fails if a fresh install shows it. Three audit agents then went through the app (first run, daily flows, data/sync/site) and found the next group below.
+
+2026-10-02
+Problem: the wizard's "what should be in the till" subtracted credit purchases and UPI as if they were cash, left out shop goods bought for cash, and saved the cash figure from before the day's spending, so a normal day over Rs 2,000 raised a false "cash does not match the book".
+Location: src/screens/DayWizard.tsx (StepCash, save), src/lib/draft.ts dayTotal
+Action: agent walked a day with wages, credit cement, a UPI expense and shop goods.
+Cause: dayTotal is a "total spent" figure, not a cash figure; cash_computed was taken before the rows were built.
+Fix: cashAfterDay() runs the book's own cashState over the book plus the day's rows; the same figure is the count's comparison and the saved cash_computed.
+
+2026-10-02
+Problem: a job read red ("spending far ahead of the work") on its first day, with both bars at 0%.
+Location: src/lib/calc.ts projectTotals, server/src/summary.js, nightly/compute.mjs projectStatus
+Action: first wages on a new job.
+Cause: cost-per-work is earned / cost and earned is 0 until a stage is marked, so cpi = 0 < 0.9. A job with no stages can never show progress, so every rupee was "ahead".
+Fix: cpi only once 2% is done (the gate at_finish already had); the spend-ahead rule only when the job has stages (has_stages from the server).
+
+2026-10-02
+Problem: a credit purchase from a new supplier became "overdue" the next morning.
+Location: src/screens/Shop.tsx, DayWizard.tsx, calc.ts dueOf, server/src/summary.js
+Action: bought on credit from a supplier whose terms were left at 0 ("0 if unknown").
+Cause: due date = purchase date + 0, and a missing date fell back to the purchase date.
+Fix: no terms means no due date; such a bill is owed, ordered by the day it was written, and never overdue (phone, server, reminders, screens).
+
+2026-10-02
+Problem: cash and stock lost whatever was written after a count on the same day (a payment after the evening count, a sale after the morning stock count).
+Location: src/lib/calc.ts cashState and shopStock, server/src/stock.js
+Action: agent counted cash/stock and then paid/sold the same day.
+Cause: "inside the count" was decided by date only.
+Fix: inside the count means an earlier day or the same day no later than the count's own created_at; the opening balance is the start of its day. Cancelled pairs are dropped, not summed.
+
+2026-10-02
+Problem: the reset code could be worked out from the public APK, so anyone could wipe the online ledger; a "dry" check did not exist and the wipe ran on first call.
+Location: src/lib/reset.ts (CODE_HASH), server/src/index.js wipe
+Action: agent read the bundle: a SHA-256 of a six-digit code was in it (worked out in 0.9 s) and /wipe had no slow-down.
+Cause: the code was checked on the phone against a hash shipped in the app.
+Fix: the app carries no hash; the Worker checks the code (dry:true checks without deleting), wrong guesses wait 1.5 s; with no server the phone asks him to type the words. Set a LONG RESET_CODE secret. The device token baked into a public APK still lets anyone read the ledger (open, needs a private repo or per-install tokens).
+
+2026-10-02
+Problem: one row the database refused made the whole batch fail (HTTP 500), so no row was stored and the phone resent the same forty for ever; also rows saved during a long send dropped out of memory until the next restart.
+Location: server/src/index.js postRows, src/lib/sync.ts flush
+Action: agent posted an Items row to a database not yet migrated; and queued rows while a send was in flight.
+Cause: DB.batch is one transaction with no per-row fallback; flush rebuilt the outbox from an older picture of the state.
+Fix: on batch failure the rows are tried one at a time and only the bad ones are refused; flush builds the new outbox from the state as it is after its writes.
+
+2026-10-02
+Problem: a new or reinstalled phone on the same online ledger made two of every job, man and material (and stage weights summed to 200); the website then listed one item as in stock and out of stock.
+Location: src/screens/Onboarding.tsx, src/lib/seed.ts, src/lib/restore.ts
+Action: agent onboarded a second phone with the same token and restored.
+Cause: onboarding always seeds stages/items with random ids and has no step that asks the server first.
+Fix: onboarding asks the server for an existing book and offers to bring it back; seeded rows have fixed ids.
+
+2026-10-02
+Problem: a python heredoc patch run from the shell silently produced wrong strings: "\\n" became a real newline and the "marker" was not found; the earlier one died on an apostrophe.
+Location: several fix scripts this session
+Action: patching files from `python - <<'PYEOF'` with backslashes, regexes or typographic quotes.
+Cause: the Git Bash wrapper rewrites backslashes and quotes inside heredocs (logged on 2026-10-01 and 2026-10-02 already).
+Fix: write the patch script with the Write tool and run it with `python file.py`; assert that every replacement text was found.
+
+2026-10-02
+Problem: replaying an agent's repro script failed after the fixes ("waiting for 'এগিয়ে যান'").
+Location: scripts/.scratch-daily/t12-backdate.mjs
+Action: re-running it to confirm a fix.
+Cause: the script assumed the old behaviour (a History day started with no job and no crew ticked); now the job is filled in and last crew is pre-ticked, so its click un-ticked the man.
+Fix: not a regression; the behaviour is now covered by a smoke step (a day added from History keeps the one job, says which day it is, and leaves today's draft alone).
+
+2026-10-16
+Problem: a file search for "SiteKhata" across the whole user folder timed out after 20 seconds.
+Location: C:\Users\abhij (search root)
+Action: finding where the app lives before reviewing it.
+Cause: the search walked every folder under the user profile, including large ones.
+Fix: search Downloads only. The live copy is roychoudhurybuilders\archives-app\app (branch fuzz-and-ui); Downloads\app\sitekhata\app is an older September copy.

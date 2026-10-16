@@ -141,7 +141,7 @@ async function postRows(request, env) {
 
   const rows = Array.isArray(body.rows) ? body.rows.slice(0, MAX_ROWS) : []
   const now = new Date().toISOString()
-  const accepted = []
+  let accepted = []
   const rejected = []
   const statements = []
 
@@ -154,7 +154,25 @@ async function postRows(request, env) {
     }
   }
 
-  if (statements.length) await env.DB.batch(statements)
+  if (statements.length) {
+    try {
+      await env.DB.batch(statements)
+    } catch {
+      /* The batch is one transaction, so one row the database refuses (a column it does not have yet, a
+         value it will not take) used to fail every row with it — and the phone would resend the same
+         forty for ever. Nothing was written, so the rows are tried one at a time and only the bad ones
+         are refused. Every statement is idempotent (insert-or-ignore / insert-or-replace). */
+      const ids = [...accepted]
+      const failed = new Set()
+      for (let i = 0; i < statements.length; i++) {
+        try { await statements[i].run() } catch (err) {
+          failed.add(ids[i])
+          rejected.push({ id: ids[i], error: String(err.message || err).slice(0, 120) })
+        }
+      }
+      accepted = accepted.filter((id) => !failed.has(id))
+    }
+  }
   return json({ ok: true, accepted, rejected })
 }
 
@@ -246,6 +264,9 @@ async function inventory(request, env) {
 
 const PHONE_RE = /^[0-9+\-\s()]{6,20}$/
 const clamp = (v, max) => String(v == null ? '' : v).trim().slice(0, max)
+/** A number typed with Bengali digits is the same number; stored in ASCII so it can be dialled. */
+const asciiDigits = (s) => String(s).replace(/[\u09E6-\u09EF]/g, (d) => String(d.charCodeAt(0) - 0x09E6))
+const phoneOk = (p) => PHONE_RE.test(p) && p.replace(/\D/g, '').length >= 8 && p.replace(/\D/g, '').length <= 15
 
 /** A question or call-back request from the website. */
 async function postEnquiry(request, env) {
@@ -257,12 +278,22 @@ async function postEnquiry(request, env) {
   if (!b || typeof b !== 'object') return json({ ok: false, error: 'bad json' }, 400)
 
   const name = clamp(b.name, 120)
-  const phone = clamp(b.phone, 20)
+  const phone = asciiDigits(clamp(b.phone, 20))
   if (!name) return json({ ok: false, error: 'name required' }, 400)
-  if (!PHONE_RE.test(phone)) return json({ ok: false, error: 'phone looks wrong' }, 400)
+  if (!phoneOk(phone)) return json({ ok: false, error: 'phone looks wrong' }, 400)
 
   const hh = await siteHousehold(env)
   if (!hh) return json({ ok: false, error: 'no household' }, 404)
+
+  /* A public form can be flooded. Thirty in an hour and two hundred in a day are far more than a shop
+     gets; past that the answer is "later", and the website still emails the same enquiry. */
+  const hourAgo = new Date(Date.now() - 3600_000).toISOString()
+  const dayAgo = new Date(Date.now() - 86_400_000).toISOString()
+  const busy = await env.DB.prepare(
+    `SELECT (SELECT COUNT(*) FROM enquiries WHERE household_id = ?1 AND received_at >= ?2) AS h,
+            (SELECT COUNT(*) FROM enquiries WHERE household_id = ?1 AND received_at >= ?3) AS d`
+  ).bind(hh.id, hourAgo, dayAgo).first()
+  if (busy && (busy.h >= 30 || busy.d >= 200)) return json({ ok: false, error: 'too many enquiries just now' }, 429)
 
   // The site names the enquiry, so a retry after a timeout cannot post it twice.
   const given = clamp(b.id, 64)
@@ -322,8 +353,13 @@ async function putBrief(request, env, url) {
 
    The one route that deletes. It is deliberately not reachable with the
    device token alone: the reset code must come with it, and the code lives
-   only in your head and in the RESET_CODE secret. An extracted APK therefore
-   still cannot erase his household.
+   only in your head and in the RESET_CODE secret. The app carries NO copy or
+   hash of it (a hash of a six-digit code in a public APK is worked out in a
+   second), so an extracted APK cannot erase his household; the phone asks this
+   route to check the code (`dry: true` checks without deleting).
+
+   A wrong guess is answered after a pause, so guessing online is slow, and a
+   longer RESET_CODE makes it hopeless: it is a secret you set, not a number.
 
    It empties one household's rows and its brief. The household itself and
    its device token survive, so the phone he is holding keeps working and
@@ -336,7 +372,11 @@ async function wipe(request, env) {
 
   const expected = env.RESET_CODE || ''
   if (!expected) return json({ ok: false, error: 'সার্ভারে রিসেট কোড বসানো নেই' }, 400)
-  if (!sameToken(String(body.code || ''), expected)) return json({ ok: false, error: 'কোড মিলল না' }, 403)
+  if (!sameToken(String(body.code || ''), expected)) {
+    await new Promise((r) => setTimeout(r, 1500))
+    return json({ ok: false, error: 'কোড মিলল না' }, 403)
+  }
+  if (body.dry) return json({ ok: true, dry: true, household: household.name })
 
   let deleted = 0
   for (const tab of Object.keys(COLUMNS)) {

@@ -78,7 +78,7 @@ function net(rows, settlements, dir, today, week) {
     pot.set(s.party_id, paise(n(pot.get(s.party_id)) + n(s.amount)))
   }
   const oldest = [...rows].sort((a, b) =>
-    cmp(a.due_date, b.due_date) || cmp(a.date, b.date) || cmp(a.created_at || '', b.created_at || '') || cmp(String(a.id), String(b.id)))
+    cmp(a.due_date || a.date, b.due_date || b.date) || cmp(a.date, b.date) || cmp(a.created_at || '', b.created_at || '') || cmp(String(a.id), String(b.id)))
   let total = 0, overdue = 0, inWeek = 0
   for (const r of oldest) {
     let amount = n(r.amount)
@@ -121,7 +121,7 @@ export async function buildSummary(db, hid) {
     // JavaScript with exactly the rule the phone uses — oldest bill first —
     // so the dashboard and his screen can never disagree about what he owes.
     // A purchase that was cancelled (and the row that cancelled it) is owed to nobody.
-    all(db, `SELECT id, party_id, amount, date, created_at, COALESCE(NULLIF(due_date,''), date) AS due_date, dir
+    all(db, `SELECT id, party_id, amount, date, created_at, COALESCE(due_date,'') AS due_date, dir
              FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale') AND ${LIVE('stock')}`, hid),
     all(db, `SELECT party_id, dir, COALESCE(SUM(amount),0) AS amount
              FROM money WHERE household_id = ?1 AND personal = 0 AND head_bn = ?2
@@ -257,9 +257,13 @@ export async function buildSummary(db, hid) {
     const pct_done = stagePercent(p, stages, progress)
     const pct_spent = budget > 0 ? (cost / budget) * 100 : 0
     const earned = (pct_done / 100) * budget
-    const cpi = cost > 0 && budget > 0 ? earned / cost : null
+    // Cost-per-work needs some work to compare against (same 2% gate as at_finish, and as the phone):
+    // before the first stage is marked it is 0 for the very first wage paid, and the job reads red.
+    const cpi = cost > 0 && budget > 0 && pct_done > 2 ? earned / cost : null
     const at_finish = pct_done > 2 ? cost / (pct_done / 100) : null
-    const gap = pct_spent - pct_done
+    // "Spending ahead of the work" is only a statement when the work is measured at all.
+    const has_stages = stages.some((s) => s.project_type === p.ptype)
+    const gap = has_stages ? pct_spent - pct_done : 0
 
     perProject.push({
       id: p.id,
@@ -277,6 +281,7 @@ export async function buildSummary(db, hid) {
       cost: round(cost),
       received: round(t.received),
       unbilled: round(earned - n(t.received)),
+      has_stages,
       pct_done: round(pct_done),
       pct_spent: round(pct_spent),
       earned: round(earned),
@@ -297,8 +302,8 @@ export async function buildSummary(db, hid) {
       stage_now_bn: currentStage(p, stages, progress),
       days_running: p.start_date ? daysBetween(p.start_date, TODAY) : null,
       flag_bn: budget <= 0 ? 'বাজেট দেওয়া নেই'
-        : gap > 15 ? 'খরচ কাজের অনেক আগে'
-        : gap > 6 ? 'খরচ কাজের থেকে এগিয়ে'
+        : gap > 15 || (cpi != null && cpi < 0.9) ? 'খরচ কাজের অনেক আগে'
+        : gap > 6 || (cpi != null && cpi < 1) ? 'খরচ কাজের থেকে এগিয়ে'
         : 'ঠিক আছে',
       burn: await burn(db, hid, p, pct_done),
       // Where this job's money actually went, so "spending is ahead" can be

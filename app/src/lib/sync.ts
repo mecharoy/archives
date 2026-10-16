@@ -66,24 +66,31 @@ export async function flush(force = false): Promise<{ sent: number; error: strin
     const res = await postRows(apiUrl('/rows'), s.settings.token, batch)
     if (res.ok) {
       const done = new Set(res.accepted)
-      const keep: OutboxRow[] = []
+      const refused = new Map(res.rejected.map((x) => [x.id, x.error]))
+      // Write what happened to storage first...
       for (const r of getState().outbox) {
-        if (done.has(r.id)) { await dbDel('outbox', r.id); sent++; continue }
-        const rej = res.rejected.find((x) => x.id === r.id)
-        if (rej) {
-          const next = { ...r, tries: r.tries + 1, last_error: rej.error, rejected: true }
-          await dbPut('outbox', next)
-          keep.push(next)
-          error = rej.error
-        } else keep.push(r)
+        if (done.has(r.id)) { await dbDel('outbox', r.id); sent++ }
+        else if (refused.has(r.id)) {
+          await dbPut('outbox', { ...r, tries: r.tries + 1, last_error: refused.get(r.id) || '', rejected: true })
+          error = refused.get(r.id) || ''
+        }
       }
+      /* ...then work out what is left from the outbox AS IT IS NOW. Rows saved while those writes were
+         being awaited (a day written during a long send) are in the state already; building the new list
+         from an older picture dropped them from memory while they stayed in storage, so they waited for
+         the next restart and the home screen said everything was sent. */
+      const keep = getState().outbox
+        .filter((r) => !done.has(r.id))
+        .map((r) => (refused.has(r.id) ? { ...r, tries: r.tries + 1, last_error: refused.get(r.id) || '', rejected: true } : r))
       setState({ outbox: keep, sync_error: error })
     } else {
       error = res.error
-      const keep = getState().outbox.map((r) => (inBatch.has(r.id) ? { ...r, tries: r.tries + 1, last_error: error } : r))
-      await Promise.all(keep.filter((r) => inBatch.has(r.id)).map((r) => dbPut('outbox', r)))
+      const failed = getState().outbox.filter((r) => inBatch.has(r.id)).map((r) => ({ ...r, tries: r.tries + 1, last_error: error }))
+      await Promise.all(failed.map((r) => dbPut('outbox', r)))
+      const byId = new Map(failed.map((r) => [r.id, r]))
+      const keep = getState().outbox.map((r) => byId.get(r.id) ?? r)   // fresh: nothing queued meanwhile is lost
       setState({ outbox: keep, sync_error: error })
-      scheduleSync(backoff(keep.find((r) => inBatch.has(r.id))?.tries || 1))
+      scheduleSync(backoff(failed[0]?.tries || 1))
     }
   } catch (e) {
     error = describe(e)
@@ -114,6 +121,7 @@ async function postRows(endpoint: string, token: string, rows: OutboxRow[]): Pro
       redirect: 'follow',
     })
     const text = await res.text()
+    if (res.status === 401) return { ok: false, accepted: [], rejected: [], error: t('টোকেন মিলল না') }
     if (!res.ok) return { ok: false, accepted: [], rejected: [], error: tf('সার্ভার {0}', res.status) }
     let data: { ok?: boolean; accepted?: string[]; rejected?: { id: string; error: string }[]; error?: string }
     try { data = JSON.parse(text) } catch { return { ok: false, accepted: [], rejected: [], error: t('উত্তর বোঝা গেল না') } }

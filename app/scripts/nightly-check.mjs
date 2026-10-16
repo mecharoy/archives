@@ -82,8 +82,9 @@ const EMPTY = { business: { cash_counted: null, cash_variance: null, dues_total:
 const bare = skeleton(EMPTY)
 ck('an empty ledger still makes cards', bare.cards.length > 0, 'true')
 ck('an uncounted till says so', bare.cards.find((c) => c.label_en === 'Cash in hand').sub_en, 'not counted yet')
-ck('and the silence comes first when the book is empty', bare.cards[0].label_en, 'Nothing written')
-ck('no entries in 3 days is shouted', bare.cards.some((c) => c.status === 'crit'), 'true')
+ck('a book nobody has written in yet is not "silent" — it has not started', bare.cards.some((c) => c.label_en === 'Nothing written'), 'false')
+ck('and nothing on it is shouted', bare.cards.some((c) => c.status === 'crit'), 'false')
+ck('but a book that WAS written in, and has gone quiet, still is', skeleton({ ...EMPTY, business: { ...EMPTY.business, entries_last_3_days: 0, last_entry_date: '2026-08-01' } }).cards[0].label_en, 'Nothing written')
 ck('no jobs means no s-curve', bare.series.scurve, 'undefined')
 /* Stock below zero means goods left that were never entered as bought. */
 const NEG = { ...EMPTY, business: { ...EMPTY.business, shop_stock_value: -500 } }
@@ -92,7 +93,8 @@ ck('negative stock reaches the cards', Boolean(neg), 'true')
 ck('and it is shouted, not filed away', neg.status, 'crit')
 ck('positive stock stays quiet', skeleton({ ...EMPTY, business: { ...EMPTY.business, shop_stock_value: 500 } }).cards.find((c) => c.label_en === 'Stock in the shop').status, 'info')
 
-ck('the plain headline leads with the silence', plainHeadline(EMPTY).en, 'No day has been entered for three days.')
+ck('the plain headline of an empty new book says how to start, not that he has gone quiet', plainHeadline(EMPTY).en, "Start by writing the first day's entry.")
+ck('the plain headline of a book that went quiet leads with the silence', plainHeadline({ ...EMPTY, business: { ...EMPTY.business, entries_last_3_days: 0, last_entry_date: '2026-08-01' } }).en, 'No day has been entered for three days.')
 
 /* ---------- the checker ---------- */
 

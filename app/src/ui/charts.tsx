@@ -1,5 +1,5 @@
 import { useState, type MouseEvent, type TouchEvent } from 'react'
-import { toBn } from '../lib/bn'
+import { toBn, money } from '../lib/bn'
 import type { Brief, Status } from '../lib/store'
 import { t, tf } from '../lib/i18n'
 
@@ -13,6 +13,8 @@ const niceTop = (v: number) => {
   return (f <= 1 ? 1 : f <= 1.5 ? 1.5 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 3 ? 3 : f <= 4 ? 4 : f <= 5 ? 5 : f <= 6 ? 6 : f <= 8 ? 8 : 10) * p
 }
 const plain = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1))
+/** Lakh when it is a lakh or more, rupees when it is not: ₹1,150 is not "0 lakh". */
+const lakhOrRupees = (v: number) => (v >= 1 ? tf('{0} লাখ', toBn(plain(Math.round(v * 10) / 10))) : money(Math.round(v * 100000)))
 
 export function SCurve({ data }: { data: NonNullable<NonNullable<Brief['series']>['scurve']> }) {
   const W = 320, H = 148, L = 30, R = 8, T = 10, B = 22
@@ -69,8 +71,8 @@ export function SCurve({ data }: { data: NonNullable<NonNullable<Brief['series']
         <span style={{ color: 'var(--accent)' }}>{t("—— আসল খরচ")}</span>
         <span className="num">
           {hover != null
-            ? tf('{0} দিন · {1} / {2} লাখ', toBn(days[hover]), toBn(plain(Math.round((data.actual[hover] ?? 0) * 10) / 10)), toBn(plain(Math.round((data.plan[hover] ?? 0) * 10) / 10)))
-            : tf('{0} লাখ খরচ', toBn(plain(Math.round((data.actual[last] ?? 0) * 10) / 10)))}
+            ? tf('{0} দিন · {1} / {2}', toBn(days[hover]), lakhOrRupees(data.actual[hover] ?? 0), lakhOrRupees(data.plan[hover] ?? 0))
+            : tf('{0} খরচ', lakhOrRupees(data.actual[last] ?? 0))}
         </span>
       </div>
     </div>

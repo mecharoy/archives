@@ -276,7 +276,8 @@ const B = ledger(({ masters, entries }) => {
   const later = stockRow({ date: d(20), item_id: 'i4', dir: 'count', qty: 70, rate: 55 })
   const earlier = stockRow({ date: d(20), item_id: 'i4', dir: 'count', qty: 90, rate: 55, created_at: '2026-08-01T00:00:00.000Z' })
   entries.push(later, earlier)
-  entries.push(stockRow({ date: d(20), item_id: 'i4', dir: 'sale', qty: 4, rate: 80 }))   // on the count day: already in the count
+  // Rung up on the count day BEFORE the count was taken: already in the count.
+  entries.push(stockRow({ date: d(20), item_id: 'i4', dir: 'sale', qty: 4, rate: 80, created_at: '2026-08-01T00:00:00.000Z' }))
   entries.push(stockRow({ date: d(10), item_id: 'i4', dir: 'in', qty: 10, rate: 60 }))
   entries.push(stockRow({ date: d(5), item_id: 'i4', dir: 'sale', qty: 5, rate: 80 }))
 })

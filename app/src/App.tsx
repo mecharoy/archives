@@ -19,6 +19,8 @@ import { startSyncLoop } from './lib/sync'
 import { refreshUpdate } from './lib/update'
 import { reschedule } from './lib/remind'
 import { useToast, Toast } from './ui/kit'
+import { isoDate, dayLabelBn } from './lib/bn'
+import { tf } from './lib/i18n'
 import type { Draft } from './lib/draft'
 
 /* Every place he can be. The home screen is the shelf; the three books
@@ -127,9 +129,9 @@ export function App() {
      schedules what the current dues say. */
   const entryCount = state.entries.length
   useEffect(() => {
-    if (!ready || settings.remind === 'off') return
+    if (!ready || needsSetup || settings.remind === 'off') return
     void reschedule()
-  }, [ready, entryCount, settings.remind])
+  }, [ready, needsSetup, entryCount, settings.remind])
 
   /* theme and text size follow the settings, and the Android status bar
      follows the theme so the top of the screen never looks borrowed. */
@@ -197,7 +199,7 @@ export function App() {
       {screen === 'money' && <Money onBack={back} onGo={push} />}
       {screen === 'all' && <AllFeatures onBack={back} onGo={push} />}
       {screen === 'day' && (
-        <DayWizard start={draft} onExit={(saved) => { goHome(); if (saved) toast.show('আজকের হিসাব লেখা হল') }} />
+        <DayWizard start={draft} onExit={(saved, date) => { goHome(); if (saved) toast.show(!date || date === isoDate() ? 'আজকের হিসাব লেখা হল' : tf('{0}-এর হিসাব লেখা হল', dayLabelBn(date))) }} />
       )}
       {screen === 'shop' && <Shop onBack={back} onGo={push} />}
       {screen === 'personal' && <Personal onBack={back} />}

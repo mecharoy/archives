@@ -219,6 +219,8 @@ export async function queue(rows: { tab: string; mode: 'append' | 'upsert'; valu
   const out: OutboxRow[] = rows.map((r) => ({ ...r, id: uid(), tries: 0, last_error: '', created_at: new Date().toISOString() }))
   await dbPutMany('outbox', out)
   setState({ outbox: [...state.outbox, ...out] })
+  // Whoever queued it, it goes soon: a master saved in Settings or setup used to wait for the 45-second timer.
+  void import('./sync').then((m) => m.scheduleSync(800)).catch(() => {})
 }
 
 export function noteChip(taken: boolean) {

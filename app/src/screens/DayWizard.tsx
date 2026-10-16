@@ -4,15 +4,15 @@ import { useStore, getState, activeProjects, workers, allWorkers, items, parties
 import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
 import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
-import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
-import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
+import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, cashAfterDay, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
+import { lastAttendance, attendanceDone, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
 import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
 import { ContactPicker } from './Settings'
 import { HOUSE } from '../lib/seed'
 import { scheduleSync } from '../lib/sync'
-import { t, tf } from '../lib/i18n'
+import { t, tf, okWord } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 
 type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'returned' | 'expense' | 'progress' | 'personal' | 'inventory' | 'cash' | 'review'
@@ -31,9 +31,15 @@ const QUESTION: Record<StepId, string> = {
   review: 'একবার দেখে নিন',
 }
 
-export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (saved: boolean) => void }) {
+export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (saved: boolean, date?: string) => void }) {
   const s = useStore((x) => x)
-  const [draft, setDraft] = useState<Draft | null>(start ? normalizeDraft(start) : null)
+  // A day opened from History or "same as yesterday" gets the same one-job shortcut as a fresh one.
+  const [draft, setDraft] = useState<Draft | null>(() => {
+    if (!start) return null
+    const d = normalizeDraft(start)
+    const act = activeProjects(getState())
+    return !d.project_id && act.length === 1 ? { ...d, project_id: act[0].id } : d
+  })
   const [i, setI] = useState(start?.step ?? 0)
   const toast = useToast()
 
@@ -101,8 +107,8 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
   const jumpTo = (id: StepId) => { const k = steps.indexOf(id); if (k >= 0) setI(k) }
 
   const save = async () => {
-    const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-    const withComputed = { ...draft, cash_computed: cash.computed }
+    // What the book expected to find AFTER this day's own spending — the figure the count is compared with.
+    const withComputed = { ...draft, cash_computed: cashAfterDay(s.entries, draft, s.settings.opening_cash, s.settings.opening_date) }
     await saveEntries(buildEntries(withComputed))
     // Keep the item master's rate current, so the estimator and the shop see
     // the same price he just paid on site.
@@ -110,9 +116,9 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       const it = items(s).find((x) => x.id === m.item_id)
       if (it && m.rate > 0 && it.last_rate !== m.rate) await saveMaster({ ...it, last_rate: m.rate })
     }
-    await clearDraft()
+    await clearDraft(draft.date)
     scheduleSync(300)
-    onExit(true)
+    onExit(true, draft.date)
   }
 
   const project = activeProjects(s).find((p) => p.id === draft.project_id)
@@ -124,7 +130,7 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
         <div className="stepdots">
           {steps.map((sid, k) => <i key={sid} className={k <= at ? 'on' : ''} />)}
         </div>
-        <span className="stepcount num">{toBn(at + 1)} / {toBn(steps.length)}</span>
+        <span className="stepcount num">{draft.date !== isoDate() ? dayLabelBn(draft.date) + ' · ' : ''}{toBn(at + 1)} / {toBn(steps.length)}</span>
         <button className="iconbtn" onClick={() => onExit(false)} aria-label="বন্ধ করুন"><Icon name="close" /></button>
       </div>
 
@@ -140,7 +146,7 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       {step === 'cash' && <StepCash s={s} draft={draft} patch={patch} next={next} />}
       {step === 'review' && (
         <StepReview
-          s={s} draft={draft} project_bn={project?.name_bn || ''} onJump={jumpTo} onSave={save}
+          s={s} draft={draft} project_bn={project?.name_bn || ''} onJump={jumpTo} onSave={save} has={(id) => steps.includes(id)}
           extrasAvailable={false}
           onExtras={() => {}}
           patch={patch}
@@ -195,22 +201,23 @@ function StepProject({ s, draft, patch, next }: StepProps) {
 
 function StepAttendance({ s, draft, patch, next }: StepProps) {
   const men = workers(s)
-  const suggested = useMemo(() => lastAttendance(s.entries, draft.project_id), [s.entries, draft.project_id])
-  const [seeded, setSeeded] = useState(false)
+  const suggested = useMemo(() => lastAttendance(s.entries, draft.project_id, draft.date), [s.entries, draft.project_id, draft.date])
+  // Men already paid for this job on this day (an earlier visit to the wizard today).
+  const done = useMemo(() => attendanceDone(s.entries, draft.project_id, draft.date), [s.entries, draft.project_id, draft.date])
   const [longPress, setLongPress] = useState<ID | null>(null)
   const [newMan, setNewMan] = useState(false)
 
   useEffect(() => {
-    if (seeded || Object.keys(draft.att).length || !suggested.size) { setSeeded(true); return }
+    if (draft.att_seeded) return
+    if (Object.keys(draft.att).length || !suggested.size || done.size) { patch({ att_seeded: true }); return }
     const att: Draft['att'] = {}
     for (const [wid, presence] of suggested) {
       const w = men.find((x) => x.id === wid)
       if (!w) continue
       att[wid] = { presence, rate: w.rate, amount: w.rate * DAYS_FOR[presence], advance: 0 }
     }
-    patch({ att })
-    setSeeded(true)
-  }, [seeded, suggested, men]) // eslint-disable-line
+    patch({ att, att_seeded: true })
+  }, [draft.att_seeded, suggested, done, men]) // eslint-disable-line
 
   const toggle = (wid: ID) => {
     const att = { ...draft.att }
@@ -237,7 +244,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
       <div className="scroll">
         <h2 className="question">{t(QUESTION.attendance)}</h2>
         <p className="hint">
-          {suggested.size ? t('গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।') : t('যারা এসেছে তাদের টিক দিন।')}
+          {done.size ? t('এই দিনের মজুরি কয়েকজনের আগেই লেখা আছে — আবার টিক দিলে দু’বার ধরা হবে।') : suggested.size ? t('গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।') : t('যারা এসেছে তাদের টিক দিন।')}
           {' '}{t('আধা দিন বা ওভারটাইম দিতে নামের উপর চেপে ধরুন।')}
         </p>
         <div className="rowlist">
@@ -248,7 +255,7 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
                 <CheckPick
                   on={!!a}
                   title={w.name_bn}
-                  sub={a && a.presence !== 'full' ? (a.presence === 'half' ? t('আধা দিন') : t('ওভারটাইম')) : tf('দিনে {0}', money(w.rate))}
+                  sub={done.has(w.id) ? t('এই দিনের মজুরি আগেই লেখা আছে') : a && a.presence !== 'full' ? (a.presence === 'half' ? t('আধা দিন') : t('ওভারটাইম')) : tf('দিনে {0}', money(w.rate))}
                   right={a ? money(a.amount) : ''}
                   onClick={() => toggle(w.id)}
                 />
@@ -350,7 +357,7 @@ function StepWages({ s, draft, patch, next }: StepProps) {
           {tab === 'amount'
             ? <MoneyPad value={amount} onChange={setAmount} />
             : <MoneyPad value={advance} onChange={setAdvance} />}
-          <button className="btn primary" style={{ marginTop: '.8rem' }} onClick={commit}>{t("ঠিক আছে")}</button>
+          <button className="btn primary" style={{ marginTop: '.8rem' }} onClick={commit}>{okWord()}</button>
         </Sheet>
       )}
     </>
@@ -374,6 +381,9 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
   const [rate, setRate] = useState('')
   const [newItem, setNewItem] = useState(false)
   const total = draft[field].reduce((a, m) => a + m.qty * m.rate, 0)
+  // Android Back inside a line being entered goes back inside it (rate -> quantity -> the list), instead
+  // of jumping out to the previous wizard step and losing what was typed.
+  useBackHandler(() => setSub(sub === 'rate' ? 'qty' : (draft[field].length || startAsk) ? 'ask' : 'item'), sub === 'qty' || sub === 'rate')
 
   // Rank by the history of the place it is going: the shop for inventory, this
   // job for site material.
@@ -400,7 +410,8 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
     const terms = p?.terms_days ?? 0
     const line: DraftMat = {
       ...cur, qty: Number(qty) || 0, rate: Number(rate) || 0, paid, party_id,
-      due_date: paid ? '' : addDays(draft.date, terms), photo_id,
+      // Terms unknown (0): no date. The bill is owed, but not late tomorrow.
+      due_date: paid || terms <= 0 ? '' : addDays(draft.date, terms), photo_id,
     }
     patch({ [field]: [...draft[field], line] })
     setCur(null); setSub('ask')
@@ -491,7 +502,7 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
     return (
       <RateStep
         s={s} item={it} last={last} rate={rate} setRate={setRate}
-        qty={Number(qty) || 0} defaultParty={cur.party_id}
+        qty={Number(qty) || 0} defaultParty={cur.party_id} date={draft.date}
         onBack={() => setSub('qty')}
         onDone={commitLine}
       />
@@ -500,8 +511,8 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
   return null
 }
 
-function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onDone }: {
-  s: State; item?: Item; last: ReturnType<typeof lastPurchase>; rate: string; setRate: (v: string) => void
+function RateStep({ s, item, last, rate, setRate, qty, defaultParty, date, onBack, onDone }: {
+  s: State; date: string; item?: Item; last: ReturnType<typeof lastPurchase>; rate: string; setRate: (v: string) => void
   qty: number; defaultParty: ID | ''; onBack: () => void; onDone: (paid: boolean, party: ID | '', photo: ID | '') => void
 }) {
   const [party, setParty] = useState<ID | ''>(defaultParty)
@@ -522,12 +533,12 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
       <div className="scroll">
         <h2 className="question">{tf('{0} দর কত?', t(item?.name_bn || ''))}</h2>
         <p className="hint">
-          {last ? tf('গতবার {0} প্রতি {1} · {2}', money(last.rate), item?.unit_bn, dayLabelBn(last.date)) : t('প্রথমবার — যা দিলেন লিখুন।')}
+          {last ? tf('গতবার {0} প্রতি {1} · {2}', money(last.rate), t(item?.unit_bn || ''), dayLabelBn(last.date)) : t('প্রথমবার — যা দিলেন লিখুন।')}
         </p>
         <MoneyPad value={rate} onChange={setRate} allowDecimal />
         {rateNum > 0 && (
           <div className="card" style={{ marginTop: '.9rem' }}>
-            <div className="spread"><span>{num(qty, qty % 1 ? 2 : 0)} {item?.unit_bn} × {money(rateNum)}</span>
+            <div className="spread"><span>{num(qty, qty % 1 ? 2 : 0)} {t(item?.unit_bn || '')} × {money(rateNum)}</span>
               <strong className="num">{money(qty * rateNum)}</strong></div>
             {rise && <p className="small" style={{ color: 'var(--warn)', marginTop: '.4rem' }}>
               {tf('গতবারের থেকে {0}% বেশি।', toBn(Math.round(((rateNum - last!.rate) / last!.rate) * 100)))}</p>}
@@ -538,7 +549,7 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
         <div className="chips">
           {top.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => setParty(party === p.id ? '' : p.id)}>{p.name_bn}</Chip>)}
           {rest.length > 0 && <Chip onClick={() => setAllParties(true)}>{t("আরও…")}</Chip>}
-          {suppliers.length === 0 && <Chip onClick={() => setNewParty(true)}>{t("+ দোকান যোগ করুন")}</Chip>}
+          <Chip onClick={() => setNewParty(true)}>{t("+ দোকান যোগ করুন")}</Chip>
         </div>
 
         <p className="sectionlabel">{t("টাকা দিয়েছেন?")}</p>
@@ -549,7 +560,7 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
         {paid === false && (
           <p className="hint" style={{ marginTop: '.7rem' }}>
             {partyObj?.terms_days
-              ? tf('{0} — {1} দিনের মধ্যে, অর্থাৎ {2}।', partyObj.name_bn, toBn(partyObj.terms_days), dateBn(addDays(isoDate(), partyObj.terms_days), false))
+              ? tf('{0} — {1} দিনের মধ্যে, অর্থাৎ {2}।', partyObj.name_bn, toBn(partyObj.terms_days), dateBn(addDays(date, partyObj.terms_days), false))
               : t('হিসাবে বাকি হিসেবে থাকবে।')}
           </p>
         )}
@@ -803,13 +814,13 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
     <>
       <div className="scroll">
         <h2 className="question">{t(QUESTION.progress)}</h2>
-        <p className="hint">{t("এখন চলছে —")} <strong>{cur.name_bn}</strong>{info.next ? tf(' · এরপর {0}', info.next.name_bn) : ''}</p>
+        <p className="hint">{t("এখন চলছে —")} <strong>{t(cur.name_bn)}</strong>{info.next ? tf(' · এরপর {0}', t(info.next.name_bn)) : ''}</p>
         <div className="rowlist">
           <Pick on={chosen === null && !draft.progress} title="এখনও চলছে" sub="আজ আলাদা কিছু হয়নি"
             onClick={() => { patch({ progress: null }); next() }} />
-          <Pick on={chosen === 'half'} title={tf('{0} — অর্ধেক হয়েছে', cur.name_bn)}
+          <Pick on={chosen === 'half'} title={tf('{0} — অর্ধেক হয়েছে', t(cur.name_bn))}
             onClick={() => { patch({ progress: { stage_seq: cur.seq, state: 'half' } }); next() }} />
-          <Pick on={chosen === 'done'} title={tf('{0} — শেষ হয়েছে', cur.name_bn)} sub={info.next ? tf('কাল থেকে {0}', info.next.name_bn) : t('কাজ শেষের দিকে')}
+          <Pick on={chosen === 'done'} title={tf('{0} — শেষ হয়েছে', t(cur.name_bn))} sub={info.next ? tf('কাল থেকে {0}', t(info.next.name_bn)) : t('কাজ শেষের দিকে')}
             onClick={() => { patch({ progress: { stage_seq: cur.seq, state: 'done' } }); next() }} />
         </div>
         <p className="hint" style={{ marginTop: '1.2rem' }}>{t("শতকরা কত হল সেটা আপনাকে আন্দাজ করতে হবে না — ধাপের ওজন থেকে নিজে থেকে হিসাব হয়ে যায়।")}</p>
@@ -822,8 +833,9 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
 
 function StepCash({ s, draft, patch, next }: StepProps) {
   const cash = useMemo(() => cashState(s.entries, s.settings.opening_cash, s.settings.opening_date), [s.entries, s.settings])
-  const spentToday = dayTotal(draft)
-  const expected = Math.round(cash.computed - spentToday)
+  // By the book's own rules, with this day's rows in it: credit and UPI are not cash going out, and
+  // shop goods bought for cash are.
+  const expected = useMemo(() => cashAfterDay(s.entries, draft, s.settings.opening_cash, s.settings.opening_date), [s.entries, s.settings, draft])
   const [counting, setCounting] = useState(false)
   const [value, setValue] = useState('')
   const diff = draft.cash_counted != null ? draft.cash_counted - expected : null
@@ -840,7 +852,7 @@ function StepCash({ s, draft, patch, next }: StepProps) {
         </div>
         <div className="actionbar">
           <button className="btn ghost" onClick={() => setCounting(false)}>{t("ফিরে")}</button>
-          <button className="btn primary" disabled={!value} onClick={() => { patch({ cash_counted: Number(value) }); setCounting(false) }}>{t("ঠিক আছে")}</button>
+          <button className="btn primary" disabled={!value} onClick={() => { patch({ cash_counted: Number(value) }); setCounting(false) }}>{okWord()}</button>
         </div>
       </>
     )
@@ -896,8 +908,8 @@ function StepCash({ s, draft, patch, next }: StepProps) {
 
 /* ---------- 8. review ---------- */
 
-function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onExtras, patch }: {
-  s: State; draft: Draft; project_bn: string; onJump: (id: StepId) => void; onSave: () => void
+function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onExtras, patch, has }: {
+  s: State; draft: Draft; project_bn: string; onJump: (id: StepId) => void; onSave: () => void; has: (id: StepId) => boolean
   extrasAvailable: boolean; onExtras: () => void; patch: (p: Partial<Draft>) => void
 }) {
   const [saving, setSaving] = useState(false)
@@ -908,17 +920,18 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
       <div className="scroll">
         <h2 className="question">{t(QUESTION.review)}</h2>
         <p className="hint">{project_bn ? project_bn + ' · ' : ''}{dateBn(draft.date)}</p>
-        <div className="card">
-          <button className="review-row" onClick={() => onJump('attendance')}>
+        {/* A row only when its step exists: with no men and no job on the books there is nothing behind it. */}
+        {(has('attendance') || has('material') || has('expense')) && <div className="card">
+          {has('attendance') && <button className="review-row" onClick={() => onJump('attendance')}>
             <span><span className="t">{t("মজুরি")}</span><span className="k">{tf('{0} জন', toBn(men))}</span></span>
             <span className="v num">{money(wageTotal(draft))}</span>
             <Icon name="fwd" size={16} />
-          </button>
-          <button className="review-row" onClick={() => onJump('material')}>
+          </button>}
+          {has('material') && <button className="review-row" onClick={() => onJump('material')}>
             <span><span className="t">{t("মাল")}</span><span className="k">{draft.mats.length ? draft.mats.map((m) => nameOf(s, m.item_id)).join(', ') : t('কিছু আসেনি')}</span></span>
             <span className="v num">{money(matTotal(draft))}</span>
             <Icon name="fwd" size={16} />
-          </button>
+          </button>}
           {(draft.rets?.length ?? 0) > 0 && (
             <button className="review-row" onClick={() => onJump('returned')}>
               <span><span className="t">{t("মাল ফেরত")}</span><span className="k">{draft.rets.map((r) => nameOf(s, r.item_id)).join(', ')}</span></span>
@@ -926,13 +939,13 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
               <Icon name="fwd" size={16} />
             </button>
           )}
-          <button className="review-row" onClick={() => onJump('expense')}>
+          {has('expense') && <button className="review-row" onClick={() => onJump('expense')}>
             <span><span className="t">{t("অন্য খরচ")}</span><span className="k">{draft.exps.length ? draft.exps.map((e) => t(e.head_bn)).join(', ') : t('কিছু নেই')}</span></span>
             <span className="v num">{money(expTotal(draft))}</span>
             <Icon name="fwd" size={16} />
-          </button>
+          </button>}
           <div className="total"><span className="k">{t("আজকের মোট খরচ")}</span><span className="v num">{money(dayTotal(draft) - retTotal(draft))}</span></div>
-        </div>
+        </div>}
 
         {/* His own book and the shop, kept apart from the job's cost above —
             personal spending never touches a job, and goods put into the shop
@@ -955,11 +968,11 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
         )}
 
         <div className="card">
-          <button className="review-row" onClick={() => onJump('progress')}>
+          {has('progress') && <button className="review-row" onClick={() => onJump('progress')}>
             <span><span className="t">{t("কাজের অগ্রগতি")}</span>
               <span className="k">{draft.progress ? (draft.progress.state === 'done' ? t('একটা ধাপ শেষ') : t('অর্ধেক হয়েছে')) : t('আজ বদল নেই')}</span></span>
             <Icon name="fwd" size={16} />
-          </button>
+          </button>}
           <button className="review-row" onClick={() => onJump('cash')}>
             <span><span className="t">{t("হাতে টাকা")}</span><span className="k">{t("দিনের শেষে")}</span></span>
             <span className="v num">{draft.cash_counted != null ? money(draft.cash_counted) : '—'}</span>

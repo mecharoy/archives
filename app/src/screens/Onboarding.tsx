@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Icon, Field, NumField, Chip, Pick } from '../ui/kit'
 import { saveMaster, saveSettings, useStore, allItems } from '../lib/store'
 import { uid } from '../lib/db'
@@ -6,6 +6,8 @@ import { isoDate, money } from '../lib/bn'
 import type { Project, Worker } from '../lib/model'
 import { seedHouse, HOUSE } from '../lib/seed'
 import { t, setLang, type Lang } from '../lib/i18n'
+import { useBackHandler } from '../lib/back'
+import { probeServer, restoreFromServer } from '../lib/restore'
 
 /* First run.
 
@@ -32,6 +34,24 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [men, setMen] = useState<{ name: string; rate: number | null }[]>([{ name: '', rate: null }])
   const [cash, setCash] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
+  /* If the online ledger already holds his books (a reinstall, a new phone, the same token), offer to
+     bring them back BEFORE asking him to type the same names again — typing them twice made two of
+     every job and every man. */
+  const [found, setFound] = useState(0)
+  const [restoring, setRestoring] = useState(false)
+  const [restoreErr, setRestoreErr] = useState('')
+  useEffect(() => { void probeServer().then(setFound) }, [])
+  const restoreNow = async () => {
+    setRestoring(true); setRestoreErr('')
+    const r = await restoreFromServer()
+    if (r.error) { setRestoring(false); setRestoreErr(r.error); return }
+    await saveSettings({ onboarded: true, toured: false, lang, owner_bn: owner.trim() })
+    setRestoring(false)
+    onDone()
+  }
+  // The phone's Back key steps back through setup (and does not quit the app halfway through it).
+  const PREV: Record<Step, Step> = { intro: 'intro', lang: 'intro', about: 'lang', work: 'about', people: 'work', cash: runsSites ? 'people' : 'about' }
+  useBackHandler(() => setStep(PREV[step]), step !== 'intro')
 
   // The language has to take effect the moment he picks it, not at the end —
   // the rest of setup is the first proof that the switch does anything.
@@ -47,8 +67,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       } as Project)
     }
     for (const m of men) {
-      if (!m.name.trim() || !m.rate) continue
-      await saveMaster({ id: uid(), kind: 'worker', name_bn: m.name.trim(), rate: m.rate, phone: '', active: true, updated_at: now } as Worker)
+      // A name with no wage is still a man: he is kept, at 0, to be filled in when he is first paid.
+      if (!m.name.trim()) continue
+      await saveMaster({ id: uid(), kind: 'worker', name_bn: m.name.trim(), rate: m.rate ?? 0, phone: '', active: true, updated_at: now } as Worker)
     }
     await seedHouse(allItems(s))
     // Without a starting figure the first day's closing cash comes out
@@ -86,7 +107,19 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
             {t('নেট না থাকলেও পুরোটা চলে। কোনো নাম-পাসওয়ার্ড লাগে না। কোনো হিসাব মুছে যায় না — ভুল হলে উল্টো লাইন লেখা হয়।')}
           </p>
         </div>
-        <div className="actionbar"><button className="btn primary" onClick={() => setStep('lang')}>{t('শুরু করি')}</button></div>
+        {found > 0 && (
+          <div className="scroll" style={{ flex: 'none', paddingTop: 0 }}>
+            <div className="card">
+              <strong>{t('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে')}</strong>
+              <p className="small muted" style={{ margin: '.3rem 0 .7rem' }}>{t('এই ফোনে আবার সব নাম লিখতে হবে না — আগের হিসাব ফিরিয়ে আনা যায়।')}</p>
+              <button className="btn primary" style={{ width: '100%' }} disabled={restoring} onClick={restoreNow}>
+                {restoring ? t('আনছি…') : t('আগের হিসাব ফিরিয়ে আনুন')}
+              </button>
+              {restoreErr && <p className="small" style={{ color: 'var(--crit)', marginTop: '.5rem' }}>{restoreErr}</p>}
+            </div>
+          </div>
+        )}
+        <div className="actionbar"><button className="btn primary" onClick={() => setStep('lang')}>{found > 0 ? t('না, নতুন করে শুরু করি') : t('শুরু করি')}</button></div>
       </>
     )
   }

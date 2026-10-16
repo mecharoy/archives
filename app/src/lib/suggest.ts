@@ -75,13 +75,29 @@ export function amountChips(entries: Entry[], head: string, personal: boolean, m
 }
 
 /** Yesterday's men, so screen two starts already ticked. */
-export function lastAttendance(entries: Entry[], projectId: ID): Map<ID, Presence> {
+/** The men on the last day written before `before` (when given) — the crew to pre-tick. A day is never
+    its own suggestion: a second visit to today must not tick today's men a second time. */
+export function lastAttendance(entries: Entry[], projectId: ID, before?: string): Map<ID, Presence> {
   const att = (liveEntries(entries).filter((e) => e.kind === 'attendance') as AttendanceEntry[])
-    .filter((a) => a.project_id === projectId && a.days > 0)
+    .filter((a) => a.project_id === projectId && a.days > 0 && (!before || a.date < before))
   if (!att.length) return new Map()
   const lastDate = att.reduce((a, b) => (a > b.date ? a : b.date), '')
   const out = new Map<ID, Presence>()
   for (const a of att) if (a.date === lastDate) out.set(a.worker_id, a.presence)
+  return out
+}
+
+/** The date of the crew lastAttendance returns. */
+export function lastAttendanceDay(entries: Entry[], projectId: ID, before?: string): string | null {
+  const att = (liveEntries(entries).filter((e) => e.kind === 'attendance') as AttendanceEntry[])
+    .filter((a) => a.project_id === projectId && a.days > 0 && (!before || a.date < before))
+  return att.length ? att.reduce((a, b) => (a > b.date ? a : b.date), '') : null
+}
+
+/** Who has already been paid for this job on this day. */
+export function attendanceDone(entries: Entry[], projectId: ID, date: string): Set<ID> {
+  const out = new Set<ID>()
+  for (const a of liveEntries(entries) as AttendanceEntry[]) if (a.kind === 'attendance' && a.project_id === projectId && a.date === date && a.days > 0) out.add(a.worker_id)
   return out
 }
 

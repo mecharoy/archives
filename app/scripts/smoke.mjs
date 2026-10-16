@@ -129,6 +129,13 @@ await step('the last stop closes it for good', async () => {
 })
 
 await step('home renders headline', async () => { await page.locator('.headline').waitFor({ timeout: 3000 }) })
+await step('a brand-new book is not told it has gone quiet', async () => {
+  // Nothing has been written yet — he has not stopped, he has not started.
+  const body = await page.locator('.app').innerText()
+  if (/তিন দিন/.test(body)) throw new Error('a fresh install says nothing was written for three days: ' + body.slice(0, 200).replace(/\n/g, ' | '))
+  const head = await page.locator('.headline').innerText()
+  if (!/শুরু করুন/.test(head)) throw new Error('the headline of a new book should say how to start, not: ' + head)
+})
 await step('open wizard', async () => { await tap('আজকের হিসাব'); await page.getByText('আজ কে কে এসেছে?').waitFor({ timeout: 4000 }) })
 await step('tick both men', async () => {
   await page.locator('.pick').nth(0).click()
@@ -299,6 +306,27 @@ await step('history lists days and can reverse', async () => {
   await page.getByText('বাতিল করুন').click()
   await page.waitForTimeout(500)
 })
+await step('a day added from History keeps the one job, says which day it is, and leaves today alone', async () => {
+  await home()
+  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
+  await page.locator('.tile', { hasText: 'পুরোনো হিসাব' }).click()
+  await page.locator('.topbar .iconbtn').last().click()
+  await page.locator('.sheet .pick', { hasText: 'পরশু' }).first().click()
+  await page.getByText('আজ কে কে এসেছে?').waitFor({ timeout: 4000 })
+  const head = await page.locator('.wizhead').innerText()
+  if (!head.includes('পরশু')) throw new Error('the header should name the day when it is not today: ' + head)
+  await page.locator('.pick').first().click()
+  await page.waitForTimeout(300)
+  const yday = await page.evaluate(async () => {
+    const bn = await import('/src/lib/bn.ts'), db = await import('/src/lib/db.ts')
+    return db.kvGet('draft:' + bn.addDays(bn.isoDate(), -2), null)
+  })
+  if (!yday || !yday.project_id) throw new Error('with one job on the books a day added from History must carry it (project_id was empty)')
+  const today = await page.evaluate(async () => (await import('/src/lib/db.ts')).kvGet('draft:' + (await import('/src/lib/bn.ts')).isoDate(), null))
+  if (today) throw new Error('starting yesterday must not touch a draft for today')
+  await page.locator('.wizhead .iconbtn').last().click()
+  await page.waitForTimeout(300)
+})
 await step('personal book with pin', async () => {
   await home()
   await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
@@ -443,6 +471,18 @@ await step('settling it clears the balance', async () => {
   await page.locator('.tile', { hasText: 'টাকা দেওয়া-নেওয়া' }).click()
   await page.getByText('যাদের কাছে পাওনা').waitFor({ timeout: 3000 })
   await page.getByText('হালদার বাবু').first().click()
+  // The sheet opens with the whole balance filled in. The first key he presses REPLACES it (typing 650 over
+  // a prefilled 600 used to give 6,00,650); after that, keys add as usual.
+  const field = page.locator('.sheet .moneyfield')
+  const shown = async () => (await field.innerText()).replace(/\s/g, '')
+  if (!(await shown()).includes('২,৫০০')) throw new Error('the balance should be filled in: ' + (await shown()))
+  await page.locator('.sheet .pad button', { hasText: '৭' }).first().click()
+  if ((await shown()) !== '₹৭') throw new Error('the first key over a filled-in figure must replace it, got ' + (await shown()))
+  await page.locator('.sheet .pad button', { hasText: '৫' }).first().click()
+  if ((await shown()) !== '₹৭৫') throw new Error('and the next key adds to it, got ' + (await shown()))
+  for (let i = 0; i < 2; i++) await page.locator('.sheet .pad .fn').last().click()
+  for (const d of ['২', '৫', '০', '০']) await page.locator('.sheet .pad button', { hasText: d }).first().click()
+  if (!(await shown()).includes('২,৫০০')) throw new Error('typing the full amount back should read 2,500, got ' + (await shown()))
   await page.locator('.sheet .btn.primary').click()
   await page.waitForTimeout(700)
   await home()

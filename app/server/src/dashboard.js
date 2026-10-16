@@ -290,10 +290,11 @@ export function dashboardHtml() {
       ['Received this week', money(b.received_this_week), 'drawings ' + money(b.drawings_this_week), 'info'],
       ['Days entered', String(b.days_entered_this_week) + ' of 7',
         'week before: ' + String(b.days_entered_prev_week) + ' of 7',
-        b.days_entered_this_week < 3 ? 'crit' : b.days_entered_this_week < 6 ? 'warn' : 'ok'],
+        // Red only once he has written and then gone quiet. A new book, or a shop that never uses the day screen (its rows are not days), is not a problem.
+        !b.last_entry_date || !(d.coverage && d.coverage.days_recorded) ? 'info' : b.days_entered_this_week < 3 ? 'crit' : b.days_entered_this_week < 6 ? 'warn' : 'ok'],
       ['Shop stock', money(b.shop_stock_value), 'at cost', 'info'],
       ['Entries, last 3 days', String(b.entries_last_3_days), b.last_entry_date ? 'last ' + b.last_entry_date : 'nothing yet',
-        b.entries_last_3_days === 0 ? 'crit' : 'ok']
+        b.entries_last_3_days === 0 && b.last_entry_date ? 'crit' : 'ok']
     ];
     $('stats').innerHTML = cards.map(function (c) {
       return '<div class="stat ' + c[3] + '"><div class="k">' + c[0] + '</div>' +

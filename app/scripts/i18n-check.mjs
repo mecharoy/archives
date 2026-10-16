@@ -19,6 +19,7 @@ const { i18n } = app
 /* Exempt on purpose. */
 const EXEMPT = new Set([
   'বাংলা',          // the name of the language, shown in its own script on the language page
+  'মুছে দিন',       // the words he TYPES to confirm a reset on a phone with no server: compared as typed, never shown alone
 ])
 
 const files = []

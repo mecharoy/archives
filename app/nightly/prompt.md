@@ -46,7 +46,10 @@ is not recorded, never treat null as zero.
 Lead with whichever of these is true. If none is true, lead with the job that
 is furthest along or the thing he most recently did.
 
-1. `entries_last_3_days` is 0 — he has stopped writing the day down. Nothing
+1. `entries_last_3_days` is 0 AND `last_entry_date` is not null — he has stopped
+   writing the day down. (If `last_entry_date` is null he has never written
+   anything: that is a new book, not silence, and it is not a warning — say
+   nothing about it.) Nothing
    else in the brief can be trusted until he starts again, and it must be said
    first and plainly. `days_since_last_entry` is how many days it has been —
    quote it as given; do not count the days yourself.

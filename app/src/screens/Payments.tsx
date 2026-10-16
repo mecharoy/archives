@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useOnce } from '../lib/once'
 import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, Field, useToast, Toast, Empty } from '../ui/kit'
 import { useStore, saveEntries, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
@@ -43,8 +44,8 @@ export function Payments({ onBack }: { onBack: () => void }) {
             <div className="rowlist">
               {owe.map((x) => (
                 <Pick key={'o' + x.party_id} title={x.party_id ? nameOf(s, x.party_id) : t('নাম লেখা নেই')}
-                  sub={x.oldest < isoDate() ? tf('{0} থেকে বাকি — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে দিতে হবে', dateBn(x.oldest, false))}
-                  right={<span className="num" style={{ color: x.oldest < isoDate() ? 'var(--crit)' : undefined }}>{money(x.amount)}</span>}
+                  sub={!x.oldest ? t('তারিখ ঠিক করা নেই') : x.oldest < isoDate() ? tf('{0} থেকে বাকি — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে দিতে হবে', dateBn(x.oldest, false))}
+                  right={<span className="num" style={{ color: x.oldest && x.oldest < isoDate() ? 'var(--crit)' : undefined }}>{money(x.amount)}</span>}
                   onClick={() => setPay({ party_id: x.party_id, dir: 'paid', owed: x.amount })} />
               ))}
             </div>
@@ -57,7 +58,7 @@ export function Payments({ onBack }: { onBack: () => void }) {
             <div className="rowlist">
               {get.map((x) => (
                 <Pick key={'g' + x.party_id} title={x.party_id ? nameOf(s, x.party_id) : t('খুচরো খদ্দের')}
-                  sub={x.oldest < isoDate() ? tf('{0} থেকে পাওনা — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে পাওয়ার কথা', dateBn(x.oldest, false))}
+                  sub={!x.oldest ? t('তারিখ ঠিক করা নেই') : x.oldest < isoDate() ? tf('{0} থেকে পাওনা — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে পাওয়ার কথা', dateBn(x.oldest, false))}
                   right={<span className="num">{money(x.amount)}</span>}
                   onClick={() => setPay({ party_id: x.party_id, dir: 'received', owed: x.amount })} />
               ))}
@@ -79,10 +80,11 @@ function byParty(rows: { party_id: ID; amount: number; due_date: string }[]) {
   const map = new Map<ID, { party_id: ID; amount: number; oldest: string }>()
   for (const r of rows) {
     const cur = map.get(r.party_id)
-    if (cur) { cur.amount += r.amount; if (r.due_date < cur.oldest) cur.oldest = r.due_date }
+    // oldest is '' when none of the party's bills has a date; those go last.
+    if (cur) { cur.amount += r.amount; if (r.due_date && (!cur.oldest || r.due_date < cur.oldest)) cur.oldest = r.due_date }
     else map.set(r.party_id, { party_id: r.party_id, amount: r.amount, oldest: r.due_date })
   }
-  return [...map.values()].sort((a, b) => (a.oldest < b.oldest ? -1 : 1))
+  return [...map.values()].sort((a, b) => ((a.oldest || '9999') < (b.oldest || '9999') ? -1 : (a.oldest || '9999') > (b.oldest || '9999') ? 1 : 0))
 }
 
 function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
@@ -95,6 +97,7 @@ function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
   const name = party_id ? nameOf(s, party_id) : dir === 'paid' ? t('নাম লেখা নেই') : t('খুচরো খদ্দের')
   const amount = Number(value) || 0
 
+  const saveOnce = useOnce(() => save())
   const save = async () => {
     const e: MoneyEntry = {
       id: uid(), kind: 'money', batch: uid(), date, project_id: '',
@@ -127,7 +130,7 @@ function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
           <span>{t('বাকির চেয়ে বেশি লিখছেন। বাড়তি টাকাটা পরের বিলের জমা হিসেবে থেকে যাবে।')}</span>
         </div>
       )}
-      <button className="btn primary" disabled={amount <= 0} onClick={save} style={{ marginTop: '.4rem', width: '100%' }}>
+      <button className="btn primary" disabled={amount <= 0} onClick={saveOnce} style={{ marginTop: '.4rem', width: '100%' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}>
           <Icon name="check" size={18} />{t('সেভ করুন')}
         </span>

@@ -29,6 +29,23 @@ const NULLABLE = new Set(['area_sqft', 'budget', 'plan_days', 'last_rate', 'cash
 
 export interface RestoreResult { masters: number; entries: number; error: string }
 
+/** How many rows the online ledger already holds for this phone's token (0 on any trouble). A new or
+    reinstalled phone on the same token should be offered them before it starts a second set of books. */
+export async function probeServer(): Promise<number> {
+  const s = getState()
+  const url = apiUrl('/pull')
+  if (!url || !s.settings.token) return 0
+  try {
+    const res = await fetch(url, { headers: { Authorization: 'Bearer ' + s.settings.token }, cache: 'no-store' })
+    if (!res.ok) return 0
+    const data = (await res.json()) as { ok?: boolean; tables?: Record<string, unknown[]> }
+    if (!data.ok || !data.tables) return 0
+    // Stages and the like are seeded by the app itself; only what he wrote counts as "a book".
+    const mine = ['Projects', 'Workers', 'Parties', 'Day', 'Attendance', 'Stock', 'Money', 'Bills']
+    return mine.reduce((a, k) => a + (Array.isArray(data.tables![k]) ? data.tables![k].length : 0), 0)
+  } catch { return 0 }
+}
+
 export async function restoreFromServer(): Promise<RestoreResult> {
   const s = getState()
   const url = apiUrl('/pull')

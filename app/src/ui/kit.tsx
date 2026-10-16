@@ -131,22 +131,31 @@ export function Empty({ children }: { children: ReactNode }) {
    A keypad rather than the system keyboard: he never has to decide whether
    the app wants ১২৫০ or 1250, and the buttons are the size of his thumb. */
 
-export function MoneyPad({ value, onChange, prefix = '₹', allowDecimal = false, chips, onChipTaken }: {
+export function MoneyPad({ value, onChange, prefix = '₹', allowDecimal = false, chips, onChipTaken, code = false }: {
   value: string
   onChange: (v: string) => void
   prefix?: string
   allowDecimal?: boolean
   chips?: number[]
   onChipTaken?: () => void
+  /** A code, not an amount: every digit counts (0000 is four zeros, 0123 starts with a zero) and is shown as a dot. */
+  code?: boolean
 }) {
+  /* A figure the app filled in (his usual wage, the price he paid last time) is replaced by the first
+     digit he presses, not added to: typing 650 over a prefilled 600 gave 6,00,650. Once he has pressed
+     anything — a digit, delete, a quick-pick — he is editing, and keys add as usual. */
+  const touched = useRef(false)
   const press = (k: string) => {
     if (navigator.vibrate) navigator.vibrate(8)
-    if (k === 'del') return onChange(value.slice(0, -1))
-    if (k === 'clr') return onChange('')
-    if (k === '.') { if (!allowDecimal || value.includes('.')) return; return onChange((value || '0') + '.') }
-    if (value.replace('.', '').length >= 9) return
-    if (value === '0' && k === '0') return
-    onChange(value === '0' ? k : value + k)
+    if (k === 'del') { touched.current = true; return onChange(value.slice(0, -1)) }
+    if (k === 'clr') { touched.current = true; return onChange('') }
+    if (code) return onChange(value + k)
+    const base = !touched.current && value ? '' : value
+    touched.current = true
+    if (k === '.') { if (!allowDecimal || base.includes('.')) return; return onChange((base || '0') + '.') }
+    if (base.replace('.', '').length >= 9) return
+    if (base === '0' && k === '0') return
+    onChange(base === '0' ? k : base + k)
   }
   const shown = value ? groupIndian(Number(value.endsWith('.') ? value + '0' : value || '0')) : ''
   const display = value.endsWith('.') ? shown + '.' : shown
@@ -154,13 +163,13 @@ export function MoneyPad({ value, onChange, prefix = '₹', allowDecimal = false
     <div>
       <div className={'moneyfield num' + (value ? '' : ' empty')}>
         <span className="cur">{prefix}</span>
-        <span>{value ? toBn(display) : toBn(0)}</span>
+        <span>{code ? '●'.repeat(value.length) || '\u00a0' : value ? toBn(display) : toBn(0)}</span>
         <span className="caret" />
       </div>
       {chips && chips.length > 0 && (
         <div className="chips" style={{ margin: '.3rem 0 .9rem', justifyContent: 'center' }}>
           {chips.map((c) => (
-            <Chip key={c} onClick={() => { onChange(String(c)); onChipTaken?.() }}>{prefix}{toBn(groupIndian(c))}</Chip>
+            <Chip key={c} onClick={() => { touched.current = true; onChange(String(c)); onChipTaken?.() }}>{prefix}{toBn(groupIndian(c))}</Chip>
           ))}
         </div>
       )}

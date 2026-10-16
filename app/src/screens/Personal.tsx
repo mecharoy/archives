@@ -12,6 +12,7 @@ import { hashPin, checkPin } from '../lib/pin'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
+import { useOnce } from '../lib/once'
 
 export function Personal({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -57,7 +58,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
               }} />
             ))}
           </div>
-          <MoneyPad value={pin} onChange={(v) => void tryPin(v.slice(0, 4))} prefix="" />
+          <MoneyPad value={pin} onChange={(v) => void tryPin(v.slice(0, 4))} prefix="" code />
         </div>
       </>
     )
@@ -167,6 +168,8 @@ function BillSheet({ bill, onClose, onSaved }: {
   const fresh = !bill.updated_at
   const set = (p: Partial<Bill>) => setB({ ...b, ...p })
   const ok = b.name_bn.trim() !== '' && (b.amount || 0) > 0 && b.due_date !== ''
+  const saveOnce = useOnce(() => save())
+  const payOnce = useOnce(async () => { await payBill(b); onSaved('দেওয়া হয়েছে বলে লেখা হল') })
 
   const save = async () => {
     await saveMaster({ ...b, name_bn: b.name_bn.trim(), to_bn: b.to_bn.trim(), updated_at: new Date().toISOString() })
@@ -207,12 +210,12 @@ function BillSheet({ bill, onClose, onSaved }: {
           <Chip on={isMonthly(b.repeat)} onClick={() => set({ repeat: isMonthly(b.repeat) ? b.repeat : 'monthly' })} sub={t('প্রতি মাসে এই তারিখে')}>{t('প্রতি মাসে')}</Chip>
         </div>
       </Field>
-      <button className="btn primary" disabled={!ok} style={{ marginTop: '.4rem', width: '100%' }} onClick={save}>
+      <button className="btn primary" disabled={!ok} style={{ marginTop: '.4rem', width: '100%' }} onClick={saveOnce}>
         {t("সেভ করুন")}
       </button>
       {!fresh && (
         <button className="btn" style={{ marginTop: '.6rem', width: '100%' }}
-          onClick={async () => { await payBill(b); onSaved('দেওয়া হয়েছে বলে লেখা হল') }}>
+          onClick={payOnce}>
           {t("দিয়ে দিয়েছি")}
         </button>
       )}
@@ -233,6 +236,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
   const ranked = rankHeads(s.entries, true).filter((h) => h !== DRAWING_HEAD)
   const ordered = [...ranked, ...MONEY_HEADS_PERSONAL.filter((h) => !ranked.includes(h))]
   const chips = amountChips(s.entries, head, true)
+  const saveOnce = useOnce(() => save())
 
   const save = async () => {
     const e: MoneyEntry = {
@@ -286,7 +290,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
         <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{m}</Chip>)}</div>
       </div>
       <div className="actionbar">
-        <button className="btn primary" disabled={!Number(amount)} onClick={save}>{t("সেভ করুন")}</button>
+        <button className="btn primary" disabled={!Number(amount)} onClick={saveOnce}>{t("সেভ করুন")}</button>
       </div>
     </>
   )
@@ -308,7 +312,7 @@ export function PinSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (
             <span key={k} style={{ width: '1rem', height: '1rem', borderRadius: '50%', background: (stage === 'first' ? pin : again).length > k ? 'var(--accent)' : 'var(--line)' }} />
           ))}
         </div>
-        <MoneyPad prefix="" value={stage === 'first' ? pin : again}
+        <MoneyPad prefix="" code value={stage === 'first' ? pin : again}
           onChange={(v) => (stage === 'first' ? setPin(v.slice(0, 4)) : setAgain(v.slice(0, 4)))} />
         {stage === 'again' && (
           <button className="btn primary" style={{ marginTop: '.8rem' }} disabled={again !== pin} onClick={save}>

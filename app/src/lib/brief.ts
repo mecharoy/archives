@@ -6,7 +6,7 @@
 
 import { kvSet } from './db'
 import { getState, setState, apiUrl, type Brief, type Status, activeProjects, stages, coeffs, allItems, nameOf } from './store'
-import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries, SETTLE_HEAD } from './calc'
+import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, lastEntryDate, liveEntries, outlay, SETTLE_HEAD } from './calc'
 import { hoursSince, isoDate, daysBetween, addDays, money, toBn, dayLabelBn } from './bn'
 import type { Entry, StockEntry } from './model'
 import { t, tf } from './i18n'
@@ -25,6 +25,8 @@ export function parseBrief(raw: unknown): Brief | null {
   const o = raw as Record<string, unknown>
   const generated_at = str(o.generated_at, 40)
   if (!generated_at || !Number.isFinite(new Date(generated_at).getTime())) return null
+  // A brief with no words in it would blank the headline and, being newer, replace a good one.
+  if (!str(o.headline_bn) && !str(o.headline_en)) return null
   const series = (o.series || {}) as Record<string, unknown>
   const sc = (series.scurve || {}) as Record<string, unknown>
   const numbers = (v: unknown) => arr(v).map((x) => numOr(x, 0)).slice(0, 200)
@@ -136,6 +138,8 @@ export function localBrief(): Brief {
   const st = stages(s)
   const cf = coeffs(s)
   const entered3 = entriesInLastDays(es, 3)
+  // Silence means he STOPPED writing. A book with nothing in it has not started — that is not a warning.
+  const started = lastEntryDate(es) != null
 
   const counted = es.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
   const cards: NonNullable<Brief['cards']> = [
@@ -153,7 +157,7 @@ export function localBrief(): Brief {
   })
 
   const alerts: NonNullable<Brief['alerts']> = []
-  if (entered3 === 0) alerts.push({ severity: 'crit', text_bn: t('তিন দিন কোনো হিসাব লেখা হয়নি।') })
+  if (started && entered3 === 0) alerts.push({ severity: 'crit', text_bn: t('তিন দিন কোনো হিসাব লেখা হয়নি।') })
   if (dues.overdue > 0) alerts.push({ severity: 'crit', text_bn: tf('{0} দেনার সময় পেরিয়ে গেছে।', money(dues.overdue)) })
   else if (dues.thisWeek > 0) alerts.push({ severity: 'warn', text_bn: tf('এ সপ্তাহে {0} দিতে হবে।', money(dues.thisWeek)) })
   for (const p of active) {
@@ -171,23 +175,21 @@ export function localBrief(): Brief {
 
   return {
     generated_at: new Date().toISOString(),
-    headline_bn: alerts[0]?.text_bn || (active.length ? t('সব ঠিক চলছে।') : t('একটা কাজ যোগ করে শুরু করুন।')),
+    headline_bn: alerts[0]?.text_bn || (
+      active.length ? (started ? t('সব ঠিক চলছে।') : t('প্রথম দিনের হিসাব লিখে শুরু করুন।'))
+      : !s.settings.runs_sites ? (started ? t('সব ঠিক চলছে।') : t('দোকানের প্রথম মাল বা বিক্রি লিখে শুরু করুন।'))   // a shop with no jobs is not missing a job
+      : started ? t('সব ঠিক চলছে।')                              // written in, but no job open (sales only, or between contracts)
+      : t('একটা কাজ যোগ করে শুরু করুন।')),
     cards, projects: projs, alerts,
     series: { scurve: main ? sCurve(main.id) : undefined, burn: burnRows },
-    todo_bn: dues.all.slice(0, 4).map((d) => `${nameOf(s, d.party_id) || t('দোকান')} — ${money(d.amount)}, ${dayLabelBn(d.due_date)}`),
+    // A bill with no shop named has no name to show ('—' is what nameOf gives for nothing), and one with no date has no day.
+    todo_bn: dues.all.slice(0, 4).map((d) => `${d.party_id ? nameOf(s, d.party_id) : t('দোকান')} — ${money(d.amount)}${d.due_date ? ', ' + dayLabelBn(d.due_date) : ''}`),
   }
 }
 
 export function monthSpend(es: Entry[]): number {
   const from = isoDate().slice(0, 8) + '01'
-  let total = 0
-  for (const e of es) {
-    if (e.date < from) continue
-    if (e.kind === 'attendance') total += e.amount + e.advance
-    else if (e.kind === 'stock' && (e.dir === 'in' || e.dir === 'transfer')) total += e.amount
-    else if (e.kind === 'money' && e.dir === 'paid' && !e.personal && e.head_bn !== SETTLE_HEAD) total += e.amount
-  }
-  return total
+  return outlay(es.filter((e) => e.date >= from))
 }
 
 /** Cumulative spend against a straight-line plan, in lakh. */

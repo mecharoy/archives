@@ -1,62 +1,58 @@
 /* Factory reset — wipe the phone, and optionally the server copy with it.
 
    This is the one operation in the app that destroys instead of appending, so
-   it is the one operation behind a code. The code is not stored anywhere in
-   plain text: the app carries its SHA-256 hash, and the Worker holds its own
-   copy as a secret, so wiping the server needs the code even from a phone
-   whose token has been pulled out of the APK.
+   it is the one operation behind a code. The code is checked by the Worker,
+   which holds it as a secret (RESET_CODE). The app carries NO copy and no hash
+   of it: it used to carry a hash, and a hash of a six-digit code inside a
+   public APK is worked out in about a second, which made the code decoration.
 
-   Nothing about it is recoverable. A backup written from সেটিংস → ব্যাকআপ is
-   the only way back, which is why the screen offers one first. */
+   So a reset needs the server to say yes (its `dry` check, for a phone-only
+   reset, or the real wipe). With no server set up at all there is nothing to
+   check a code against, so the phone asks him to type the words instead.
+
+   Nothing about it is recoverable once the online copy is gone. Wiping only
+   the phone is: the online ledger brings everything back. */
 
 import { dbClear } from './db'
 import { getState, apiUrl } from './store'
 
-/* sha256('site-khata/reset/v1:' + code) — the code itself is never in the
-   bundle, so unpacking the APK does not hand anyone the reset. */
-const CODE_HASH = 'dc86066e089acf42d8598d770637d155e054bdffeb66b9e64aa843349d1fbefd'
-
-export async function codeHash(code: string): Promise<string> {
-  const data = new TextEncoder().encode('site-khata/reset/v1:' + code.trim())
-  const buf = await crypto.subtle.digest('SHA-256', data)
-  return [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('')
-}
-
-export async function codeOk(code: string): Promise<boolean> {
-  return (await codeHash(code)) === CODE_HASH
-}
+/** What he types on a phone with no server, where there is no code to check. */
+export const CONFIRM_WORDS = 'মুছে দিন'
 
 export interface ResetResult { phone: boolean; server: 'done' | 'skipped' | 'failed'; error: string }
 
+/** True when there is a server that can check the code. */
+export function hasServer(): boolean {
+  const s = getState()
+  return !!(apiUrl('/wipe') && s.settings.token)
+}
+
 /** Wipe this phone, and the household on the server when asked to. */
 export async function factoryReset(code: string, alsoServer: boolean): Promise<ResetResult> {
-  if (!(await codeOk(code))) return { phone: false, server: 'skipped', error: 'কোড মিলল না' }
-
-  let server: ResetResult['server'] = 'skipped'
-  let error = ''
   const s = getState()
-  const url = apiUrl('/wipe')
-  if (alsoServer && url && s.settings.token) {
+  let server: ResetResult['server'] = 'skipped'
+
+  if (hasServer()) {
     try {
-      const res = await fetch(url, {
+      const res = await fetch(apiUrl('/wipe'), {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ token: s.settings.token, code: code.trim() }),
+        // dry: the server checks the code and, if it is right, says so without deleting. The real wipe is the same call without it.
+        body: JSON.stringify({ token: s.settings.token, code: code.trim(), dry: !alsoServer }),
       })
       const data = (await res.json().catch(() => ({}))) as { ok?: boolean; error?: string }
-      if (res.ok && data.ok) server = 'done'
-      else { server = 'failed'; error = data.error || `সার্ভার ${res.status}` }
+      if (res.status === 403) return { phone: false, server: 'skipped', error: 'কোড মিলল না' }
+      if (!(res.ok && data.ok)) return { phone: false, server: 'failed', error: data.error || `সার্ভার ${res.status}` }
+      server = alsoServer ? 'done' : 'skipped'
     } catch {
-      server = 'failed'
-      error = 'নেট পাওয়া যাচ্ছে না'
+      // The code can only be checked by the server, so without signal nothing is wiped.
+      return { phone: false, server: 'failed', error: 'নেট ছাড়া মোছা যায় না — কোডটা সার্ভার মেলায়' }
     }
+  } else if (code.trim() !== CONFIRM_WORDS) {
+    return { phone: false, server: 'skipped', error: 'কোড মিলল না' }
   }
 
-  // The phone goes last: if the server refused, he still has his rows and can
-  // try again rather than being left with nothing anywhere.
-  if (server !== 'failed') {
-    await Promise.all([dbClear('kv'), dbClear('masters'), dbClear('entries'), dbClear('outbox'), dbClear('blobs')])
-    return { phone: true, server, error }
-  }
-  return { phone: false, server, error }
+  // The phone goes last: if the server refused, he still has his rows and can try again.
+  await Promise.all([dbClear('kv'), dbClear('masters'), dbClear('entries'), dbClear('outbox'), dbClear('blobs')])
+  return { phone: true, server, error: '' }
 }

@@ -18,7 +18,7 @@ import { seedHouse, HOUSE } from '../lib/seed'
 import { chipMissRate } from '../lib/suggest'
 import { readContacts, pickOneContact, type PhoneContact } from '../lib/contacts'
 import { plan, reschedule, type RemindWhen } from '../lib/remind'
-import { factoryReset } from '../lib/reset'
+import { factoryReset, hasServer, CONFIRM_WORDS } from '../lib/reset'
 import { cashState } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
@@ -73,6 +73,12 @@ export function Settings({ onBack }: { onBack: () => void }) {
           <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={<Icon name="fwd" size={18} />} onClick={() => setPage('backup')} />
           <Pick title="টাকার তাগাদা" sub={REMIND_LABEL[s.settings.remind]} right={<Icon name="fwd" size={18} />} onClick={() => setPage('remind')} />
           <Pick title="নিজের খরচের পাসকোড" sub={s.settings.pin_hash ? t('দেওয়া আছে') : t('দেওয়া নেই')} right={<Icon name="lock" size={18} />} onClick={() => setPin(true)} />
+        </div>
+
+        <p className="sectionlabel">{t("কী কী চালান")}</p>
+        <div className="rowlist">
+          <Pick on={s.settings.runs_sites} title="সাইটের কাজ" sub="ঠিকাদারি, বাড়ি তোলা" onClick={() => void saveSettings({ runs_sites: !s.settings.runs_sites })} />
+          <Pick on={s.settings.runs_shop} title="দোকান" sub="মাল কেনা-বেচা, মজুত" onClick={() => void saveSettings({ runs_shop: !s.settings.runs_shop })} />
         </div>
 
         <p className="sectionlabel">{t("দেখা ও পড়া")}</p>
@@ -285,6 +291,9 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
           {t("রাতের হিসাবের কথাগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।")}
         </p>
         <p className="small muted">
+          {t("মাল, খরচের খাতের নাম (যেমন চা, ওষুধ) আর টাকার অঙ্ক কিন্তু গুগলে যায় — না হলে বাক্য লেখা যায় না।")}
+        </p>
+        <p className="small muted">
           {t("কী-টা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।")}
         </p>
         <Field label="গুগল এআই কী">
@@ -491,7 +500,7 @@ export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
             </div>
           </Field>
           <Field label="মাপ (বর্গফুট)"><NumField value={edit.area_sqft} onChange={(v) => setEdit({ ...edit, area_sqft: v })} /></Field>
-          <Field label="চুক্তির টাকা"><NumField value={edit.budget} onChange={(v) => setEdit({ ...edit, budget: v })} /></Field>
+          <Field label="চুক্তির টাকা"><NumField value={edit.budget} onChange={(v) => setEdit({ ...edit, budget: v != null && v < 0 ? null : v })} /></Field>
           <Field label="কত দিনে শেষ করার কথা"><NumField value={edit.plan_days} onChange={(v) => setEdit({ ...edit, plan_days: v })} /></Field>
           <Field label="অবস্থা">
             <div className="chips">
@@ -808,6 +817,8 @@ export function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
 export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [amount, setAmount] = useState<number | null>(s.settings.opening_cash)
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
+  // Once he has counted the cash, the book is worked out from that count and the starting figure is never used again.
+  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null)
   const toast = useToast()
   return (
     <>
@@ -822,11 +833,17 @@ export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
         <p className="hint" style={{ marginTop: '1rem' }}>
           {t("রোজকার হিসাবের শেষে টাকা গুনলে এই সংখ্যাটা নিজে থেকেই ঠিক হয়ে যায়। প্রথম দিনের জন্য শুধু একবার শুরুর টাকাটা বসিয়ে দিন।")}
         </p>
-        <Field label="শুরুর টাকা"><NumField value={amount} onChange={setAmount} /></Field>
-        <button className="btn primary" style={{ width: '100%' }} onClick={async () => {
-          await saveSettings({ opening_cash: amount ?? 0, opening_date: isoDate() })
-          toast.show('সেভ হয়েছে')
-        }}>{t("সেভ করুন")}</button>
+        {counted ? (
+          <p className="hint">{t('গোনা হয়ে গেছে, তাই হাতের টাকা এখন শেষ গোনা থেকেই হিসাব হয় — শুরুর টাকা আর কাজে লাগে না। বদলাতে চাইলে দিনের শেষে নতুন করে গুনে বলুন।')}</p>
+        ) : (
+          <>
+            <Field label="শুরুর টাকা"><NumField value={amount} onChange={setAmount} /></Field>
+            <button className="btn primary" style={{ width: '100%' }} onClick={async () => {
+              await saveSettings({ opening_cash: amount ?? 0, opening_date: isoDate() })
+              toast.show('সেভ হয়েছে')
+            }}>{t("সেভ করুন")}</button>
+          </>
+        )}
       </div>
       {toast.msg && <Toast text={toast.msg} />}
     </>
@@ -851,8 +868,8 @@ function BackupPage({ onBack }: { onBack: () => void }) {
           {t("পুরো খাতাটা একটা ফাইলে বেরিয়ে আসে, ফোনের Documents ফোল্ডারে। মাসে একবার করে রাখলে ফোন হারালেও হিসাব থাকে।")}
         </p>
         <div className="rowlist">
-          <Pick title="স্প্রেডশিটের জন্য (CSV)" sub="Excel বা Google Sheet-এ খোলে" onClick={() => run('csv')} right={busy === 'csv' ? <span className="small">…</span> : <Icon name="fwd" size={18} />} />
-          <Pick title="পুরো কপি (JSON)" sub="সব কিছু, হুবহু" onClick={() => run('json')} right={busy === 'json' ? <span className="small">…</span> : <Icon name="fwd" size={18} />} />
+          <Pick title="স্প্রেডশিটের জন্য (CSV)" sub="Excel বা Google Sheet-এ খোলে — দেখে রাখার জন্য" onClick={() => run('csv')} right={busy === 'csv' ? <span className="small">…</span> : <Icon name="fwd" size={18} />} />
+          <Pick title="পুরো কপি (JSON)" sub="ছবি ছাড়া সব হিসাব — দেখে রাখার জন্য" onClick={() => run('json')} right={busy === 'json' ? <span className="small">…</span> : <Icon name="fwd" size={18} />} />
         </div>
       </div>
       {toast.msg && <Toast text={toast.msg} />}
@@ -971,11 +988,11 @@ function ResetPage({ onBack }: { onBack: () => void }) {
       <div className="scroll">
         <div className="alert crit" style={{ marginTop: '1rem' }}>
           <span className="dot" />
-          <span>{t('সব হিসাব, সব নাম, সব মজুত মুছে যাবে। ফেরানোর কোনো উপায় নেই — আগে সেটিংস → ব্যাকআপ থেকে একটা কপি রেখে দিন।')}</span>
+          <span>{t('সব হিসাব, সব নাম, সব মজুত মুছে যাবে। অনলাইন খাতাও মুছলে ফেরানোর কোনো উপায় নেই; শুধু ফোন মুছলে অনলাইন থেকে সব ফিরিয়ে আনা যাবে। ব্যাকআপের ফাইলটা দেখে রাখার জন্য — তা থেকে অ্যাপে ফেরানো যায় না।')}</span>
         </div>
 
-        <Field label="গোপন কোড">
-          <input className="input num" value={code} inputMode="numeric" autoComplete="off"
+        <Field label={hasServer() ? 'গোপন কোড' : tf('লিখুন: {0}', CONFIRM_WORDS)}>
+          <input className="input" value={code} autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
             onChange={(e) => { setCode(e.target.value); setMsg('') }} />
         </Field>
 

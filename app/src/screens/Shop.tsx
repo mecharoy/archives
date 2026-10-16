@@ -5,12 +5,13 @@ import { useStore, items, parties, activeProjects, saveEntries, saveMaster, name
 import { uid } from '../lib/db'
 import { money, toBn, num, isoDate, addDays, dateBn } from '../lib/bn'
 import type { Item, StockEntry, ID } from '../lib/model'
-import { shopStock, duesSplit } from '../lib/calc'
+import { shopStock, shopEverHandled, duesSplit, isLate } from '../lib/calc'
 import { rankItems, rankParties, lastPurchase, qtyChips } from '../lib/suggest'
 import { scheduleSync } from '../lib/sync'
 import { capture } from '../lib/photo'
 import { t, tf } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
+import { useOnce } from '../lib/once'
 
 type Flow = null | 'in' | 'sale' | 'count' | 'transfer'
 
@@ -51,9 +52,9 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
                 <div className="review-row" key={d.entry_id}>
                   <span>
                     <span className="t">{d.party_id ? nameOf(s, d.party_id) : t('নাম লেখা নেই')}</span>
-                    <span className="k">{nameOf(s, d.item_id)} · {d.due_date < isoDate() ? t('সময় পেরিয়েছে') : tf('{0} তারিখে', dateBn(d.due_date, false))}</span>
+                    <span className="k">{nameOf(s, d.item_id)} · {isLate(d) ? t('সময় পেরিয়েছে') : d.due_date ? tf('{0} তারিখে', dateBn(d.due_date, false)) : t('তারিখ ঠিক করা নেই')}</span>
                   </span>
-                  <span className="v num" style={{ color: d.due_date < isoDate() ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
+                  <span className="v num" style={{ color: isLate(d) ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
                 </div>
               ))}
               <div className="total"><span className="k">{t("মোট বাকি")}</span><span className="v num">{money(dues.total)}</span></div>
@@ -62,7 +63,9 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
         )}
 
         <p className="sectionlabel">{t("এখন যা আছে")}</p>
-        {levels.length === 0 && <Empty>{t("এখনও কোনো মাল ঢোকেনি।")}<br />{t("‘মাল এসেছে’ থেকে শুরু করুন।")}</Empty>}
+        {levels.length === 0 && (shopEverHandled(s.entries)
+          ? <Empty>{t("দোকানের সব মাল শেষ।")}<br />{t("নতুন মাল তুললে ‘মাল এসেছে’ থেকে লিখুন।")}</Empty>
+          : <Empty>{t("এখনও কোনো মাল ঢোকেনি।")}<br />{t("‘মাল এসেছে’ থেকে শুরু করুন।")}</Empty>)}
         {levels.length > 0 && (
           <div className="card">
             {levels.map((l) => (
@@ -114,8 +117,9 @@ const TITLES: Record<Exclude<Flow, null>, string> = {
 
 function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; onDone: (msg?: string) => void }) {
   const [step, setStep] = useState<'item' | 'qty' | 'rate' | 'who'>('item')
-  // One step back, not out of the whole flow with the entry lost.
-  useBackHandler(() => setStep(step === 'who' ? 'rate' : step === 'rate' ? 'qty' : 'item'), step !== 'item')
+  // One step back, not out of the whole flow with the entry lost. A count has no rate step.
+  const before = (st: typeof step) => (st === 'who' ? (flow === 'count' ? 'qty' : 'rate') : st === 'rate' ? 'qty' : 'item')
+  useBackHandler(() => setStep(before(step)), step !== 'item')
   const [item, setItem] = useState<Item | null>(null)
   const [qty, setQty] = useState('')
   const [rate, setRate] = useState('')
@@ -153,6 +157,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
     setStep(flow === 'count' ? 'qty' : 'qty')
   }
 
+  const commitOnce = useOnce(() => commit())
   const commit = async () => {
     if (!item) return
     const q = Number(qty) || 0
@@ -164,7 +169,8 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
       project_id: flow === 'transfer' ? project : '', created_at: new Date().toISOString(),
       item_id: item.id, dir: flow, qty: q, rate: r, amount: Math.round(q * r * 100) / 100,
       party_id: flow === 'transfer' ? '' : party,
-      due_date: credit ? addDays(date, p?.terms_days ?? 0) : '',
+      // No terms known (0) means no date: the bill is owed, but it is not late tomorrow morning.
+      due_date: credit && (p?.terms_days ?? 0) > 0 ? addDays(date, p!.terms_days) : '',
       paid: flow === 'in' || flow === 'sale' ? paid !== false : true, photo_id: photo,
     }
     await saveEntries([e])
@@ -177,7 +183,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
 
   return (
     <>
-      <TopBar title={TITLES[flow]} sub={item?.name_bn} onBack={() => (step === 'item' ? onDone() : setStep(step === 'qty' ? 'item' : step === 'rate' ? 'qty' : 'rate'))} />
+      <TopBar title={TITLES[flow]} sub={item?.name_bn} onBack={() => (step === 'item' ? onDone() : setStep(before(step)))} />
       {step === 'item' && (
         <>
           <div className="scroll">
@@ -229,12 +235,12 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
               {flow === 'transfer'
                 ? t('কাজে পাঠানো মাল কেনা দামেই ধরা হয় — তাতে দোকানের লাভ আর কাজের খরচ, দুটোই ঠিক থাকে।')
                 : lastPurchase(s.entries, item.id)
-                  ? tf('গতবার {0} প্রতি {1}', money(lastPurchase(s.entries, item.id)!.rate), unit)
+                  ? tf('গতবার {0} প্রতি {1}', money(lastPurchase(s.entries, item.id)!.rate), t(unit))
                   : t('প্রথমবার')}
             </p>
             <MoneyPad value={rate} onChange={setRate} allowDecimal />
             <div className="card" style={{ marginTop: '.9rem' }}>
-              <div className="spread"><span>{num(Number(qty), 2)} {unit} × {money(Number(rate) || 0)}</span>
+              <div className="spread"><span>{num(Number(qty), 2)} {t(unit)} × {money(Number(rate) || 0)}</span>
                 <strong className="num">{money((Number(qty) || 0) * (Number(rate) || 0))}</strong></div>
             </div>
           </div>
@@ -317,7 +323,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
           <div className="actionbar">
             <button className="btn primary"
               disabled={((flow === 'in' || flow === 'sale') && paid === null) || (flow === 'transfer' && !project)}
-              onClick={commit}>{t("সেভ করুন")}</button>
+              onClick={commitOnce}>{t("সেভ করুন")}</button>
           </div>
           {newParty && <NewPartySheet kind={kind} onClose={() => setNewParty(false)} onCreated={(p) => { setParty(p.id); setNewParty(false) }} />}
         </>

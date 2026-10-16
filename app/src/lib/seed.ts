@@ -4,7 +4,6 @@
    Bengal, offered once, editable everywhere, and corrected over time by what
    his own jobs actually consume. They are never used as wizard suggestions. */
 
-import { uid } from './db'
 import { saveMaster } from './store'
 import type { Stage, Coeff, Item } from './model'
 
@@ -33,14 +32,18 @@ export async function seedHouse(existingItems: Item[]): Promise<void> {
   const now = new Date().toISOString()
   let seq = 1
   for (const [name_bn, weight] of STAGES) {
-    await saveMaster({ id: uid(), kind: 'stage', project_type: HOUSE, seq: seq++, name_bn, weight, updated_at: now } as Stage)
+    // Fixed ids: seeding twice (a second phone on the same online ledger, a restore afterwards) merges
+    // into the same rows instead of making a second set whose weights add up to 200.
+    await saveMaster({ id: 'seed-stage-' + seq, kind: 'stage', project_type: HOUSE, seq: seq++, name_bn, weight, updated_at: now } as Stage)
   }
+  let n = 0
   for (const [name_bn, unit_bn, per_sqft] of COEFFS) {
+    n++
     let item = existingItems.find((i) => i.name_bn === name_bn)
     if (!item) {
-      item = { id: uid(), kind: 'item', name_bn, unit_bn, last_rate: null, active: true, updated_at: now } as Item
+      item = { id: 'seed-item-' + n, kind: 'item', name_bn, unit_bn, last_rate: null, active: true, updated_at: now } as Item
       await saveMaster(item)
     }
-    await saveMaster({ id: uid(), kind: 'coeff', project_type: HOUSE, item_id: item.id, per_sqft, updated_at: now } as Coeff)
+    await saveMaster({ id: 'seed-coeff-' + n, kind: 'coeff', project_type: HOUSE, item_id: item.id, per_sqft, updated_at: now } as Coeff)
   }
 }

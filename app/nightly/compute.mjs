@@ -138,7 +138,7 @@ export function cards(sum) {
      other card on this screen is out of date. It goes FIRST — it used to be
      added last and then cut off by the six-card limit, on exactly the nights
      it mattered most. */
-  if (n(b.entries_last_3_days) === 0) {
+  if (n(b.entries_last_3_days) === 0 && b.last_entry_date) {
     out.unshift({
       label_bn: 'লেখা হয়নি', label_en: 'Nothing written',
       value: b.last_entry_date ? toBn(daysSince(b.last_entry_date)) + ' দিন' : '—',
@@ -173,7 +173,8 @@ function daysSince(iso) {
    never from the model, which does not get to decide that a job is fine. */
 export function projectStatus(p) {
   if (n(p.budget) <= 0) return 'info'
-  const gap = n(p.pct_spent) - n(p.pct_done)
+  // With no stages there is no progress to be "ahead" of (the server says so in has_stages).
+  const gap = p.has_stages === false ? 0 : n(p.pct_spent) - n(p.pct_done)
   // Red: spending well ahead of the work, or work that has cost over a tenth
   // more than it earned. Amber: spending ahead, or any cost over earnings.
   // Kept identical to calc.ts projectTotals, which colours the phone's own copy.
@@ -241,7 +242,7 @@ export function burn(sum) {
    less than a written one, but every word of it is true. */
 export function plainHeadline(sum) {
   const b = sum.business
-  if (n(b.entries_last_3_days) === 0) {
+  if (n(b.entries_last_3_days) === 0 && b.last_entry_date) {
     return { bn: 'তিন দিন ধরে হিসাব লেখা হয়নি।', en: 'No day has been entered for three days.' }
   }
   if (has(b.cash_variance) && Math.abs(b.cash_variance) > 2000) {
@@ -253,8 +254,11 @@ export function plainHeadline(sum) {
   if (n(b.receivable_overdue) > 0) {
     return { bn: 'খদ্দেরের টাকা আটকে আছে।', en: 'A customer payment is late.' }
   }
-  const bad = sum.projects.filter((p) => p.status === 'active' && projectStatus(p) !== 'ok')
-  if (bad.length) return { bn: `${bad[0].name_bn} — খরচ কাজের থেকে এগিয়ে।`, en: `${bad[0].name_bn} — spending is ahead of the work.` }
+  // A job with no budget has no verdict ('info'), so it is not one that is "ahead".
+  const bad = sum.projects.filter((p) => p.status === 'active' && ['warn', 'crit'].includes(projectStatus(p)))
+  if (bad.length && b.last_entry_date) return { bn: `${bad[0].name_bn} — খরচ কাজের থেকে এগিয়ে।`, en: `${bad[0].name_bn} — spending is ahead of the work.` }
+  // A book with nothing in it is not "on track"; it has not started.
+  if (!b.last_entry_date) return { bn: 'প্রথম দিনের হিসাব লিখে শুরু করুন।', en: "Start by writing the first day's entry." }
   return { bn: 'সব ঠিক চলছে।', en: 'Everything is on track.' }
 }
 

@@ -25,13 +25,15 @@ import { join } from 'path'
 import { loadApp, freeze, rng } from './_app.mjs'
 import { genLedger, reference, HOUSE, SETTLE } from './_ledger.mjs'
 import { figuresFor } from './_figures.mjs'
+import { projectStatus } from '../nightly/compute.mjs'
+import { anonymize } from '../nightly/anonymize.mjs'
 
 const N = Number(process.env.FUZZ_N || 120)
 const SEED = Number(process.env.FUZZ_SEED || 20261002)
 const SIZE = Number(process.env.FUZZ_SIZE || 60)
 
 const app = await loadApp()
-const { calc, model, bn, monthly, restore, sync, SQL, schemaSql } = app
+const { calc, model, bn, monthly, restore, sync, i18n, SQL, schemaSql } = app
 
 freeze('2026-09-03T08:00:00Z')
 const TODAY = bn.isoDate()
@@ -153,6 +155,103 @@ async function report(name, L, seed, bad, stillFails) {
   const day = (id, counted) => ({ id, kind: 'day', batch: 'b' + id, date: '2026-08-20', project_id: '', created_at: '2026-08-20T00:00:00.000Z', cash_counted: counted, cash_computed: counted, note: '' })
   const tie = ledger([day('d1', 100), day('d9', 900), day('d5', 500)])
   hit('directed: two cash counts in one instant: the highest id stands, phone and server', phoneOf(tie, rng(1)).cash.anchor_amount === 900 && (await serverOf(tie, rng(2))).summary.business.cash_counted === 900, {})
+
+  // A bill with no due date (a new supplier whose terms nobody knows) is owed, but it is never "overdue".
+  const open = ledger([buy('n', 8000, '2026-07-25T01:00:00.000Z', { due_date: '' })])
+  const od = phoneOf(open, rng(1)), osv = (await serverOf(open, rng(2))).summary.business
+  hit('directed: a bill with no due date is owed but not overdue, not "this week" (phone)', od.dues.total === 8000 && od.dues.overdue === 0 && od.dues.thisWeek === 0, { dues: od.dues })
+  hit('directed: a bill with no due date is owed but not overdue (server)', osv.dues_total === 8000 && osv.dues_overdue === 0 && osv.dues_this_week === 0, { b: [osv.dues_total, osv.dues_overdue, osv.dues_this_week] })
+
+  // A job that has only just started: wages paid, no stage done. Not "in the red", not "spending ahead".
+  const wage = { id: 'a1', kind: 'attendance', batch: 'ba1', date: '2026-09-02', project_id: 'p1', created_at: '2026-09-02T01:00:00.000Z', worker_id: 'w0', presence: 'full', days: 1, rate: 1150, amount: 1150, advance: 0 }
+  const started = ledger([wage])
+  const sp0 = phoneOf(started, rng(1)).projects.p1, ss0 = (await serverOf(started, rng(2))).summary.projects[0]
+  hit('directed: first wages on a new job: no cost-per-work yet, status fine (phone)', sp0.cpi === null && sp0.status === 'ok', { cpi: sp0.cpi, status: sp0.status })
+  hit('directed: first wages on a new job: no cost-per-work yet, status fine (server)', ss0.cpi === null && ss0.flag_bn === 'ঠিক আছে' && projectStatus(ss0) === 'ok', { cpi: ss0.cpi, flag: ss0.flag_bn })
+  // ...but a job that has spent a lot with nothing to show for it IS a problem.
+  const burnt = { ...ledger([{ ...wage, amount: 60000, rate: 60000 }]), masters: [...base, m({ id: 'st0', kind: 'stage', project_type: HOUSE, seq: 1, name_bn: 'ভিত', weight: 100 })] }
+  hit('directed: 60% of the budget spent and no stage done is still a warning (phone and server)', phoneOf(burnt, rng(1)).projects.p1.status === 'crit' && projectStatus((await serverOf(burnt, rng(2))).summary.projects[0]) === 'crit', {})
+  // With no stages there is no progress to be "ahead" of: the same spending is not called ahead.
+  const unmeasured = ledger([{ ...wage, amount: 60000, rate: 60000 }])
+  hit('directed: a job with no stages is never "spending ahead of the work" (phone and server)', phoneOf(unmeasured, rng(1)).projects.p1.status === 'ok' && projectStatus((await serverOf(unmeasured, rng(2))).summary.projects[0]) === 'ok', {})
+
+  // The day the book is opened: what is bought and sold that day counts against the opening cash.
+  const todayRows = [
+    { ...buy('t1', 4000, '2026-09-03T01:00:00.000Z', { date: TODAY, due_date: '', paid: true, party_id: '' }) },
+    { id: 't2', kind: 'stock', batch: 'bt2', date: TODAY, project_id: '', created_at: '2026-09-03T02:00:00.000Z', item_id: 'i1', dir: 'sale', qty: 1, rate: 900, amount: 900, party_id: '', due_date: '', paid: true, photo_id: '' },
+  ]
+  const installDay = calc.cashState(todayRows, 15000, TODAY)
+  hit('directed: cash opened today counts what is bought and sold today (15000 - 4000 + 900)', installDay.computed === 11900, { computed: installDay.computed })
+  hit('directed: but a count made at the end of today already includes what was written before it', calc.cashState([...todayRows, { ...day('dd', 20000), date: TODAY, created_at: '2026-09-03T05:00:00.000Z' }], 0, '2026-01-01').computed === 20000, {})
+
+  // Written AFTER the count, the same day: a payment made once he had counted. It is new.
+  const afterCount = calc.cashState([{ ...day('dd', 5000), date: TODAY, created_at: '2026-09-03T05:00:00.000Z' }, { id: 'pp', kind: 'money', batch: 'bpp', date: TODAY, project_id: '', created_at: '2026-09-03T06:00:00.000Z', head_bn: 'চা-জলখাবার', dir: 'paid', amount: 1000, party_id: '', mode: 'নগদ', note: '', personal: false, photo_id: '' }], 0, '2026-01-01')
+  hit('directed: a cash payment written after the count, the same day, comes off the count (5000 - 1000)', afterCount.computed === 4000, { computed: afterCount.computed })
+  // And cancelling a payment that was already inside the count must not move the cash the count found.
+  const pay0 = { id: 'q1', kind: 'money', batch: 'bq1', date: TODAY, project_id: '', created_at: '2026-09-03T04:00:00.000Z', head_bn: 'চা-জলখাবার', dir: 'paid', amount: 700, party_id: '', mode: 'নগদ', note: '', personal: false, photo_id: '' }
+  const cancelled = calc.cashState([pay0, { ...day('dd', 5000), date: TODAY, created_at: '2026-09-03T05:00:00.000Z' }, { ...pay0, id: 'q2', amount: -700, reverses: 'q1', created_at: '2026-09-03T06:00:00.000Z' }], 0, '2026-01-01')
+  hit('directed: cancelling a payment already inside the count leaves the counted cash alone', cancelled.computed === 5000, { computed: cancelled.computed })
+  // The shelf: a count in the morning, a sale in the afternoon.
+  const shelfRows = [
+    { id: 'c1', kind: 'stock', batch: 'bc1', date: TODAY, project_id: '', created_at: '2026-09-03T03:00:00.000Z', item_id: 'i1', dir: 'count', qty: 50, rate: 400, amount: 20000, party_id: '', due_date: '', paid: true, photo_id: '' },
+    { id: 'c2', kind: 'stock', batch: 'bc2', date: TODAY, project_id: '', created_at: '2026-09-03T08:00:00.000Z', item_id: 'i1', dir: 'sale', qty: 5, rate: 450, amount: 2250, party_id: '', due_date: '', paid: true, photo_id: '' },
+  ]
+  const shelfL = { masters: base, entries: shelfRows, today: TODAY, opening: { amount: 0, date: '2026-01-01' } }
+  hit('directed: 50 counted in the morning, 5 sold in the afternoon: 45 left (phone and server)', phoneOf(shelfL, rng(1)).stock.find((l) => l.item_id === 'i1')?.qty === 45 && Math.abs((await serverOf(shelfL, rng(2))).summary.business.shop_stock_value - 45 * 400) < 0.01, {})
+
+  // The wizard's "what should be in the till": credit and UPI are not cash going out, shop goods bought for cash are.
+  {
+    const dr = app.draft.newDraft(TODAY, 'p1')
+    dr.att = { w0: { presence: 'full', rate: 1150, amount: 1150, advance: 0 } }
+    dr.mats = [{ key: 'k1', item_id: 'i1', qty: 41, rate: 100, party_id: 's1', due_date: '', paid: false, photo_id: '' }]
+    dr.exps = [
+      { key: 'x1', head_bn: 'চা-জলখাবার', amount: 300, mode: 'নগদ', note: '', photo_id: '' },
+      { key: 'x2', head_bn: 'গাড়ি ভাড়া', amount: 200, mode: 'UPI', note: '', photo_id: '' },
+    ]
+    dr.invs = [{ key: 'v1', item_id: 'i1', qty: 70, rate: 100, party_id: '', due_date: '', paid: true, photo_id: '' }]
+    const got = app.draft.cashAfterDay([], dr, 10000, '2026-01-01')
+    hit('directed: till after a day with credit, UPI and shop goods: 10000 - 1150 - 300 - 7000 = 1550', got === 1550, { got })
+    // And the same day counted 200 short is a 200 variance, not a 2,650 one.
+    const rows = app.draft.buildEntries({ ...dr, cash_counted: 1350, cash_computed: got })
+    const dayRow = rows.find((e) => e.kind === 'day')
+    hit('directed: the saved day carries what the book expected AFTER its own spending', dayRow.cash_computed === 1550 && dayRow.cash_counted === 1350, { dayRow })
+  }
+
+  // One definition of "what went out": wages and advances, job material net of returns; not shop goods, not settlements.
+  {
+    const mk = (o) => ({ id: 'z' + Math.random(), batch: 'bz', date: TODAY, project_id: 'p1', created_at: '2026-09-03T01:00:00.000Z', ...o })
+    const rows = [
+      mk({ kind: 'attendance', worker_id: 'w0', presence: 'full', days: 1, rate: 600, amount: 600, advance: 0 }),
+      mk({ kind: 'attendance', worker_id: 'w1', presence: 'full', days: 1, rate: 550, amount: 550, advance: 200 }),
+      mk({ kind: 'stock', item_id: 'i1', dir: 'transfer', qty: -8, rate: 102.5, amount: -820, party_id: '', due_date: '', paid: true, photo_id: '' }),
+      mk({ kind: 'stock', item_id: 'i1', dir: 'in', project_id: '', qty: 20, rate: 102.5, amount: 2050, party_id: '', due_date: '', paid: true, photo_id: '' }),
+      mk({ kind: 'money', head_bn: SETTLE, dir: 'paid', amount: 999, project_id: '', party_id: 's1', mode: 'নগদ', note: '', personal: false, photo_id: '' }),
+      mk({ kind: 'money', head_bn: 'বাজার', dir: 'paid', amount: 800, project_id: '', party_id: '', mode: 'নগদ', note: '', personal: true, photo_id: '' }),
+    ]
+    hit('directed: outlay counts wages and advances and job material net of returns, nothing else (1150 + 200 - 820 = 530)', calc.outlay(rows) === 530, { got: calc.outlay(rows) })
+  }
+
+  // Days written: three sales in one evening are one day.
+  {
+    const sale = (id) => ({ id, kind: 'stock', batch: 'b' + id, date: TODAY, project_id: '', created_at: '2026-09-03T0' + id.slice(-1) + ':00:00.000Z', item_id: 'i1', dir: 'sale', qty: 1, rate: 10, amount: 10, party_id: '', due_date: '', paid: true, photo_id: '' })
+    hit('directed: three sales in one evening are one day written, not three', calc.daysWritten([sale('s1'), sale('s2'), sale('s3')], 7) === 1 && calc.entriesInLastDays([sale('s1'), sale('s2'), sale('s3')], 7) === 3, {})
+    const bought = { ...sale('s4'), dir: 'in', qty: 10 }, sold = { ...sale('s5'), qty: 10 }
+    hit('directed: a shop that sold everything is "sold out", not "nothing ever came in"', calc.shopEverHandled([bought, sold]) && !calc.shopEverHandled([]), {})
+  }
+
+  // English plurals, and a plain OK.
+  hit('directed: "1 days" reads "1 day"; 11, 21 and 1.5 are left alone', i18n.fixPlurals('1 days · 11 days · 21 days · 1.5 days · 1 men') === '1 day · 11 days · 21 days · 1.5 days · 1 man', { got: i18n.fixPlurals('1 days · 11 days · 21 days · 1.5 days · 1 men') })
+
+  // What goes to Google: a bill's wording can carry a name; the ordinary heads keep theirs.
+  {
+    const { payload } = anonymize({ summary: { projects: [], breakdown: {}, bills: { list: [
+      { name_bn: 'রমেশদা', to_bn: 'রমেশ', note: 'গোপন' },
+      { name_bn: 'ছেলের স্কুল', to_bn: '', note: '' },
+      { name_bn: 'ঘরভাড়া', to_bn: '', note: '' },
+    ] } }, computed: {} })
+    const names = payload.summary.bills.list.map((b) => b.name_bn)
+    hit('directed: a bill called by a person or a school goes to Google as "a payment"; "house rent" stays', names[0] === 'একটা দেনা' && names[1] === 'একটা দেনা' && names[2] === 'ঘরভাড়া', { names })
+  }
 }
 
 /* ======================================================================

@@ -223,9 +223,9 @@ export function reference(L) {
         pot -= use; left -= use
         if (left <= 50) continue
         total += left
-        const due = s.due_date || s.date
-        if (due < today) overdue += left
-        else if (due <= week) soon += left
+        const due = s.due_date                       // none given = no date to be late for
+        if (due && due < today) overdue += left
+        else if (due && due <= week) soon += left
       }
     }
     return { total: total / 100, overdue: overdue / 100, thisWeek: soon / 100 }
@@ -243,7 +243,7 @@ export function reference(L) {
     let rate = lastCount ? lastCount.rate || 0 : 0
     for (const s of mine) {
       if (s.project_id && s.dir !== 'transfer') continue
-      if (lastCount && s.date <= lastCount.date) continue
+      if (lastCount && (s.date < lastCount.date || (s.date === lastCount.date && s.created_at <= lastCount.created_at))) continue
       if (s.dir === 'in' && !s.project_id) { qty += s.qty; rate = s.rate || rate }
       else if (s.dir === 'sale' || s.dir === 'transfer') qty -= s.qty
     }
@@ -255,10 +255,12 @@ export function reference(L) {
   const counts = live.filter((e) => e.kind === 'day' && e.cash_counted != null).sort(written)
   const anchor = counts[counts.length - 1]
   const anchorDate = anchor ? anchor.date : L.opening.date
+  // A count at the end of a day already includes that day; the opening balance is the start of its day.
+  const skips = (e) => (anchor ? e.date < anchor.date || (e.date === anchor.date && e.created_at <= anchor.created_at) : e.date < anchorDate)
   const anchorPaise = anchor ? P(anchor.cash_counted) : P(L.opening.amount)
   let inc = 0, out = 0
-  for (const e of E) {
-    if (e.date <= anchorDate) continue
+  for (const e of live) {
+    if (skips(e)) continue
     if (e.kind === 'attendance') out += P(e.amount) + P(e.advance)
     else if (e.kind === 'stock') {
       if (e.dir === 'in' && e.paid) out += P(e.amount)
@@ -296,7 +298,7 @@ export function reference(L) {
     const earned = (pct / 100) * budget
     projects[p.id] = {
       labour: labour / 100, material: material / 100, other: other / 100, received: received / 100, cost,
-      pct_done: pct, pct_spent: budget > 0 ? (cost / budget) * 100 : 0, cpi: cost > 0 && budget > 0 ? earned / cost : null,
+      pct_done: pct, pct_spent: budget > 0 ? (cost / budget) * 100 : 0, cpi: cost > 0 && budget > 0 && pct > 2 ? earned / cost : null,
     }
   }
 
