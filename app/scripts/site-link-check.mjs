@@ -137,7 +137,8 @@ const KEYS = ['available', 'category_bn', 'category_en', 'name_bn', 'name_en']
 ck('each good is exactly name, section and yes/no', list.every((x) => Object.keys(x).sort().join() === KEYS.join()), true)
 ck('the answer carries only the list and when it was last true', Object.keys(r.json).sort().join(), 'items,ok,updated_at')
 ck('no quantity, price or id is anywhere in it', /qty|quantity|rate|price|amount|"id"|supplier|party|cost/i.test(r.text), false)
-ck('and not one of the numbers he typed (20, 5, 40, 60) appears', /[^0-9](20|40|60)[^0-9]/.test(r.text.replace(/[০-৯]/g, '')), false)
+// The goods only: updated_at is a clock time, and ":20" or ":40" in it is not a number he typed.
+ck('and not one of the numbers he typed (20, 5, 40, 60) appears', /[^0-9](20|40|60)[^0-9]/.test(JSON.stringify(list).replace(/[০-৯]/g, '')), false)
 ck('when it was last told is an ISO time', Number.isFinite(Date.parse(r.json.updated_at)), true)
 
 /* ---------- a sale reaches the website on the next read ---------- */

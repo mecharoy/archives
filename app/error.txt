@@ -340,3 +340,17 @@ Location: C:\Users\abhij (search root)
 Action: finding where the app lives before reviewing it.
 Cause: the search walked every folder under the user profile, including large ones.
 Fix: search Downloads only. The live copy is roychoudhurybuilders\archives-app\app (branch fuzz-and-ui); Downloads\app\sitekhata\app is an older September copy.
+
+2026-10-16
+Problem: four smoke checks on website enquiries failed; the home tour covered the screen and the tap missed.
+Location: scripts/smoke.mjs (enquiries steps), set off by an edit to src/lib/store.ts
+Action: agent edited a comment in store.ts while `npm test` was running smoke in the background.
+Cause: the Vite dev server reloaded the test page on the edit; the reload brought the tour back mid-run. Not a code fault: smoke alone, rerun with no edits, passed 74 of 74.
+Fix: never edit anything under src/ while smoke, ui-sweep or handover-check is running; wait for the run to finish.
+
+2026-10-16
+Problem: `npm test` failed at random on "not one of the numbers he typed (20, 5, 40, 60) appears".
+Location: scripts/site-link-check.mjs line 140
+Action: agent ran the full suite after adding the handover checks.
+Cause: the check searched the whole reply, which includes updated_at, a clock time; any time with :20 or :40 in it (e.g. 12:40:05) matched.
+Fix: search only the list of goods (JSON.stringify(list)), not the timestamp.
