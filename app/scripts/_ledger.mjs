@@ -155,6 +155,21 @@ export function genLedger(app, r, nEvents, o = {}) {
     })]
   }
 
+  /* The paper khata copied in (an old balance either way, often dated months back, often already
+     late), and a sale written by its total alone. Neither names an item or moves the shelf. */
+  function openingRows() {
+    if (r.chance(0.5)) {
+      const get = r.chance(0.5) && clients.length > 0
+      const party_id = get ? clientId() : supplierId()
+      const row = stockRow({ date: d(r.int(0, 200)), item_id: '', dir: get ? 'opening_get' : 'opening_owe', qty: 0, rate: 0, amount: r.money(1, 50000), paid: false, party_id, due_date: r.chance(0.7) ? d(r.int(-30, 60)) : '' })
+      owe(party_id, row.amount)
+      return [row]
+    }
+    const row = stockRow({ date: past(), item_id: '', dir: 'sale', qty: 0, rate: 0, amount: r.money(1, 20000), paid: false, party_id: clientId(), due_date: dueFor(false) })
+    owe(row.party_id, row.amount)
+    return [row]
+  }
+
   const reversed = new Set()
   function reverseRows() {
     const pool = entries.filter((e) => !e.reverses && !reversed.has(e.id))
@@ -165,11 +180,11 @@ export function genLedger(app, r, nEvents, o = {}) {
     return targets.map((t) => { reversed.add(t.id); const m = draft.reversalOf(t); m.id = nid('e'); m.created_at = at; return m })
   }
 
-  const weightsOfKinds = [['day', 0.3], ['shop', 0.3], ['settle', 0.12], ['money', 0.1], ['reverse', 0.1]]
+  const weightsOfKinds = [['day', 0.3], ['shop', 0.26], ['settle', 0.12], ['money', 0.1], ['opening', 0.05], ['reverse', 0.1]]
   for (let n = 0; n < nEvents; n++) {
     let x = r.f(), kind = 'day'
     for (const [k, w] of weightsOfKinds) { if (x < w) { kind = k; break } x -= w }
-    const rows = kind === 'day' ? dayRows() : kind === 'shop' ? shopRows() : kind === 'settle' ? settleRows() : kind === 'money' ? moneyRows() : reverseRows()
+    const rows = kind === 'day' ? dayRows() : kind === 'shop' ? shopRows() : kind === 'settle' ? settleRows() : kind === 'money' ? moneyRows() : kind === 'opening' ? openingRows() : reverseRows()
     entries.push(...rows)
   }
 
@@ -178,7 +193,7 @@ export function genLedger(app, r, nEvents, o = {}) {
     opening: { amount: r.chance(0.5) ? 0 : r.money(0, 5000), date: d(r.int(0, 80)) },
     /** A fresh event and its cancellation — which must change nothing. */
     pair: () => {
-      const rows = [dayRows, shopRows, settleRows, moneyRows][r.int(0, 3)]()
+      const rows = [dayRows, shopRows, settleRows, moneyRows, openingRows][r.int(0, 4)]()
       const at = stamp()
       const mirrors = rows.map((t) => { const m = draft.reversalOf(t); m.id = nid('e'); m.created_at = at; return m })
       return [...rows, ...mirrors]
@@ -304,8 +319,8 @@ export function reference(L) {
 
   const recent = live.filter((e) => e.date >= shiftDay(today, -2))
   return {
-    dues: owed(['in', 'transfer'], 'paid'),
-    owed: owed(['sale'], 'received'),
+    dues: owed(['in', 'transfer', 'opening_owe'], 'paid'),
+    owed: owed(['sale', 'opening_get'], 'received'),
     stockValue, stockQty,
     cash: {
       anchor_date: anchorDate, anchor_amount: anchorPaise / 100, computed: (anchorPaise + inc - out) / 100,

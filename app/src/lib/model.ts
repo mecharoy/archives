@@ -118,7 +118,9 @@ export interface AttendanceEntry extends BaseEntry {
   advance: number
 }
 
-export type StockDir = 'in' | 'out' | 'sale' | 'transfer' | 'count'
+/* opening_get / opening_owe: a balance copied in from the paper khata — he is owed it, or he owes it.
+   No item, no quantity, and not a sale or a purchase in any period: only the dues read these two. */
+export type StockDir = 'in' | 'out' | 'sale' | 'transfer' | 'count' | 'opening_get' | 'opening_owe'
 
 export interface StockEntry extends BaseEntry {
   kind: 'stock'

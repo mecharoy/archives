@@ -122,7 +122,7 @@ export async function buildSummary(db, hid) {
     // so the dashboard and his screen can never disagree about what he owes.
     // A purchase that was cancelled (and the row that cancelled it) is owed to nobody.
     all(db, `SELECT id, party_id, amount, date, created_at, COALESCE(due_date,'') AS due_date, dir
-             FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale') AND ${LIVE('stock')}`, hid),
+             FROM stock WHERE household_id = ?1 AND paid = 0 AND dir IN ('in','transfer','sale','opening_get','opening_owe') AND ${LIVE('stock')}`, hid),
     all(db, `SELECT party_id, dir, COALESCE(SUM(amount),0) AS amount
              FROM money WHERE household_id = ?1 AND personal = 0 AND head_bn = ?2
              GROUP BY party_id, dir`, hid, SETTLE_HEAD),
@@ -325,8 +325,10 @@ export async function buildSummary(db, hid) {
   const counted = lastCount.cash_counted == null ? null : n(lastCount.cash_counted)
   const computed = lastCount.cash_computed == null ? null : n(lastCount.cash_computed)
 
-  const dues = net(openRows.filter((r) => r.dir === 'in' || r.dir === 'transfer'), settlements, 'paid', TODAY, IN_WEEK)
-  const owed = net(openRows.filter((r) => r.dir === 'sale'), settlements, 'received', TODAY, IN_WEEK)
+  // An old balance copied in from the paper khata (opening_owe / opening_get) is a due like any other,
+  // and nothing else: every other query here asks for 'in' or 'sale' by name and never sees it.
+  const dues = net(openRows.filter((r) => r.dir === 'in' || r.dir === 'transfer' || r.dir === 'opening_owe'), settlements, 'paid', TODAY, IN_WEEK)
+  const owed = net(openRows.filter((r) => r.dir === 'sale' || r.dir === 'opening_get'), settlements, 'received', TODAY, IN_WEEK)
   const stockValue = shopStockValue(stockRows, itemRows)
 
   const spendWeek = n(thisWeek.wages) + n(thisWeek.material) + n(thisWeek.other)

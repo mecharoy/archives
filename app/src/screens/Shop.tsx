@@ -5,7 +5,7 @@ import { useStore, items, parties, activeProjects, saveEntries, saveMaster, name
 import { uid } from '../lib/db'
 import { money, toBn, num, isoDate, addDays, dateBn } from '../lib/bn'
 import type { Item, StockEntry, ID } from '../lib/model'
-import { shopStock, shopEverHandled, duesSplit, isLate } from '../lib/calc'
+import { shopStock, shopEverHandled, duesSplit, isLate, dueLabel } from '../lib/calc'
 import { rankItems, rankParties, lastPurchase, qtyChips } from '../lib/suggest'
 import { scheduleSync } from '../lib/sync'
 import { capture } from '../lib/photo'
@@ -52,7 +52,7 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
                 <div className="review-row" key={d.entry_id}>
                   <span>
                     <span className="t">{d.party_id ? nameOf(s, d.party_id) : t('নাম লেখা নেই')}</span>
-                    <span className="k">{nameOf(s, d.item_id)} · {isLate(d) ? t('সময় পেরিয়েছে') : d.due_date ? tf('{0} তারিখে', dateBn(d.due_date, false)) : t('তারিখ ঠিক করা নেই')}</span>
+                    <span className="k">{dueLabel(d, (id) => nameOf(s, id))} · {isLate(d) ? t('সময় পেরিয়েছে') : d.due_date ? tf('{0} তারিখে', dateBn(d.due_date, false)) : t('তারিখ ঠিক করা নেই')}</span>
                   </span>
                   <span className="v num" style={{ color: isLate(d) ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
                 </div>

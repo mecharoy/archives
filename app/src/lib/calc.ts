@@ -4,7 +4,7 @@
    wizard. Everything here is a plain sum over entries he himself made, and
    the dashboard labels it as the phone's own arithmetic, not the Sheet's. */
 
-import type { Entry, AttendanceEntry, StockEntry, MoneyEntry, ProgressEntry, DayEntry, Project, Stage, Coeff, Item, ID } from './model'
+import type { Entry, AttendanceEntry, StockEntry, StockDir, MoneyEntry, ProgressEntry, DayEntry, Project, Stage, Coeff, Item, ID } from './model'
 import { isoDate, addDays } from './bn'
 import { t } from './i18n'
 
@@ -13,6 +13,10 @@ export const DRAWING_HEAD = 'ব্যবসা থেকে নেওয়া'
    they arrived. This head keeps that payment out of every cost total while
    still moving the cash. */
 export const SETTLE_HEAD = 'বাকি মেটানো'
+/* An old balance from the paper khata (see model.ts StockDir). Two dirs of their own, so every sum
+   that asks for 'in' or 'sale' leaves them out without being told; only the dues below read them. */
+export const OPENING_GET = 'opening_get'
+export const OPENING_OWE = 'opening_owe'
 
 export function reversedIds(entries: Entry[]): Set<ID> {
   const s = new Set<ID>()
@@ -197,7 +201,7 @@ export function cashState(entries: Entry[], openingAmount: number, openingDate: 
 
 /* due_date is '' when nobody gave one (a new shop whose terms he does not know). Such a bill is owed, and
    is cleared in the order it was written, but it is never overdue and never "due this week". */
-export interface Due { party_id: ID; date: string; due_date: string; amount: number; item_id: ID; entry_id: ID; created_at: string }
+export interface Due { party_id: ID; date: string; due_date: string; amount: number; item_id: ID; entry_id: ID; created_at: string; dir: StockDir }
 export const isLate = (d: { due_date: string }, today = isoDate()) => !!d.due_date && d.due_date < today
 
 /* A due is opened by an unpaid row and closed by a payment to that party —
@@ -245,23 +249,33 @@ const oldestFirst = (a: Due, b: Due) =>
       : a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1
         : a.entry_id < b.entry_id ? -1 : a.entry_id > b.entry_id ? 1 : 0
 
-const dueOf = (s: StockEntry): Due => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || '', amount: s.amount, item_id: s.item_id, entry_id: s.id, created_at: s.created_at })
+const dueOf = (s: StockEntry): Due => ({ party_id: s.party_id, date: s.date, due_date: s.due_date || '', amount: s.amount, item_id: s.item_id, entry_id: s.id, created_at: s.created_at, dir: s.dir })
 
-/** What he still owes his suppliers. */
+/** What a due is, for a list: the item, or — for a row that names none — the kind of row it is. */
+export function dueLabel(d: Due, itemName: (id: ID) => string): string {
+  return d.item_id ? itemName(d.item_id) : noItemLabel(d.dir)
+}
+
+/** A stock row that names no item: an old balance, or a sale written by its total alone. */
+export function noItemLabel(dir: StockDir): string {
+  return dir === OPENING_GET || dir === OPENING_OWE ? t('পুরোনো বাকি') : t('বাকিতে দিলাম')
+}
+
+/** What he still owes his suppliers — an unpaid purchase, or an old balance he owes. */
 export function openDues(entries: Entry[]): Due[] {
   const stock = liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]
   const rows = stock
-    .filter((s) => (s.dir === 'in' || s.dir === 'transfer') && !s.paid && (s.amount || 0) > 0)
+    .filter((s) => (s.dir === 'in' || s.dir === 'transfer' || s.dir === OPENING_OWE) && !s.paid && (s.amount || 0) > 0)
     .map(dueOf)
     .sort(oldestFirst)
   return netted(rows, SETTLED(entries, 'paid'))
 }
 
-/** What his customers still owe him — a sale written down as not yet paid. */
+/** What his customers still owe him — a sale written down as not yet paid, or an old balance. */
 export function openReceivables(entries: Entry[]): Due[] {
   const stock = liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]
   const rows = stock
-    .filter((s) => s.dir === 'sale' && !s.paid && (s.amount || 0) > 0)
+    .filter((s) => (s.dir === 'sale' || s.dir === OPENING_GET) && !s.paid && (s.amount || 0) > 0)
     .map(dueOf)
     .sort(oldestFirst)
   return netted(rows, SETTLED(entries, 'received'))

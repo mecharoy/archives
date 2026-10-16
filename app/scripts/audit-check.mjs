@@ -265,6 +265,56 @@ ck('phone and server agree on the shop stock', phoneStock.reduce((a, l) => a + l
 ck('phone and server agree on the job status colour', pt.status, projectStatus(sp))
 
 /* =====================================================================
+   OLD BALANCES AND MONEY-ONLY CREDIT.  The paper khata copied in, and a sale
+   written by its total alone. Neither names an item and neither moves stock.
+   An old balance is a due and nothing else: not this week's sale or purchase.
+   ===================================================================== */
+
+const O = ledger(({ masters, entries }) => {
+  masters.push(
+    { id: 'i3', kind: 'item', name_bn: 'পাইপ', unit_bn: 'পিস', last_rate: 100, active: true, updated_at: stamp() },
+    { id: 'cold', kind: 'party', name_bn: 'পুরোনো খদ্দের', ptype: 'client', terms_days: 0, phone: '', updated_at: stamp() },
+    { id: 'c2', kind: 'party', name_bn: 'খদ্দের দুই', ptype: 'client', terms_days: 7, phone: '', updated_at: stamp() },
+    { id: 'sold', kind: 'party', name_bn: 'পুরোনো দোকান', ptype: 'supplier', terms_days: 0, phone: '', updated_at: stamp() },
+  )
+  // He is owed 5,000 since two months back, due a month ago; 2,000 of it came in cash two days ago.
+  entries.push(stockRow({ date: d(60), item_id: '', dir: 'opening_get', qty: 0, rate: 0, amount: 5000, paid: false, party_id: 'cold', due_date: d(30) }))
+  entries.push(moneyRow({ date: d(2), head_bn: 'বাকি মেটানো', dir: 'received', amount: 2000, party_id: 'cold' }))
+  // He owes an old shop 1,200, no date agreed.
+  entries.push(stockRow({ date: d(1), item_id: '', dir: 'opening_owe', qty: 0, rate: 0, amount: 1200, paid: false, party_id: 'sold', due_date: '' }))
+  // A sale on credit by its total alone: 800, due in a week.
+  entries.push(stockRow({ date: d(1), item_id: '', dir: 'sale', qty: 0, rate: 0, amount: 800, paid: false, party_id: 'c2', due_date: bn.addDays(T, 7) }))
+  // And one ordinary shop purchase in cash, so there is a shelf to compare with.
+  entries.push(stockRow({ date: d(1), item_id: 'i3', dir: 'in', qty: 10, rate: 100, paid: true }))
+})
+
+/* By hand.  Owed to him: 5,000 − 2,000 = 3,000 (past its date) + 800 (this week) = 3,800.
+   Owed by him: 1,200, no date, so neither late nor this week. The shelf: 10 pipes, 1,000.
+   The week's material: the 1,000 of pipes only. Cash since an opening of 0 two months ago:
+   + 2,000 received − 1,000 pipes = 1,000; the unpaid rows move nothing. */
+const oDues = calc.duesSplit(O.entries)
+const oOwed = calc.receivablesSplit(O.entries)
+ck('old balances: phone owed to him', oOwed.total, 3800)
+ck('old balances: phone of which late', oOwed.overdue, 3000)
+ck('old balances: phone of which this week', oOwed.thisWeek, 800)
+ck('old balances: phone owed by him', oDues.total, 1200)
+ck('old balances: phone of which late', oDues.overdue, 0)
+ck('old balances: phone shop stock untouched', totalStock(O), 1000)
+ck('old balances: phone cash moves only for the money that moved', calc.cashState(O.entries, 0, d(90)).computed, 1000)
+ck('old balances: phone outlay ignores them', calc.outlay(O.entries), 0)
+ck('old balances: each due says which kind it is', oOwed.all.map((x) => x.dir).sort().join(), 'opening_get,sale')
+ck('old balances: a due with no item is named by its kind',
+  [...oOwed.all, ...oDues.all].map((x) => calc.dueLabel(x, () => 'X')).sort().join(), 'পুরোনো বাকি,পুরোনো বাকি,বাকিতে দিলাম')
+const oS = (await serverSummary(O)).business
+ck('old balances: server owed to him', oS.receivable_total, 3800)
+ck('old balances: server of which late', oS.receivable_overdue, 3000)
+ck('old balances: server of which this week', oS.receivable_this_week, 800)
+ck('old balances: server owed by him', oS.dues_total, 1200)
+ck('old balances: server of which late', oS.dues_overdue, 0)
+ck('old balances: server shop stock untouched', oS.shop_stock_value, 1000)
+ck("old balances: server week's material is the pipes only", oS.material_this_week, 1000)
+
+/* =====================================================================
    COUNTS.  A physical count replaces whatever the book said up to that day.
    ===================================================================== */
 

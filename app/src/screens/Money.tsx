@@ -3,7 +3,7 @@ import { Icon, TopBar } from '../ui/kit'
 import { useStore, nameOf, type Brief } from '../lib/store'
 import { money, dayLabelBn } from '../lib/bn'
 import { localBrief, briefIsStale, monthSpend } from '../lib/brief'
-import { cashState, duesSplit, isLate } from '../lib/calc'
+import { cashState, duesSplit, isLate, dueLabel } from '../lib/calc'
 import { t, pick } from '../lib/i18n'
 import type { Screen } from '../App'
 
@@ -45,7 +45,7 @@ export function Money({ onBack, onGo }: { onBack: () => void; onGo: (s: Screen) 
                 <div className="review-row" key={d.entry_id}>
                   <span>
                     <span className="t">{d.party_id ? nameOf(s, d.party_id) : t('নাম লেখা নেই')}</span>
-                    <span className="k">{t(nameOf(s, d.item_id))} · {isLate(d) ? t('সময় পেরিয়েছে') : d.due_date ? dayLabelBn(d.due_date) : t('তারিখ ঠিক করা নেই')}</span>
+                    <span className="k">{dueLabel(d, (id) => nameOf(s, id))} · {isLate(d) ? t('সময় পেরিয়েছে') : d.due_date ? dayLabelBn(d.due_date) : t('তারিখ ঠিক করা নেই')}</span>
                   </span>
                   <span className="v num" style={{ color: isLate(d) ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
                 </div>
