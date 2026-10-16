@@ -8,6 +8,7 @@ import { PAY_MODES, type ID, type MoneyEntry } from '../lib/model'
 import { openDues, openReceivables, SETTLE_HEAD } from '../lib/calc'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
+import { OldDueSheet } from './OldDue'
 
 /* Paying off a bill, and collecting one.
 
@@ -24,6 +25,7 @@ export function Payments({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
   const toast = useToast()
   const [pay, setPay] = useState<{ party_id: ID; dir: 'paid' | 'received'; owed: number } | null>(null)
+  const [old, setOld] = useState(false)
 
   const owe = useMemo(() => byParty(openDues(s.entries)), [s.entries])
   const get = useMemo(() => byParty(openReceivables(s.entries)), [s.entries])
@@ -34,6 +36,7 @@ export function Payments({ onBack }: { onBack: () => void }) {
     <>
       <TopBar title="টাকা দেওয়া-নেওয়া" sub={tf('দেবেন {0} · পাবেন {1}', money(oweTotal), money(getTotal))} onBack={onBack} />
       <div className="scroll">
+        <button className="btn quiet small" style={{ marginTop: '.6rem' }} onClick={() => setOld(true)}>{t('+ পুরোনো বাকি')}</button>
         {owe.length === 0 && get.length === 0 && (
           <Empty>{t('কারও কাছে বাকি নেই, কারও কাছে পাওনাও নেই।')}</Empty>
         )}
@@ -71,6 +74,7 @@ export function Payments({ onBack }: { onBack: () => void }) {
         <SettleSheet s={s} {...pay} onClose={() => setPay(null)}
           onDone={(msg) => { setPay(null); toast.show(msg) }} />
       )}
+      {old && <OldDueSheet s={s} onClose={() => setOld(false)} onDone={(msg) => { setOld(false); toast.show(msg) }} />}
       {toast.msg && <Toast text={toast.msg} />}
     </>
   )

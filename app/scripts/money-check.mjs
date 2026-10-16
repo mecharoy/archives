@@ -193,6 +193,66 @@ const toWho = async (page, tile, qty, rate) => {
   await ctx.close()
 }
 
+/* ---- B4: old dues from the paper khata ---- */
+const lastRow = (page, dir) => page.evaluate(async (dir) => {
+  const m = await import('/src/lib/store.ts'); const bn = await import('/src/lib/bn.ts')
+  const e = m.getState().entries.filter((x) => x.kind === 'stock' && x.dir === dir).pop()
+  return e ? { ...e, today: bn.isoDate(), ago60: bn.addDays(bn.isoDate(), -60), in15: bn.addDays(bn.isoDate(), 15) } : null
+}, dir)
+const listText = (page) => page.locator('.scroll').first().innerText()
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await step('old dues: "উনি আমাকে দেবেন" ₹5,000 from a new person, since two months', page, async () => {
+    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
+    await tap(page, 'টাকা দেওয়া-নেওয়া')
+    await tap(page, '+ পুরোনো বাকি')
+    await tap(page, 'উনি আমাকে দেবেন')
+    await tap(page, '+ নতুন', true)
+    await page.locator('.sheet input.input').first().fill('পুরোনো খদ্দের')
+    await pad(page, ['৫', '০', '০', '০'])
+    const ago60 = await page.evaluate(() => import('/src/lib/bn.ts').then((bn) => bn.addDays(bn.isoDate(), -60)))
+    await page.locator('.sheet input[type=date]').fill(ago60)
+    await tap(page, '১৫ দিন', true)
+    await page.locator('.sheet .btn.primary').last().click()
+    await page.waitForTimeout(500)
+    const r = await lastRow(page, 'opening_get')
+    if (!r) throw new Error('no old-balance row')
+    if (r.amount !== 5000 || r.item_id !== '' || r.qty !== 0 || r.paid !== false) throw new Error('row: ' + JSON.stringify(r))
+    if (r.date !== r.ago60 || r.due_date !== r.in15) throw new Error('since ' + r.date + ' / due ' + r.due_date)
+    const txt = await listText(page)
+    if (!txt.includes('পুরোনো খদ্দের') || !txt.includes('৫,০০০')) throw new Error('পাবেন does not show ₹5,000: ' + txt.slice(0, 200))
+  })
+  await step('old dues: ₹2,000 paid against it leaves ₹3,000', page, async () => {
+    await page.getByText('পুরোনো খদ্দের').first().click()
+    await pad(page, ['২', '০', '০', '০'])
+    await page.locator('.sheet .btn.primary').click()
+    await page.waitForTimeout(500)
+    const txt = await listText(page)
+    if (!txt.includes('৩,০০০')) throw new Error('not ₹3,000 left: ' + txt.slice(0, 200))
+  })
+  await step('old dues: "আমি ওনাকে দেব" ₹1,200 to a shop shows in দেবেন', page, async () => {
+    await tap(page, '+ পুরোনো বাকি')
+    await tap(page, 'আমি ওনাকে দেব')
+    await tap(page, 'শর্মা', true)
+    await pad(page, ['১', '২', '০', '০'])
+    await page.locator('.sheet .btn.primary').last().click()
+    await page.waitForTimeout(500)
+    const r = await lastRow(page, 'opening_owe')
+    if (!r || r.amount !== 1200 || r.party_id !== 's1' || r.due_date !== r.in15) throw new Error('row: ' + JSON.stringify(r))
+    const txt = await listText(page)
+    if (!txt.includes('যাদের দিতে হবে') || !txt.includes('১,২০০')) throw new Error('দেবেন does not show ₹1,200')
+  })
+  await step("old dues: they are not this month's spending", page, async () => {
+    await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
+    const spend = await page.locator('.stat', { hasText: 'এ মাসের খরচ' }).innerText()
+    if (!spend.includes('₹০')) throw new Error('month spend: ' + spend)
+    const txt = await listText(page)
+    if (!txt.includes('পুরোনো বাকি')) throw new Error('the dues list does not name the old balance')
+  })
+  await ctx.close()
+}
+
 /* ---- B3: the cash count stops blaming him ---- */
 const toCount = async (page, counted) => {
   await toReceived(page)
