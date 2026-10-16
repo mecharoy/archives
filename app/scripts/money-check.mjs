@@ -138,6 +138,39 @@ const finishDay = async (page) => {
   await ctx.close()
 }
 
+/* ---- B3: the cash count stops blaming him ---- */
+const toCount = async (page, counted) => {
+  await toReceived(page)
+  await page.getByText('না', { exact: true }).first().click()
+  await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 }); await tap(page, 'এগিয়ে যান')
+  await page.getByText('নিজের কোনো খরচ?').waitFor({ timeout: 3000 }); await page.getByText('না', { exact: true }).first().click()
+  await page.getByText('দিনের শেষে হাতে কত?').waitFor({ timeout: 3000 })
+  await tap(page, 'না, গুনে বলছি')
+  await pad(page, counted)
+  await page.locator('.actionbar .btn.primary').click()
+  await page.waitForTimeout(300)
+}
+{
+  const { ctx, page } = await fresh()
+  await step('cash: ₹3,000 more than the book offers to write the money received', page, async () => {
+    await toCount(page, ['১', '৩', '০', '০', '০'])
+    if (!(await page.getByText('টাকা পেয়েছি — লিখে দিন').count())) throw new Error('no offer to write the money in')
+    if (await page.getByText('কোনো খরচ লিখতে ভুলে গেছেন কি?').count()) throw new Error('asked about a forgotten expense when he has MORE')
+    await tap(page, 'টাকা পেয়েছি — লিখে দিন')
+    await page.getByText('আজ কেউ টাকা দিয়েছেন?').waitFor({ timeout: 3000 })
+  })
+  await ctx.close()
+}
+{
+  const { ctx, page } = await fresh()
+  await step('cash: ₹3,000 less than the book asks about a forgotten expense', page, async () => {
+    await toCount(page, ['৭', '০', '০', '০'])
+    if (!(await page.getByText('কোনো খরচ লিখতে ভুলে গেছেন কি?').count())) throw new Error('no question about a forgotten expense')
+    if (await page.getByText('টাকা পেয়েছি — লিখে দিন').count()) throw new Error('offered money received when he has LESS')
+  })
+  await ctx.close()
+}
+
 console.log(log.join('\n'))
 await browser.close()
 await server.close()

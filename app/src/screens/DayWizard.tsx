@@ -148,7 +148,7 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       {step === 'progress' && <StepProgress s={s} draft={draft} patch={patch} next={next} />}
       {step === 'personal' && <StepExpense s={s} draft={draft} patch={patch} next={next} field="pexps" personal startAsk question={QUESTION.personal} hint="ঘরের বা নিজের খরচ — কাজের হিসাবে ধরা হবে না।" />}
       {step === 'inventory' && <StepMaterial s={s} draft={draft} patch={patch} next={next} field="invs" toShop startAsk question={QUESTION.inventory} hint="দোকানের জন্য মাল তুললে এখানে লিখুন — সাইটের হিসাবে যাবে না।" />}
-      {step === 'cash' && <StepCash s={s} draft={draft} patch={patch} next={next} />}
+      {step === 'cash' && <StepCash s={s} draft={draft} patch={patch} next={next} onReceived={steps.includes('received') ? () => jumpTo('received') : undefined} />}
       {step === 'review' && (
         <StepReview
           s={s} draft={draft} project_bn={project?.name_bn || ''} onJump={jumpTo} onSave={save} has={(id) => steps.includes(id)}
@@ -872,7 +872,7 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
 
 /* ---------- 7. cash ---------- */
 
-function StepCash({ s, draft, patch, next }: StepProps) {
+function StepCash({ s, draft, patch, next, onReceived }: StepProps & { onReceived?: () => void }) {
   const cash = useMemo(() => cashState(s.entries, s.settings.opening_cash, s.settings.opening_date), [s.entries, s.settings])
   // By the book's own rules, with this day's rows in it: credit and UPI are not cash going out, and
   // shop goods bought for cash are.
@@ -914,11 +914,22 @@ function StepCash({ s, draft, patch, next }: StepProps) {
             )}
           </>
         )}
-        {diff != null && Math.abs(diff) >= 1 && (
-          <div className={'alert ' + (Math.abs(diff) > 2000 ? 'crit' : 'warn')} style={{ marginTop: '.6rem' }}>
+        {/* More in the box than the book expects is almost always money that came in and was not written —
+            not a mistake of his. Less is the one where a forgotten expense is the likely answer. */}
+        {diff != null && diff <= -1 && (
+          <div className={'alert ' + (-diff > 2000 ? 'crit' : 'warn')} style={{ marginTop: '.6rem' }}>
             <span className="dot" />
-            <span>{tf('খাতার থেকে {0} {1}। কোনো খরচ লিখতে ভুলে গেছেন কি?', money(Math.abs(diff)), diff > 0 ? t('বেশি') : t('কম'))}</span>
+            <span>{tf('খাতার থেকে {0} কম। কোনো খরচ লিখতে ভুলে গেছেন কি?', money(-diff))}</span>
           </div>
+        )}
+        {diff != null && diff >= 1 && (
+          <div className="alert" style={{ marginTop: '.6rem' }}>
+            <span className="dot" />
+            <span>{tf('খাতার থেকে {0} বেশি।', money(diff))}</span>
+          </div>
+        )}
+        {diff != null && diff >= 1 && onReceived && (
+          <button className="btn quiet" style={{ marginTop: '.6rem', width: '100%' }} onClick={onReceived}>{t('টাকা পেয়েছি — লিখে দিন')}</button>
         )}
         <div className="rowlist" style={{ marginTop: '1.1rem' }}>
           {neverCounted && draft.cash_counted == null ? (
