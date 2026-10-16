@@ -89,6 +89,50 @@ const store = (page, fn, arg) => page.evaluate(async ([src, a]) => {
   await ctx.close()
 }
 
+/* ---- 3. paste on the first screen; it survives a key-less build ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('first screen: a pasted key (with spaces) finds the old book', async () => {
+    await page.getByText('অনলাইন খাতার চাবি আছে?').click()
+    await page.locator('.field', { hasText: 'সার্ভারের ঠিকানা' }).locator('input').fill('https://worker.test')
+    await page.locator('.field', { hasText: 'চাবি' }).last().locator('input').fill('  handover-good-token\n')
+    await page.getByRole('button', { name: 'চাবি বসান' }).click()
+    await page.getByText('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে').waitFor({ timeout: 5000 })
+  })
+  await step('first screen: the key is saved trimmed and outlives a reload of a key-less build', async () => {
+    await page.reload()
+    await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 8000 })
+    const tok = await store(page, async (m) => m.getState().settings.token)
+    if (tok !== 'handover-good-token') throw new Error('saved key is ' + JSON.stringify(tok.length) + ' chars, not the trimmed key')
+  })
+  await ctx.close()
+}
+
+/* ---- 4. a wrong key is named, not hidden ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('first screen: a wrong key says so', async () => {
+    await page.getByText('অনলাইন খাতার চাবি আছে?').click()
+    await page.locator('.field', { hasText: 'সার্ভারের ঠিকানা' }).locator('input').fill('https://worker.test')
+    await page.locator('.field', { hasText: 'চাবি' }).last().locator('input').fill('wrong-key')
+    await page.getByRole('button', { name: 'চাবি বসান' }).click()
+    await page.getByText('চাবি মিলল না').waitFor({ timeout: 5000 })
+    if (await page.getByText('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে').count()) throw new Error('restore offered on a wrong key')
+  })
+  await ctx.close()
+}
+
+/* ---- 5. offline build: no address, no key, nothing breaks ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('first screen: with no address or key there is no offer and no error', async () => {
+    await page.waitForTimeout(800)
+    if (await page.getByText('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে').count()) throw new Error('offer shown with no server')
+    await page.getByRole('button', { name: 'শুরু করি' }).waitFor({ timeout: 3000 })
+  })
+  await ctx.close()
+}
+
 console.log(log.join('\n'))
 await browser.close()
 await server.close()

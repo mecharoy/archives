@@ -30,13 +30,15 @@ const NULLABLE = new Set(['area_sqft', 'budget', 'plan_days', 'last_rate', 'cash
 export interface RestoreResult { masters: number; entries: number; error: string }
 
 /** How many rows the online ledger already holds for this phone's token (0 on any trouble). A new or
-    reinstalled phone on the same token should be offered them before it starts a second set of books. */
+    reinstalled phone on the same token should be offered them before it starts a second set of books.
+    -1: the server answered, and the key is wrong. */
 export async function probeServer(): Promise<number> {
   const s = getState()
   const url = apiUrl('/pull')
   if (!url || !s.settings.token) return 0
   try {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + s.settings.token }, cache: 'no-store' })
+    if (res.status === 401) return -1
     if (!res.ok) return 0
     const data = (await res.json()) as { ok?: boolean; tables?: Record<string, unknown[]> }
     if (!data.ok || !data.tables) return 0

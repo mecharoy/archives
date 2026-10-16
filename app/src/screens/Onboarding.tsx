@@ -41,6 +41,17 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [restoring, setRestoring] = useState(false)
   const [restoreErr, setRestoreErr] = useState('')
   useEffect(() => { void probeServer().then(setFound) }, [])
+  /* Public builds carry no device key: the helper pastes it here once, and the probe runs again. */
+  const [keyOpen, setKeyOpen] = useState(false)
+  const [endpointIn, setEndpointIn] = useState(s.settings.endpoint)
+  const [tokenIn, setTokenIn] = useState('')
+  const [keyBusy, setKeyBusy] = useState(false)
+  const applyKey = async () => {
+    setKeyBusy(true)
+    await saveSettings({ endpoint: endpointIn.trim(), token: tokenIn.trim() })
+    setFound(await probeServer())
+    setKeyBusy(false)
+  }
   const restoreNow = async () => {
     setRestoring(true); setRestoreErr('')
     const r = await restoreFromServer()
@@ -106,6 +117,26 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           <p className="small muted" style={{ marginTop: '.8rem' }}>
             {t('নেট না থাকলেও পুরোটা চলে। কোনো নাম-পাসওয়ার্ড লাগে না। কোনো হিসাব মুছে যায় না — ভুল হলে উল্টো লাইন লেখা হয়।')}
           </p>
+          {!keyOpen ? (
+            <button className="btn quiet small" style={{ marginTop: '.6rem' }} onClick={() => setKeyOpen(true)}>
+              {t('অনলাইন খাতার চাবি আছে?')}
+            </button>
+          ) : (
+            <div className="card" style={{ marginTop: '.8rem' }}>
+              <Field label="সার্ভারের ঠিকানা">
+                <input className="input" value={endpointIn} onChange={(e) => setEndpointIn(e.target.value)}
+                  inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
+              </Field>
+              <Field label="চাবি">
+                <input className="input" value={tokenIn} onChange={(e) => setTokenIn(e.target.value)}
+                  type="password" autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
+              </Field>
+              <button className="btn primary" style={{ width: '100%' }} disabled={keyBusy || !tokenIn.trim() || !endpointIn.trim()} onClick={applyKey}>
+                {keyBusy ? t('দেখছি…') : t('চাবি বসান')}
+              </button>
+              {found === -1 && <p className="small" style={{ color: 'var(--crit)', marginTop: '.5rem' }}>{t('চাবি মিলল না')}</p>}
+            </div>
+          )}
         </div>
         {found > 0 && (
           <div className="scroll" style={{ flex: 'none', paddingTop: 0 }}>
