@@ -37,8 +37,11 @@ const hid = made.json.household.id
 const dev = made.json.device_token
 
 const now = new Date().toISOString()
-const today = now.slice(0, 10)
-const shift = (d) => new Date(Date.now() + d * 86400000).toISOString().slice(0, 10)
+// Dates as the server reads them: Kolkata's calendar, not UTC's. Between midnight and 5:30 in the
+// morning in India the two are a day apart, and every "late by" figure came out a day off.
+const IST_MS = 5.5 * 3600000
+const shift = (d) => new Date(Date.now() + IST_MS + d * 86400000).toISOString().slice(0, 10)
+const today = shift(0)
 const yesterday = shift(-1)
 const soon = shift(3)
 const row = (tab, values) => ({ id: 'r' + Math.random().toString(36).slice(2), tab, mode: 'append', values })
@@ -118,6 +121,22 @@ ck('a business date is kept apart', sum.bills.business.total, 0)
 /* ---- enough context to know whether any of this can be trusted ---- */
 
 ck('the ledger size is reported', sum.coverage.days_recorded, 1)
+
+/* ---- the paper khata copied in, and a sale by its total alone ---- */
+
+/* Haldar owed ₹3,000 from long before the app, and bought ₹400 more on credit by total; he owes
+   Sharma an old ₹700. None names an item: they are dues, and not this week's sales or material. */
+const old = await post('/rows', { token: dev, rows: [
+  row('Stock', ['s3', 'b5', shift(-90), '', '', 'opening_get', 0, 0, 3000, 'p2', shift(-60), false, '', '', now]),
+  row('Stock', ['s4', 'b6', today, '', '', 'sale', 0, 0, 400, 'p2', soon, false, '', '', now]),
+  row('Stock', ['s5', 'b7', today, '', '', 'opening_owe', 0, 0, 700, 'p1', '', false, '', '', now]),
+] })
+ck('old balances are stored', old.json.accepted && old.json.accepted.length, 3)
+const withOld = await fetch(B + '/summary?household=' + hid, { headers: { Authorization: 'Bearer ' + A } }).then((r) => r.json())
+ck('an old balance he is owed is receivable, and late', withOld.business.receivable_overdue, 3000)
+ck('with the credit sale by total', withOld.business.receivable_total, 2500 + 3000 + 400)
+ck('an old balance he owes is a due', withOld.business.dues_total, 2500 + 700)
+ck("the week's material is unchanged by them", withOld.business.material_this_week, sum.business.material_this_week)
 
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

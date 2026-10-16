@@ -361,3 +361,10 @@ Location: android/app/build/outputs/apk/release/app-release.apk (plan 1, Task 5 
 Action: checking the first build signed with the new key outside the repo.
 Cause: the APK carries only the newer APK signature (v2/v3); keytool reads only the old JAR (v1) signature.
 Fix: use `%LOCALAPPDATA%\Android\Sdk\build-tools\35.0.0\apksigner.bat verify --print-certs <apk>`; the new key shows "CN=Site Khata, O=Roy Choudhury Builders, C=IN", the old one had "OU=Family ... L=Kolkata".
+
+2026-10-17
+Problem: server-check failed between midnight and 5:30 am India time: "the overdue one says how late" expected -1, got -2; a credit sale due "today" counted as late.
+Location: scripts/server-check.mjs (today / shift)
+Action: running the server check while adding old balances (plan 2, Task 1).
+Cause: the test took today's date from UTC; the Worker counts days on Kolkata's calendar, which is a day ahead after midnight IST.
+Fix: the test builds its dates as Kolkata dates (now + 5h30m), the same way summary.js istDate does.
