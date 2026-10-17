@@ -14,6 +14,11 @@ export function toBn(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => BN[+d])
 }
 
+/** Bengali digits whatever language the app is shown in — for text he sends to someone else. */
+export function digitsBn(s: string | number): string {
+  return String(s).replace(/[0-9]/g, (d) => BN[+d])
+}
+
 export function toAscii(s: string): string {
   return s.replace(/[০-৯]/g, (d) => AS[BN.indexOf(d)])
 }
@@ -96,6 +101,12 @@ export function dateBn(iso: string, withDay = true): string {
   const days = isEn() ? DAYS_EN : DAYS
   const s = `${toBn(d.getDate())} ${months[d.getMonth()]}`
   return withDay ? `${s}, ${days[d.getDay()]}` : s
+}
+
+/** "১ সেপ্টেম্বর", in Bengali whatever language the app is shown in — for a message he sends. */
+export function dateInBengali(iso: string): string {
+  const d = fromIso(iso)
+  return `${digitsBn(d.getDate())} ${MONTHS[d.getMonth()]}`
 }
 
 /** আজ / গতকাল / ২৬ আগস্ট */

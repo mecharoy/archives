@@ -319,6 +319,8 @@ export const EN: Record<string, string> = {
   'কেনা': 'bought',
   'বাকিতে কেনা': 'bought on credit',
   'পুরোনো বাকি': 'Old balance',
+  'তাগাদা পাঠান': 'Send a reminder',
+  'নম্বর নেই — ফোনবুক থেকে নিন': 'No number — take it from the phone book',
   'মাল ধরে বিক্রি': 'Sell goods (stock goes down)',
   'মজুত কমবে': 'Stock goes down',
   'শুধু টাকার হিসাব — বাকিতে দিলাম': 'Money only — sold on credit',

@@ -1,7 +1,10 @@
 import { useMemo, useState } from 'react'
 import { useOnce } from '../lib/once'
 import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, Field, useToast, Toast, Empty } from '../ui/kit'
-import { useStore, saveEntries, nameOf, type State } from '../lib/store'
+import { useStore, saveEntries, saveMaster, nameOf, parties, type State } from '../lib/store'
+import { telHref } from '../lib/phone'
+import { reminderText, reminderHref } from '../lib/dues'
+import { ContactPicker } from './Settings'
 import { uid } from '../lib/db'
 import { money, isoDate, dateBn, addDays } from '../lib/bn'
 import { PAY_MODES, type ID, type MoneyEntry } from '../lib/model'
@@ -26,6 +29,7 @@ export function Payments({ onBack }: { onBack: () => void }) {
   const toast = useToast()
   const [pay, setPay] = useState<{ party_id: ID; dir: 'paid' | 'received'; owed: number } | null>(null)
   const [old, setOld] = useState(false)
+  const [bookFor, setBookFor] = useState<ID | null>(null)
 
   const owe = useMemo(() => byParty(openDues(s.entries)), [s.entries])
   const get = useMemo(() => byParty(openReceivables(s.entries)), [s.entries])
@@ -59,12 +63,31 @@ export function Payments({ onBack }: { onBack: () => void }) {
           <>
             <p className="sectionlabel">{t('যাদের কাছে পাওনা')}</p>
             <div className="rowlist">
-              {get.map((x) => (
-                <Pick key={'g' + x.party_id} title={x.party_id ? nameOf(s, x.party_id) : t('খুচরো খদ্দের')}
-                  sub={!x.oldest ? t('তারিখ ঠিক করা নেই') : x.oldest < isoDate() ? tf('{0} থেকে পাওনা — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে পাওয়ার কথা', dateBn(x.oldest, false))}
-                  right={<span className="num">{money(x.amount)}</span>}
-                  onClick={() => setPay({ party_id: x.party_id, dir: 'received', owed: x.amount })} />
-              ))}
+              {get.map((x) => {
+                const p = parties(s).find((pp) => pp.id === x.party_id)
+                return (
+                  <div key={'g' + x.party_id}>
+                    <Pick title={x.party_id ? nameOf(s, x.party_id) : t('খুচরো খদ্দের')}
+                      sub={!x.oldest ? t('তারিখ ঠিক করা নেই') : x.oldest < isoDate() ? tf('{0} থেকে পাওনা — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে পাওয়ার কথা', dateBn(x.oldest, false))}
+                      right={<span className="num">{money(x.amount)}</span>}
+                      onClick={() => setPay({ party_id: x.party_id, dir: 'received', owed: x.amount })} />
+                    {/* Collecting is the point of the list: ring him, or send the reminder already written. */}
+                    {p && (
+                      <div className="spread" style={{ gap: '.5rem', margin: '.35rem 0 .8rem' }}>
+                        {p.phone ? (
+                          <>
+                            <a className="btn ghost small" href={telHref(p.phone)} style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}>{t('ফোন')}</a>
+                            <a className="btn primary small" target="_blank" rel="noopener noreferrer" style={{ flex: 2, textDecoration: 'none', textAlign: 'center' }}
+                              href={reminderHref(p.phone, reminderText(p.name_bn, x.since, x.amount, s.settings.owner_bn))}>{t('তাগাদা পাঠান')}</a>
+                          </>
+                        ) : (
+                          <button className="btn ghost small" style={{ flex: 1 }} onClick={() => setBookFor(p.id)}>{t('নম্বর নেই — ফোনবুক থেকে নিন')}</button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </>
         )}
@@ -74,19 +97,30 @@ export function Payments({ onBack }: { onBack: () => void }) {
         <SettleSheet s={s} {...pay} onClose={() => setPay(null)}
           onDone={(msg) => { setPay(null); toast.show(msg) }} />
       )}
+      {bookFor && (
+        <ContactPicker onClose={() => setBookFor(null)} onPicked={async (c) => {
+          const p = parties(s).find((pp) => pp.id === bookFor)
+          if (p) await saveMaster({ ...p, phone: c.phone, updated_at: new Date().toISOString() })
+          setBookFor(null)
+        }} />
+      )}
       {old && <OldDueSheet s={s} onClose={() => setOld(false)} onDone={(msg) => { setOld(false); toast.show(msg) }} />}
       {toast.msg && <Toast text={toast.msg} />}
     </>
   )
 }
 
-function byParty(rows: { party_id: ID; amount: number; due_date: string }[]) {
-  const map = new Map<ID, { party_id: ID; amount: number; oldest: string }>()
+function byParty(rows: { party_id: ID; amount: number; due_date: string; date: string }[]) {
+  // since: the day the oldest still-open row was written — what the reminder says the money is owed from.
+  const map = new Map<ID, { party_id: ID; amount: number; oldest: string; since: string }>()
   for (const r of rows) {
     const cur = map.get(r.party_id)
     // oldest is '' when none of the party's bills has a date; those go last.
-    if (cur) { cur.amount += r.amount; if (r.due_date && (!cur.oldest || r.due_date < cur.oldest)) cur.oldest = r.due_date }
-    else map.set(r.party_id, { party_id: r.party_id, amount: r.amount, oldest: r.due_date })
+    if (cur) {
+      cur.amount += r.amount
+      if (r.due_date && (!cur.oldest || r.due_date < cur.oldest)) cur.oldest = r.due_date
+      if (r.date < cur.since) cur.since = r.date
+    } else map.set(r.party_id, { party_id: r.party_id, amount: r.amount, oldest: r.due_date, since: r.date })
   }
   return [...map.values()].sort((a, b) => ((a.oldest || '9999') < (b.oldest || '9999') ? -1 : (a.oldest || '9999') > (b.oldest || '9999') ? 1 : 0))
 }

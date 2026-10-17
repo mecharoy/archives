@@ -230,6 +230,35 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- B7: ring, or send a reminder, from every পাবেন row ---- */
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await step('পাবেন: a customer with a number can be rung or sent a তাগাদা on WhatsApp', page, async () => {
+    await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const db = await import('/src/lib/db.ts')
+      const now = new Date().toISOString()
+      await m.saveMaster({ id: 'c2', kind: 'party', name_bn: 'রহিম', ptype: 'client', terms_days: 0, phone: '98300 12345', updated_at: now })
+      await m.saveSettings({ owner_bn: 'সুবীর' })
+      const row = (id, party, amount) => ({ id, kind: 'stock', batch: db.uid(), date: '2026-09-01', project_id: '', created_at: now, item_id: '', dir: 'opening_get', qty: 0, rate: 0, amount, party_id: party, due_date: '2026-09-15', paid: false, photo_id: '' })
+      await m.saveEntries([row('o1', 'c2', 12500), row('o2', 'c1', 800)])
+    })
+    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
+    await tap(page, 'টাকা দেওয়া-নেওয়া')
+    const tel = await page.locator('a[href^="tel:"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+    if (!tel.includes('tel:+919830012345')) throw new Error('no call link: ' + tel.join(' '))
+    const wa = await page.locator('a[href^="https://wa.me/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+    const want = 'https://wa.me/919830012345?text=' + encodeURIComponent('নমস্কার রহিম, ১ সেপ্টেম্বর থেকে ₹১২,৫০০ বাকি আছে। সুবিধামতো দিয়ে দেবেন। — সুবীর')
+    if (!wa.includes(want)) throw new Error('reminder link: ' + wa.join(' '))
+    await page.getByText('তাগাদা পাঠান').first().waitFor({ timeout: 2000 })
+  })
+  await step('পাবেন: a customer with no number is offered the phone book instead', page, async () => {
+    await page.getByText('নম্বর নেই — ফোনবুক থেকে নিন').first().waitFor({ timeout: 2000 })
+    const wa = await page.locator('a[href^="https://wa.me/"]').count()
+    if (wa !== 1) throw new Error(wa + ' WhatsApp links; only the customer with a number should have one')
+  })
+  await ctx.close()
+}
+
 /* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })
