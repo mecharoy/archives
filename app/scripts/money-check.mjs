@@ -160,7 +160,7 @@ const toWho = async (page, tile, qty, rate) => {
   const { ctx, page } = await fresh({ shop: true })
   await step('shop: a customer can be given credit days, like a supplier', page, async () => {
     await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
-    await toWho(page, 'বিক্রি হয়েছে', ['২'], ['১', '০', '০'])
+    await toWho(page, 'মাল ধরে বিক্রি', ['২'], ['১', '০', '০'])
     await tap(page, '+ নতুন', true)
     await page.getByText('কত দিনে টাকা দেয় (না জানলে ০)').waitFor({ timeout: 3000 })
     await page.locator('.sheet .iconbtn, .sheet [aria-label="বন্ধ করুন"]').first().click().catch(() => page.keyboard.press('Escape'))
@@ -168,7 +168,7 @@ const toWho = async (page, tile, qty, rate) => {
   await step('shop: a credit sale to a customer with no agreed days falls due in a week', page, async () => {
     await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
     await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
-    await toWho(page, 'বিক্রি হয়েছে', ['২'], ['১', '০', '০'])
+    await toWho(page, 'মাল ধরে বিক্রি', ['২'], ['১', '০', '০'])
     await tap(page, 'হালদার', true)
     await tap(page, 'না, বাকি')
     await page.getByText('কবে দেবে?').waitFor({ timeout: 3000 })
@@ -193,13 +193,44 @@ const toWho = async (page, tile, qty, rate) => {
   await ctx.close()
 }
 
-/* ---- B4: old dues from the paper khata ---- */
 const lastRow = (page, dir) => page.evaluate(async (dir) => {
   const m = await import('/src/lib/store.ts'); const bn = await import('/src/lib/bn.ts')
   const e = m.getState().entries.filter((x) => x.kind === 'stock' && x.dir === dir).pop()
   return e ? { ...e, today: bn.isoDate(), ago60: bn.addDays(bn.isoDate(), -60), in15: bn.addDays(bn.isoDate(), 15) } : null
 }, dir)
 const listText = (page) => page.locator('.scroll').first().innerText()
+
+/* ---- B6, S2: a sale by its total alone, and the shop's two ways of selling named ---- */
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await step('shop: the two ways of selling say what they do', page, async () => {
+    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
+    await page.getByText('মাল ধরে বিক্রি').first().waitFor({ timeout: 3000 })
+    await page.getByText('শুধু টাকার হিসাব — বাকিতে দিলাম').first().waitFor({ timeout: 3000 })
+  })
+  await step('shop: "বাকিতে দিলাম" ₹800 to a customer, due in a fortnight, moves no stock', page, async () => {
+    const before = await page.evaluate(async () => { const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts'); const s = m.getState(); return JSON.stringify(c.shopStock(s.entries, m.items(s))) })
+    await tap(page, 'শুধু টাকার হিসাব — বাকিতে দিলাম')
+    if (await page.locator('.actionbar .btn.primary').isEnabled()) throw new Error('could be saved with no customer and no amount')
+    await tap(page, 'হালদার', true)
+    await pad(page, ['৮', '০', '০'])
+    await tap(page, '১৫ দিন', true)
+    await page.locator('.actionbar .btn.primary').click()
+    await page.waitForTimeout(500)
+    const r = await lastRow(page, 'sale')
+    if (!r || r.amount !== 800 || r.item_id !== '' || r.qty !== 0 || r.paid !== false || r.party_id !== 'c1' || r.due_date !== r.in15) throw new Error('row: ' + JSON.stringify(r))
+    const after = await page.evaluate(async () => { const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts'); const s = m.getState(); return JSON.stringify(c.shopStock(s.entries, m.items(s))) })
+    if (after !== before) throw new Error('the shelf changed: ' + before + ' → ' + after)
+    await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
+    await tap(page, 'টাকা দেওয়া-নেওয়া')
+    const txt = await listText(page)
+    if (!txt.includes('হালদার') || !txt.includes('৮০০')) throw new Error('পাবেন does not show ₹800 from হালদার')
+  })
+  await ctx.close()
+}
+
+/* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })
   await step('old dues: "উনি আমাকে দেবেন" ₹5,000 from a new person, since two months', page, async () => {

@@ -453,7 +453,7 @@ await step('which then offers itself as a chip', async () => {
 await step('a credit sale becomes a receivable', async () => {
   await home()
   await page.locator('.bookhead', { hasText: 'মজুত' }).click()
-  await tap('বিক্রি হয়েছে')
+  await tap('মাল ধরে বিক্রি')
   await pickItem('সিমেন্ট')
   for (const d of ['৫']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('এগিয়ে যান')

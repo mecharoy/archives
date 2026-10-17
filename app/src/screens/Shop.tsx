@@ -15,7 +15,7 @@ import { useOnce } from '../lib/once'
 import { defaultDueDays, dueFrom } from '../lib/dues'
 import { DueChips } from '../ui/DueChips'
 
-type Flow = null | 'in' | 'sale' | 'count' | 'transfer'
+type Flow = null | 'in' | 'sale' | 'count' | 'transfer' | 'credit'
 
 export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' | 'parties') => void }) {
   const s = useStore((x) => x)
@@ -25,6 +25,7 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const value = levels.reduce((a, l) => a + l.value, 0)
 
+  if (flow === 'credit') return <QuickCredit s={s} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
   if (flow) return <StockFlow s={s} flow={flow} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
 
   return (
@@ -36,7 +37,12 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
             <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("মাল এসেছে")}</span><span className="s">{t("দোকানে ঢুকল")}</span></span>
           </button>
           <button className="tile" onClick={() => setFlow('sale')}>
-            <Icon name="shop" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("বিক্রি হয়েছে")}</span><span className="s">{t("খদ্দেরকে")}</span></span>
+            <Icon name="shop" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("মাল ধরে বিক্রি")}</span><span className="s">{t("মজুত কমবে")}</span></span>
+          </button>
+          {/* The same sale, written by its total alone — for the evening he cannot remember every fitting.
+              Stock stays as it is; the next count puts the shelf right. */}
+          <button className="tile" onClick={() => setFlow('credit')}>
+            <Icon name="wallet" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("শুধু টাকার হিসাব — বাকিতে দিলাম")}</span><span className="s">{t("মজুত বদলাবে না")}</span></span>
           </button>
           <button className="tile" onClick={() => setFlow('transfer')}>
             <Icon name="fwd" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("কাজে পাঠানো")}</span><span className="s">{t("দামে নয়, খরচে")}</span></span>
@@ -113,11 +119,56 @@ function padChips<T extends { id: ID }>(ranked: T[], all: T[], n: number): T[] {
   return out
 }
 
-const TITLES: Record<Exclude<Flow, null>, string> = {
-  in: 'মাল এসেছে', sale: 'বিক্রি হয়েছে', transfer: 'কাজে পাঠানো', count: 'মাল গোনা',
+const TITLES: Record<Exclude<Flow, null | 'credit'>, string> = {
+  in: 'মাল এসেছে', sale: 'মাল ধরে বিক্রি', transfer: 'কাজে পাঠানো', count: 'মাল গোনা',
 }
 
-function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; onDone: (msg?: string) => void }) {
+/* বাকিতে দিলাম: a customer took goods on credit and he writes only what they came to. One unpaid sale
+   row with no item and no quantity — it is owed like any credit sale and moves nothing on the shelf.
+   (The design's optional note is not here: a stock row has no column for one.) */
+function QuickCredit({ s, onDone }: { s: State; onDone: (msg?: string) => void }) {
+  useBackHandler(() => onDone())
+  const clients = parties(s).filter((p) => p.ptype === 'client')
+  const [party, setParty] = useState<ID | ''>('')
+  const [amount, setAmount] = useState('')
+  const [dueDays, setDueDays] = useState<number | null>(null)
+  const [newParty, setNewParty] = useState(false)
+  const picked = clients.find((p) => p.id === party)
+  const days = dueDays ?? defaultDueDays(picked?.terms_days ?? 0)
+  const today = isoDate()
+  const saveOnce = useOnce(async () => {
+    const e: StockEntry = {
+      id: uid(), kind: 'stock', batch: uid(), date: today, project_id: '', created_at: new Date().toISOString(),
+      item_id: '', dir: 'sale', qty: 0, rate: 0, amount: Number(amount), party_id: party,
+      due_date: dueFrom(today, days), paid: false, photo_id: '',
+    }
+    await saveEntries([e])
+    scheduleSync(300)
+    onDone(tf('{0} — {1} বাকিতে', picked?.name_bn || '', money(Number(amount))))
+  })
+  return (
+    <>
+      <TopBar title="বাকিতে দিলাম" onBack={() => onDone()} />
+      <div className="scroll">
+        <h2 className="question">{t('কাকে?')}</h2>
+        <div className="chips">
+          {clients.slice(0, 8).map((p) => <Chip key={p.id} on={party === p.id} onClick={() => { setParty(p.id); setDueDays(null) }}>{p.name_bn}</Chip>)}
+          <Chip onClick={() => setNewParty(true)}>{t('+ নতুন')}</Chip>
+        </div>
+        <p className="sectionlabel">{t('মোট কত টাকার মাল?')}</p>
+        <MoneyPad value={amount} onChange={setAmount} />
+        <DueChips question="কবে দেবে?" days={days} onChange={setDueDays} own={picked?.terms_days} from={today} />
+        <p className="small muted" style={{ marginTop: '.8rem' }}>{t('মজুত যেমন আছে থাকবে — পরে মাল গুনলে ঠিক হয়ে যাবে।')}</p>
+      </div>
+      <div className="actionbar">
+        <button className="btn primary" disabled={!party || !(Number(amount) > 0)} onClick={saveOnce}>{t('সেভ করুন')}</button>
+      </div>
+      {newParty && <NewPartySheet kind="client" onClose={() => setNewParty(false)} onCreated={(p) => { setParty(p.id); setDueDays(null); setNewParty(false) }} />}
+    </>
+  )
+}
+
+function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | 'credit'>; onDone: (msg?: string) => void }) {
   const [step, setStep] = useState<'item' | 'qty' | 'rate' | 'who'>('item')
   // One step back, not out of the whole flow with the entry lost. A count has no rate step.
   const before = (st: typeof step) => (st === 'who' ? (flow === 'count' ? 'qty' : 'rate') : st === 'rate' ? 'qty' : 'item')
