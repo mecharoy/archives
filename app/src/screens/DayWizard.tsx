@@ -18,9 +18,12 @@ import { scheduleSync } from '../lib/sync'
 import { t, tf, okWord } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 
-type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'returned' | 'expense' | 'received' | 'progress' | 'personal' | 'inventory' | 'cash' | 'review'
+type StepId = 'project' | 'attendance' | 'wages' | 'material' | 'expense' | 'received' | 'extras' | 'cash' | 'review'
+/* The rarer things, behind আর কিছু?: material back off a site, his own spending, goods into the shop, a stage done. */
+type ExtraId = 'returned' | 'personal' | 'inventory' | 'progress'
+type AnyStep = StepId | ExtraId
 
-const QUESTION: Record<StepId, string> = {
+const QUESTION: Record<AnyStep, string> = {
   project: 'কোন কাজ?',
   attendance: 'আজ কে কে এসেছে?',
   wages: 'মজুরি কত দিলেন?',
@@ -28,6 +31,7 @@ const QUESTION: Record<StepId, string> = {
   returned: 'কোনো মাল ফেরত এল?',
   expense: 'আর কোনো খরচ?',
   received: 'আজ কেউ টাকা দিয়েছেন?',
+  extras: 'আর কিছু?',
   progress: 'কাজ কতদূর?',
   personal: 'নিজের কোনো খরচ?',
   inventory: 'দোকানে মাল তুললেন?',
@@ -44,7 +48,14 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
     const act = activeProjects(getState())
     return !d.project_id && act.length === 1 ? { ...d, project_id: act[0].id } : d
   })
-  const [i, setI] = useState(start?.step ?? 0)
+  /* The step is remembered by its name, not its place in the list. The list changes with what he runs
+     (and changed with this build), so a position saved earlier would open the wrong screen. A draft that
+     carries no name starts at the first screen, everything he typed still in it. 999 is কালকের মতোই. */
+  const [cur, setCur] = useState<StepId | null>(() => (start ? (start.step === 999 ? 'review' : ((start.at as StepId) || null)) : null))
+  const [sub, setSub] = useState<ExtraId | null>(null)
+  /* Where a step goes when he presses এগিয়ে যান, instead of onwards: back to review after a jump from it,
+     back to the cash count after its "money came in". */
+  const [returnTo, setReturnTo] = useState<StepId | null>(null)
   const toast = useToast()
 
   useEffect(() => {
@@ -60,7 +71,7 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       const act = activeProjects(getState())
       if (!d.project_id && act.length === 1) d.project_id = act[0].id
       setDraft(d)
-      setI(resume ? saved.step : 0)
+      setCur(resume ? ((saved.at as StepId) || null) : null)
     })()
   }, [draft])
 
@@ -73,44 +84,60 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
     })
   }
 
+  const hasWork = activeProjects(s).length > 0
+  /* Eight screens on an ordinary evening. No men on the books means "who came today?" has no possible
+     answer, so a man who only runs a shop never sees those two; the moment he puts one name in, they come
+     back. Money that came in is asked right after what went out, and before the count — so a payment he
+     received is in the book before the cash box is compared with it. */
   const steps = useMemo<StepId[]>(() => {
     const list: StepId[] = []
-    const hasWork = activeProjects(s).length > 0
     if (activeProjects(s).length > 1) list.push('project')
-    /* No men on the books means "who came today?" has no possible answer —
-       an empty screen and a hint pointing at Settings is a dead end, not a
-       question. A man who only runs a shop never sees these two at all; the
-       moment he puts one name in, they come back on their own. */
     if (allWorkers(s).length > 0) list.push('attendance', 'wages')
-    /* When there is a live job, the day walks through every part of it — what
-       came in, what came back, what else was spent, and how far the work got.
-       He asked for the whole round every evening, so nothing demotes itself out
-       of the way; a screen with nothing to add is one extra tap, not a lost
-       record. Personal spending is asked of everyone; putting goods into the
-       shop only of a man who runs one. */
-    /* Money that came in is asked right after what went out, and before the count — so a payment he
-       received is in the book before the cash box is compared with it. */
-    if (hasWork) list.push('material', 'returned', 'expense', 'received', 'progress')
+    if (hasWork) list.push('material', 'expense', 'received')
+    list.push('extras', 'cash', 'review')
+    return list
+  }, [s, hasWork])
+  const extras = useMemo<ExtraId[]>(() => {
+    const list: ExtraId[] = []
+    if (hasWork) list.push('returned')
     list.push('personal')
     if (s.settings.runs_shop) list.push('inventory')
-    list.push('cash', 'review')
+    if (hasWork) list.push('progress')
     return list
-  }, [s])
+  }, [s, hasWork])
 
-  /* Back is one step, not out of the whole day. Registered above the early
-     return, because hooks cannot be conditional — it does the same thing the
-     arrow in the corner does. */
-  useBackHandler(() => (i > 0 ? setI(i - 1) : onExit(false)))
+  const step: StepId = cur && steps.includes(cur) ? cur : steps[0]
+  const at = steps.indexOf(step)
+  const go = (id: StepId) => { setSub(null); setCur(id) }
+  const next = () => {
+    // Who came and what they were paid are one thing: changing the men walks on to their wages first.
+    const pairedWithNext = step === 'attendance' && steps.includes('wages')
+    if (returnTo && !pairedWithNext) { const r = returnTo; setReturnTo(null); go(r) }
+    else go(steps[Math.min(at + 1, steps.length - 1)])
+  }
+  // Done with one of the rarer things: back to আর কিছু? — or to review, if that is where he came from.
+  const subNext = () => {
+    if (returnTo === 'review') { setReturnTo(null); go('review') } else setSub(null)
+  }
+  /* Back is one step, not out of the whole day; inside a hub step it is back to the hub. Registered above
+     the early return, because hooks cannot be conditional. */
+  const back = () => {
+    if (sub) { subNext(); return }
+    if (returnTo) { const r = returnTo; setReturnTo(null); go(r); return }
+    if (at > 0) go(steps[at - 1]); else onExit(false)
+  }
+  useBackHandler(back)
+  const jumpTo = (id: AnyStep, from: StepId = 'review') => {
+    if ((extras as AnyStep[]).includes(id)) { setReturnTo(from); setCur('extras'); setSub(id as ExtraId) }
+    else if ((steps as AnyStep[]).includes(id)) { setReturnTo(from); go(id as StepId) }
+  }
 
-  useEffect(() => { if (draft && draft.step !== i) patch({ step: i }) }, [i]) // eslint-disable-line
-  useEffect(() => { if (i > steps.length - 1) setI(steps.length - 1) }, [steps.length, i]) // eslint-disable-line
+  /* Only a step he actually moved to is remembered. When the remembered one no longer exists (the men were
+     all removed, say), the first screen is shown but not written back — or putting a man back later would
+     reopen the day past "who came today". */
+  useEffect(() => { if (draft && cur && steps.includes(cur) && draft.at !== cur) patch({ at: cur }) }, [cur, !!draft]) // eslint-disable-line
 
   if (!draft) return null
-  const at = Math.min(i, steps.length - 1)   // a saved draft can be past the end for one frame
-  const step = steps[at]
-  const back = () => (i > 0 ? setI(i - 1) : onExit(false))
-  const next = () => setI(Math.min(i + 1, steps.length - 1))
-  const jumpTo = (id: StepId) => { const k = steps.indexOf(id); if (k >= 0) setI(k) }
 
   const save = async () => {
     // What the book expected to find AFTER this day's own spending — the figure the count is compared with.
@@ -144,22 +171,60 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
       {step === 'attendance' && <StepAttendance s={s} draft={draft} patch={patch} next={next} />}
       {step === 'wages' && <StepWages s={s} draft={draft} patch={patch} next={next} />}
       {step === 'material' && <StepMaterial s={s} draft={draft} patch={patch} next={next} />}
-      {step === 'returned' && <StepReturned s={s} draft={draft} patch={patch} next={next} />}
       {step === 'expense' && <StepExpense s={s} draft={draft} patch={patch} next={next} />}
       {step === 'received' && <StepReceived s={s} draft={draft} patch={patch} next={next} />}
-      {step === 'progress' && <StepProgress s={s} draft={draft} patch={patch} next={next} />}
-      {step === 'personal' && <StepExpense s={s} draft={draft} patch={patch} next={next} field="pexps" personal startAsk question={QUESTION.personal} hint="ঘরের বা নিজের খরচ — কাজের হিসাবে ধরা হবে না।" />}
-      {step === 'inventory' && <StepMaterial s={s} draft={draft} patch={patch} next={next} field="invs" toShop startAsk question={QUESTION.inventory} hint="দোকানের জন্য মাল তুললে এখানে লিখুন — সাইটের হিসাবে যাবে না।" />}
-      {step === 'cash' && <StepCash s={s} draft={draft} patch={patch} next={next} onReceived={steps.includes('received') ? () => jumpTo('received') : undefined} />}
+      {step === 'extras' && !sub && <StepExtras draft={draft} options={extras} open={setSub} next={next} />}
+      {step === 'extras' && sub === 'returned' && <StepReturned s={s} draft={draft} patch={patch} next={subNext} />}
+      {step === 'extras' && sub === 'personal' && <StepExpense s={s} draft={draft} patch={patch} next={subNext} field="pexps" personal question={QUESTION.personal} hint="ঘরের বা নিজের খরচ — কাজের হিসাবে ধরা হবে না।" />}
+      {step === 'extras' && sub === 'inventory' && <StepMaterial s={s} draft={draft} patch={patch} next={subNext} field="invs" toShop question={QUESTION.inventory} hint="দোকানের জন্য মাল তুললে এখানে লিখুন — সাইটের হিসাবে যাবে না।" />}
+      {step === 'extras' && sub === 'progress' && <StepProgress s={s} draft={draft} patch={patch} next={subNext} />}
+      {step === 'cash' && <StepCash s={s} draft={draft} patch={patch} next={next} onReceived={steps.includes('received') ? () => jumpTo('received', 'cash') : undefined} />}
       {step === 'review' && (
         <StepReview
-          s={s} draft={draft} project_bn={project?.name_bn || ''} onJump={jumpTo} onSave={save} has={(id) => steps.includes(id)}
+          s={s} draft={draft} project_bn={project?.name_bn || ''} onJump={jumpTo} onSave={save}
+          has={(id) => (steps as AnyStep[]).includes(id) || (extras as AnyStep[]).includes(id)}
           extrasAvailable={false}
           onExtras={() => {}}
           patch={patch}
         />
       )}
       {toast.msg && <Toast text={toast.msg} />}
+    </>
+  )
+}
+
+/* ---------- আর কিছু? ---------- */
+
+/* Most evenings none of these happened, so they are one screen instead of four. Each button opens the
+   step it names and comes back here; a ✓ shows the ones he has written something in. */
+const EXTRA_LABEL: Record<ExtraId, [string, string]> = {
+  returned: ['ফেরত', 'সাইট থেকে মাল ফেরত এল'],
+  personal: ['নিজের খরচ', 'ঘরের বা নিজের খরচ'],
+  inventory: ['দোকানে মাল', 'দোকানের জন্য মাল তুললেন'],
+  progress: ['কাজ এগোল', 'কোনো ধাপ অর্ধেক বা শেষ হল'],
+}
+
+function StepExtras({ draft, options, open, next }: { draft: Draft; options: ExtraId[]; open: (id: ExtraId) => void; next: () => void }) {
+  const done = (id: ExtraId) => id === 'returned' ? (draft.rets?.length ?? 0) > 0
+    : id === 'personal' ? (draft.pexps?.length ?? 0) > 0
+      : id === 'inventory' ? (draft.invs?.length ?? 0) > 0
+        : !!draft.progress
+  const any = options.some(done)
+  return (
+    <>
+      <div className="scroll">
+        <h2 className="question">{t(QUESTION.extras)}</h2>
+        <p className="hint">{t('বেশির ভাগ দিন কিছু থাকে না। থাকলে নিচে বাছুন — লিখে আবার এখানেই ফিরে আসবেন।')}</p>
+        <div className="rowlist">
+          {options.map((id) => (
+            <Pick key={id} on={done(id)} title={EXTRA_LABEL[id][0]} sub={EXTRA_LABEL[id][1]}
+              right={<Icon name={done(id) ? 'check' : 'fwd'} size={18} />} onClick={() => open(id)} />
+          ))}
+        </div>
+      </div>
+      <div className="actionbar">
+        <button className="btn primary" onClick={next}>{any ? t('এগিয়ে যান') : t('না, আর কিছু নেই')}</button>
+      </div>
     </>
   )
 }
@@ -963,7 +1028,7 @@ function StepCash({ s, draft, patch, next, onReceived }: StepProps & { onReceive
 /* ---------- 8. review ---------- */
 
 function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onExtras, patch, has }: {
-  s: State; draft: Draft; project_bn: string; onJump: (id: StepId) => void; onSave: () => void; has: (id: StepId) => boolean
+  s: State; draft: Draft; project_bn: string; onJump: (id: AnyStep) => void; onSave: () => void; has: (id: AnyStep) => boolean
   extrasAvailable: boolean; onExtras: () => void; patch: (p: Partial<Draft>) => void
 }) {
   const [saving, setSaving] = useState(false)

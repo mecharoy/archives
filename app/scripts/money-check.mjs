@@ -64,14 +64,12 @@ const book = (page) => page.evaluate(async () => {
 const toReceived = async (page) => {
   await tap(page, 'আজকের হিসাব')
   await page.getByText('কী মাল?').waitFor({ timeout: 4000 }); await tap(page, 'আজ মাল আসেনি')
-  await page.getByText('কোনো মাল ফেরত এল?').waitFor({ timeout: 3000 }); await tap(page, 'কিছু ফেরত আসেনি')
   await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 }); await tap(page, 'আর কোনো খরচ নেই')
   await page.getByText('আজ কেউ টাকা দিয়েছেন?').waitFor({ timeout: 3000 })
 }
 /** From the money question to a saved day, agreeing with whatever the book expects in hand. */
 const finishDay = async (page) => {
-  await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 }); await tap(page, 'এগিয়ে যান')
-  await page.getByText('নিজের কোনো খরচ?').waitFor({ timeout: 3000 }); await page.getByText('না', { exact: true }).first().click()
+  await page.getByText('আর কিছু?').waitFor({ timeout: 3000 }); await page.locator('.actionbar .btn.primary').click()
   await page.getByText('দিনের শেষে হাতে কত?').waitFor({ timeout: 3000 }); await tap(page, 'হ্যাঁ, এটাই আছে')
   await page.getByText('একবার দেখে নিন').waitFor({ timeout: 3000 })
 }
@@ -91,6 +89,76 @@ const finishDay = async (page) => {
   await step('text: the page can be pinched to zoom', page, async () => {
     const vp = await page.evaluate(() => document.querySelector('meta[name=viewport]').getAttribute('content'))
     if (/user-scalable\s*=\s*no|maximum-scale\s*=\s*1(?!\d)/.test(vp)) throw new Error('zoom is blocked: ' + vp)
+  })
+  await ctx.close()
+}
+
+/* ---- D2, D3: the evening in eight screens, a hub for the rest, and back to review ---- */
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await page.evaluate(async () => {
+    const m = await import('/src/lib/store.ts'); const seed = await import('/src/lib/seed.ts')
+    await seed.seedHouse([])
+    const p = m.getState().masters.find((x) => x.id === 'p1')
+    await m.saveMaster({ ...p, ptype: seed.HOUSE })
+    await m.saveMaster({ id: 'w1', kind: 'worker', name_bn: 'রতন', rate: 600, phone: '', active: true, updated_at: new Date().toISOString() })
+  })
+  await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+  await step('evening: a man, a job and a shop make eight screens', page, async () => {
+    await tap(page, 'আজকের হিসাব')
+    await page.getByText('আজ কে কে এসেছে?').waitFor({ timeout: 4000 })
+    const count = await page.locator('.stepcount').innerText()
+    if (!count.includes('/ ৮')) throw new Error('step counter reads ' + count)
+  })
+  await step('evening: আর কিছু? opens কাজ এগোল and comes back to itself, ticked', page, async () => {
+    await page.locator('.pick').first().click(); await tap(page, 'এগিয়ে যান')
+    await page.getByText('মজুরি কত দিলেন?').waitFor({ timeout: 3000 }); await tap(page, 'এগিয়ে যান')
+    await page.getByText('কী মাল?').waitFor({ timeout: 3000 }); await tap(page, 'আজ মাল আসেনি')
+    await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 }); await tap(page, 'আর কোনো খরচ নেই')
+    await page.getByText('আজ কেউ টাকা দিয়েছেন?').waitFor({ timeout: 3000 }); await page.getByText('না', { exact: true }).first().click()
+    await page.getByText('আর কিছু?').waitFor({ timeout: 3000 })
+    await tap(page, 'কাজ এগোল')
+    await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 })
+    await page.getByText('অর্ধেক হয়েছে').first().click()
+    await page.getByText('আর কিছু?').waitFor({ timeout: 3000 })
+    if (!(await page.locator('.pick.on', { hasText: 'কাজ এগোল' }).count())) throw new Error('কাজ এগোল is not ticked')
+  })
+  await step("evening: Back inside a hub step returns to the hub, not out of the day", page, async () => {
+    await tap(page, 'নিজের খরচ')
+    await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 })
+    await page.evaluate(() => import('/src/lib/back.ts').then((m) => m.goBack()))
+    await page.getByText('আর কিছু?').waitFor({ timeout: 3000 })
+  })
+  await step('evening: from the hub on to the cash count, then review', page, async () => {
+    await page.locator('.actionbar .btn.primary').click()
+    await page.getByText('দিনের শেষে হাতে কত?').waitFor({ timeout: 3000 }); await tap(page, 'হ্যাঁ, এটাই আছে')
+    await page.getByText('একবার দেখে নিন').waitFor({ timeout: 3000 })
+  })
+  await step('evening: a jump from review comes back to review', page, async () => {
+    // মজুরি opens who came, then their wages (one thing), then straight back — not on through material.
+    await page.locator('.review-row', { hasText: 'মজুরি' }).first().click()
+    await page.getByText('আজ কে কে এসেছে?').waitFor({ timeout: 3000 }); await tap(page, 'এগিয়ে যান')
+    await page.getByText('মজুরি কত দিলেন?').waitFor({ timeout: 3000 }); await tap(page, 'এগিয়ে যান')
+    await page.getByText('একবার দেখে নিন').waitFor({ timeout: 3000 })
+    await page.locator('.review-row', { hasText: 'অন্য খরচ' }).first().click()
+    await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 }); await tap(page, 'আর কোনো খরচ নেই')
+    await page.getByText('একবার দেখে নিন').waitFor({ timeout: 3000 })
+  })
+  await ctx.close()
+}
+{
+  const { ctx, page } = await fresh()
+  await step('evening: a day half-written by the old build opens on the first screen with nothing lost', page, async () => {
+    await page.evaluate(async () => {
+      const d = await import('/src/lib/draft.ts')
+      const old = { ...d.newDraft(), project_id: 'p1', step: 3, exps: [{ key: 'x', head_bn: 'চা-জলখাবার', amount: 120, mode: 'নগদ', note: '', photo_id: '' }] }
+      delete old.at
+      await d.saveDraft(old)
+    })
+    await tap(page, 'আজকের হিসাব')
+    await page.getByText('কী মাল?').waitFor({ timeout: 4000 })
+    const kept = await page.evaluate(async () => ((await (await import('/src/lib/draft.ts')).loadDraft()) || {}).exps?.length)
+    if (kept !== 1) throw new Error('the expense typed before is gone')
   })
   await ctx.close()
 }
@@ -126,7 +194,7 @@ const finishDay = async (page) => {
   await step('evening: "না" moves on and writes nothing', page, async () => {
     await toReceived(page)
     await page.getByText('না', { exact: true }).first().click()
-    await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 })
+    await page.getByText('আর কিছু?').waitFor({ timeout: 3000 })
     const d = await page.evaluate(async () => (await (await import('/src/lib/draft.ts')).loadDraft()))
     if ((d.recv || []).length) throw new Error('a received row was drafted')
   })
@@ -138,7 +206,7 @@ const finishDay = async (page) => {
   const { ctx, page } = await fresh({ jobStatus: 'done' })
   await step('evening: with no live job the question is not asked', page, async () => {
     await tap(page, 'আজকের হিসাব')
-    await page.getByText('নিজের কোনো খরচ?').waitFor({ timeout: 4000 })
+    await page.getByText('আর কিছু?').waitFor({ timeout: 4000 })
     if (await page.getByText('আজ কেউ টাকা দিয়েছেন?').count()) throw new Error('asked with no live job')
   })
   await ctx.close()
@@ -495,8 +563,7 @@ const listText = (page) => page.locator('.scroll').first().innerText()
 const toCount = async (page, counted) => {
   await toReceived(page)
   await page.getByText('না', { exact: true }).first().click()
-  await page.getByText('কাজ কতদূর?').waitFor({ timeout: 3000 }); await tap(page, 'এগিয়ে যান')
-  await page.getByText('নিজের কোনো খরচ?').waitFor({ timeout: 3000 }); await page.getByText('না', { exact: true }).first().click()
+  await page.getByText('আর কিছু?').waitFor({ timeout: 3000 }); await page.locator('.actionbar .btn.primary').click()
   await page.getByText('দিনের শেষে হাতে কত?').waitFor({ timeout: 3000 })
   await tap(page, 'না, গুনে বলছি')
   await pad(page, counted)

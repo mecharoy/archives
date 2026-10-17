@@ -35,6 +35,8 @@ export interface Draft {
   cash_computed: number | null
   note: string
   step: number
+  /* The step he was on, by name (see DayWizard). `step` is kept only for 999, "same as yesterday". */
+  at?: string
   started_at: string
   from_yesterday: boolean
   /* The crew has been pre-ticked once. Remembered here, not in the screen, so unticking everyone and coming back does not tick them again. */
