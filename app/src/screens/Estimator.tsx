@@ -119,7 +119,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
           <h2 className="question">{t("কী ধরনের কাজ?")}</h2>
           <p className="hint">{t('ধাপে ধাপে জিজ্ঞেস করা হবে — মাপ, ভিত, মাল, মজুরি, তারপর লাভ।')}</p>
           {types.length === 0 && (
-            <Empty>{t("এখনও কোনো ধরন ঠিক করা নেই।")}<br />{t("সেটিংস → ধাপ ও থাম্ব রুল থেকে একবার বসিয়ে নিলে এই হিসাব কাজ করবে।")}</Empty>
+            <Empty>{t("এখনও কোনো ধরন ঠিক করা নেই।")}<br />{t("কাজ → কাজের ধাপ ও থাম্ব রুল থেকে একবার বসিয়ে নিলে এই হিসাব কাজ করবে।")}</Empty>
           )}
           <div className="chips">
             {types.map((x) => <Chip key={x} on={ptype === x} onClick={() => { setPtype(x); setStep('size') }}>{t(x)}</Chip>)}

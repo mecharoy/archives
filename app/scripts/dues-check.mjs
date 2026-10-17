@@ -60,5 +60,15 @@ ck('marked as received earlier, so it is not counted as cash', recv[0] && recv[0
 ck('cash is untouched by it', calc.cashState(rows, 10000, '2026-10-01').computed, 10000)
 ck('at the first stage nothing is done', jobstart.jobStartRows('p9', st4, 1, 0, '2026-10-17').length, 0)
 
+/* Hints name the place a thing really is. Stages and thumb rules live in কাজ → কাজের ধাপ ও থাম্ব রুল
+   now; a hint sending him to "সেটিংস → ধাপ" sends him to a page that no longer has them. */
+{
+  const { readdirSync, readFileSync, statSync } = await import('fs')
+  const { join } = await import('path')
+  const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]))
+  const stale = walk(join(app.ROOT, 'src')).filter((f) => /\.tsx?$/.test(f) && !f.endsWith('en.ts') && readFileSync(f, 'utf8').includes('সেটিংস → ধাপ'))
+  ck('no hint points at সেটিংস → ধাপ', stale.map((f) => f.split(/[\\/]/).pop()).join(), '')
+}
+
 console.log(`\n${pass} passed, ${fail} failed`)
 process.exit(fail ? 1 : 0)

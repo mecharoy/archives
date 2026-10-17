@@ -845,7 +845,7 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
       <>
         <div className="scroll">
           <h2 className="question">{t(QUESTION.progress)}</h2>
-          <p className="hint">{t("এই কাজের ধাপগুলো এখনও ঠিক করা হয়নি। সেটিংস → ধাপ থেকে একবার ঠিক করে নিলে এখানে কাজের অগ্রগতি নিজে থেকেই হিসাব হবে।")}</p>
+          <p className="hint">{t("এই কাজের ধাপগুলো এখনও ঠিক করা হয়নি। কাজ → কাজের ধাপ ও থাম্ব রুল থেকে একবার ঠিক করে নিলে এখানে কাজের অগ্রগতি নিজে থেকেই হিসাব হবে।")}</p>
         </div>
         <div className="actionbar"><button className="btn primary" onClick={next}>{t("এগিয়ে যান")}</button></div>
       </>

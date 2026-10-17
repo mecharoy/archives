@@ -350,6 +350,29 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- C3: no man without a daily wage, in setup too ---- */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  const page = await ctx.newPage()
+  await page.goto(ORIGIN)
+  await step('setup: a man named without a wage cannot be passed', page, async () => {
+    await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 8000 })
+    await tap(page, 'শুরু করি')
+    await page.getByText('কোন ভাষায় দেখতে চান?').waitFor({ timeout: 4000 })
+    await page.locator('.pick').first().click(); await tap(page, 'এগিয়ে যান')
+    await page.getByText('আপনার নাম?').waitFor({ timeout: 4000 })
+    await page.locator('input.input').first().fill('বিমল'); await tap(page, 'এগিয়ে যান')
+    await page.getByText('এখন কোন কাজটা চলছে?').waitFor({ timeout: 4000 })
+    await page.locator('input.input').first().fill('রামপুর বাড়ি'); await tap(page, 'এগিয়ে যান')
+    await page.getByText('কারা কাজ করে?').waitFor({ timeout: 4000 })
+    await page.locator('input.input').nth(0).fill('রতন')
+    if (await page.locator('.actionbar .btn.primary').isEnabled()) throw new Error('a man with no wage could be passed')
+    await page.locator('input.input').nth(1).fill('600')
+    if (!(await page.locator('.actionbar .btn.primary').isEnabled())) throw new Error('a man with a wage could not be passed')
+  })
+  await ctx.close()
+}
+
 /* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })

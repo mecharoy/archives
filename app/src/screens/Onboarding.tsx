@@ -84,7 +84,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       } as Project)
     }
     for (const m of men) {
-      // A name with no wage is still a man: he is kept, at 0, to be filled in when he is first paid.
+      // The people step will not go on while a named man has no wage, so every man here has one.
       if (!m.name.trim()) continue
       await saveMaster({ id: uid(), kind: 'worker', name_bn: m.name.trim(), rate: m.rate ?? 0, phone: '', active: true, updated_at: now } as Worker)
     }
@@ -229,6 +229,9 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   }
 
   /* ---- 5. the men ---- */
+  /* A man is written with his day's wage or not at all: a wage of 0 makes every day he works cost
+     nothing, and the job's labour figure quietly wrong from the first evening. */
+  const menMissingWage = men.some((m) => m.name.trim() && !(m.rate && m.rate > 0))
   if (step === 'people') {
     return (
       <>
@@ -247,10 +250,11 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           <div className="chips">
             <Chip onClick={() => setMen([...men, { name: '', rate: null }])}>+ আরও একজন</Chip>
           </div>
+          {menMissingWage && <p className="small" style={{ marginTop: '.6rem', color: 'var(--warn)' }}>{t('নাম দিলে একদিনের মজুরিও দিন — নইলে মজুরির হিসাব ভুল হবে।')}</p>}
         </div>
         <div className="actionbar">
           <button className="btn ghost" onClick={() => setStep('work')}>{t('ফিরে')}</button>
-          <button className="btn primary" onClick={() => setStep('cash')}>{t('এগিয়ে যান')}</button>
+          <button className="btn primary" disabled={menMissingWage} onClick={() => setStep('cash')}>{t('এগিয়ে যান')}</button>
         </div>
       </>
     )

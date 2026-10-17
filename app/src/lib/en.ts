@@ -250,8 +250,8 @@ export const EN: Record<string, string> = {
   'অর্ধেক হয়েছে': 'Half done',
   'ধাপ শেষ': 'Stage done',
   'অর্ধেক': 'Half',
-  'এই কাজের ধাপগুলো এখনও ঠিক করা হয়নি। সেটিংস → ধাপ থেকে একবার ঠিক করে নিলে এখানে কাজের অগ্রগতি নিজে থেকেই হিসাব হবে।':
-    'The stages for this job are not set yet. Set them once under Settings → Stages and progress works itself out here.',
+  'এই কাজের ধাপগুলো এখনও ঠিক করা হয়নি। কাজ → কাজের ধাপ ও থাম্ব রুল থেকে একবার ঠিক করে নিলে এখানে কাজের অগ্রগতি নিজে থেকেই হিসাব হবে।':
+    'The stages for this job are not set yet. Set them once under Work → Stages and thumb rules and progress works itself out here.',
   'আপনি গুনে বললেন': 'You counted and said',
   'খাতার হিসাবে এখন থাকার কথা': 'By the books there should be',
   'খাতায় ছিল': 'The books said',
@@ -319,6 +319,7 @@ export const EN: Record<string, string> = {
   'কেনা': 'bought',
   'বাকিতে কেনা': 'bought on credit',
   'পুরোনো বাকি': 'Old balance',
+  'নাম দিলে একদিনের মজুরিও দিন — নইলে মজুরির হিসাব ভুল হবে।': 'With a name, give the day\'s wage too — otherwise the wages will come out wrong.',
   'এখন চলছে — {0}': 'Now at — {0}',
   'চুক্তি': 'Agreed',
   'পেয়েছেন': 'Received',
@@ -431,7 +432,7 @@ export const EN: Record<string, string> = {
   'মালের হিসাব': 'Material estimate',
   'দর জানা নেই': 'rate not known',
   'এই ধরনের জন্য কোনো থাম্ব রুল বসানো নেই।': 'No thumb rules are set for this kind of job.',
-  'সেটিংস → ধাপ ও থাম্ব রুল থেকে একবার বসিয়ে নিলে এই হিসাব কাজ করবে।': 'Set them once under Settings → Stages and thumb rules and this works.',
+  'কাজ → কাজের ধাপ ও থাম্ব রুল থেকে একবার বসিয়ে নিলে এই হিসাব কাজ করবে।': 'Set them once under Work → Stages and thumb rules and this works.',
   'এখনও কোনো ধরন ঠিক করা নেই।': 'No job type has been set up yet.',
   'দরপত্র': 'Quotation',
   'দরপত্র · {0}': 'Quotation · {0}',
