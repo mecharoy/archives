@@ -26,6 +26,7 @@ import { join, dirname } from 'path'
 import { fileURLToPath } from 'url'
 import { skeleton, plainHeadline } from './compute.mjs'
 import { check } from './check.mjs'
+import { quietDays, shouldAlert, toastScript, briefBy } from './quiet.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const HOME = join(homedir(), '.site-khata')
@@ -88,6 +89,22 @@ const b = summary.business
 say(`figures in: ${summary.projects.length} jobs, ${b.entries_last_3_days} entries in 3 days, ` +
   `dues ${b.dues_total}, receivable ${b.receivable_total}`)
 
+/* Two days with nothing written: tell the son on this PC, with a Windows toast. It is shown every night
+   until Baba writes again. A toast that cannot be shown is logged, never fatal. */
+const quiet = quietDays(b.last_entry_date || null, nowIST().slice(0, 10))
+if (shouldAlert(quiet)) {
+  const text = `Baba has not written for ${quiet} days (last: ${b.last_entry_date})`
+  if (DRY) say('would show a toast: ' + text)
+  else {
+    try {
+      execFileSync('powershell', ['-NoProfile', '-NonInteractive', '-Command', toastScript('Site Khata', text)], { windowsHide: true, timeout: 20000 })
+      say('toast shown: ' + text)
+    } catch (e) {
+      say('toast could not be shown: ' + String(e.message).slice(0, 160))
+    }
+  }
+}
+
 /* ---------------------------------------------------------- 2. the numbers */
 
 const base = skeleton(summary)
@@ -134,6 +151,13 @@ for (let attempt = 1; attempt <= 2 && !written; attempt++) {
     say(`Claude answered on attempt ${attempt}`)
   } catch (e) {
     say(`attempt ${attempt} failed: ${String(e.message).slice(0, 200)}`)
+    /* The one-line reason is rarely enough to see why. Keep everything claude printed, in full, beside
+       the log — never the config, which this run does not pass to it. */
+    try {
+      const file = join(HOME, `nightly-fail-${nowIST().slice(0, 10)}.log`)
+      appendFileSync(file, `\n==== ${nowIST()} attempt ${attempt}\n${e.message}\n---- stdout\n${e.stdout || ''}\n---- stderr\n${e.stderr || ''}\n`)
+      say('full output kept in ' + file)
+    } catch { /* best effort */ }
   }
 }
 
@@ -145,9 +169,11 @@ if (written) {
   words = check(written, summary, ids, { extra: payload.computed })
   for (const d of words.dropped) say('dropped — ' + d)
 }
+let plain = false
 if (!words.headline) {
   const p = plainHeadline(summary)
   words.headline = p
+  plain = true
   say('using the plain headline: ' + p.en)
 }
 
@@ -159,6 +185,8 @@ const worse = (a, c) => (c && (RANK[c] || 0) > (RANK[a] || 0) ? c : a)
 
 const brief = {
   generated_at: nowIST(),
+  // Whether the sentences came from the model or the brief fell back to the plain headline (rule only).
+  by: briefBy({ wrote: !!written, plain }),
   headline_bn: words.headline.bn,
   headline_en: words.headline.en,
   cards: base.cards,
