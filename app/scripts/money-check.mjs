@@ -298,6 +298,32 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- C1: a new job asks its contract, the stage it is at, and what came in so far ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('new job: contract, stage now and received so far are all written', page, async () => {
+    await page.evaluate(async () => { await (await import('/src/lib/seed.ts')).seedHouse([]) })
+    await page.locator('.bookcard', { hasText: 'কাজ' }).first().click()
+    await tap(page, 'কাজ যোগ করা, বদলানো')
+    await page.getByLabel('নতুন').click()
+    await page.locator('.sheet .field', { hasText: 'কাজের নাম' }).locator('input').fill('নতুন সাইট')
+    await pad(page, ['১', '০', '০', '০', '০', '০', '০'])
+    await tap(page, 'প্লিন্থ ঢালাই', true)
+    await page.locator('.sheet .field', { hasText: 'এ পর্যন্ত কত পেয়েছেন?' }).locator('input').fill('200000')
+    await page.locator('.sheet .btn.primary').last().click()
+    await page.waitForTimeout(500)
+    const r = await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts')
+      const s = m.getState(); const p = s.masters.find((x) => x.kind === 'project' && x.name_bn === 'নতুন সাইট')
+      if (!p) return null
+      const tt = c.projectTotals(p, s.entries, m.stages(s))
+      return { budget: p.budget, received: tt.received, pct: Math.round(tt.pct_done), cash: c.cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed }
+    })
+    if (!r || r.budget !== 1000000 || r.received !== 200000 || r.pct !== 23 || r.cash !== 10000) throw new Error(JSON.stringify(r))
+  })
+  await ctx.close()
+}
+
 /* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })

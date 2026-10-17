@@ -20,6 +20,9 @@ const STAGES: [string, number][] = [
   ['রং ও ফিনিশিং', 10],
 ]
 
+/** The same list, numbered as seedHouse numbers it — for setting up a job before anything is seeded. */
+export const HOUSE_STAGES = STAGES.map(([name_bn], i) => ({ seq: i + 1, name_bn }))
+
 const COEFFS: [string, string, number][] = [
   ['সিমেন্ট', 'বস্তা', 0.4],
   ['রড', 'কেজি', 3.5],

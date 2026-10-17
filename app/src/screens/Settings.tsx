@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { NewProjectSheet } from './NewJob'
 import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast, Toast, Empty } from '../ui/kit'
 import { PinSheet } from './Personal'
 import { NewItemSheet } from './DayWizard'
@@ -474,16 +475,14 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
 
 export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Project | null>(null)
+  // A new job asks its contract, stage and money so far (NewProjectSheet); an existing one opens the full editor.
+  const [adding, setAdding] = useState(false)
   const [delConfirm, setDelConfirm] = useState(false)
   const open = (p: Project | null) => { setDelConfirm(false); setEdit(p) }
   const list = allProjects(s)
-  const blank = (): Project => ({
-    id: uid(), kind: 'project', name_bn: '', client_bn: '', ptype: HOUSE, area_sqft: null,
-    budget: null, start_date: isoDate(), plan_days: null, status: 'active', updated_at: '',
-  })
   return (
     <>
-      <TopBar title="কাজ" onBack={onBack} right={<button className="iconbtn" onClick={() => setEdit(blank())} aria-label="নতুন"><Icon name="plus" /></button>} />
+      <TopBar title="কাজ" onBack={onBack} right={<button className="iconbtn" onClick={() => setAdding(true)} aria-label="নতুন"><Icon name="plus" /></button>} />
       <div className="scroll">
         {list.length === 0 && <Empty>{t("একটা কাজ যোগ করুন — তারপর রোজকার হিসাব শুরু।")}</Empty>}
         <div className="rowlist" style={{ marginTop: '.9rem' }}>
@@ -493,6 +492,7 @@ export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
           ))}
         </div>
       </div>
+      {adding && <NewProjectSheet onClose={() => setAdding(false)} onCreated={() => setAdding(false)} />}
       {edit && (
         <Sheet title={edit.name_bn || 'নতুন কাজ'} onClose={() => { setEdit(null); setDelConfirm(false) }}>
           <Field label="কাজের নাম"><input className="input" value={edit.name_bn} onChange={(e) => setEdit({ ...edit, name_bn: e.target.value })} placeholder="যেমন — রামপুর বাড়ি" /></Field>

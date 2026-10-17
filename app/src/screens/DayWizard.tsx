@@ -3,7 +3,7 @@ import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, PhoneFie
 import { useStore, getState, activeProjects, workers, allWorkers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, dayLabelBn, dateBn, isoDate, num } from '../lib/bn'
-import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
+import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Worker } from '../lib/model'
 import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, cashAfterDay, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, recvTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, attendanceDone, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
 import { cashState, currentStage } from '../lib/calc'
@@ -11,9 +11,9 @@ import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
 import { ContactPicker } from './Settings'
 import { ReceivedForm } from './Received'
+import { NewProjectSheet } from './NewJob'
 import { defaultDueDays, dueFrom } from '../lib/dues'
 import { DueChips } from '../ui/DueChips'
-import { HOUSE } from '../lib/seed'
 import { scheduleSync } from '../lib/sync'
 import { t, tf, okWord } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
@@ -1168,32 +1168,6 @@ export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCr
       {!base.trim() && !cat && (
         <p className="small muted">{t("পাইপ, ফিটিংস, ভালভ, বাথরুম, বিদ্যুৎ — মাপ ইঞ্চিতে। নাম টিপে বসালেই খোঁজাও যায়।")}</p>
       )}
-    </Sheet>
-  )
-}
-
-/* A job started from inside the day's entry — the contract arrives on a
-   Tuesday, not on the day he set the app up. Name is enough; area, budget and
-   plan days are all editable later in সেটিংস → কাজ. */
-export function NewProjectSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (p: Project) => void }) {
-  const [name, setName] = useState('')
-  const [client, setClient] = useState('')
-  const [budget, setBudget] = useState<number | null>(null)
-  const create = async () => {
-    const p: Project = {
-      id: uid(), kind: 'project', name_bn: name.trim(), client_bn: client.trim(), ptype: HOUSE,
-      area_sqft: null, budget, start_date: isoDate(), plan_days: null, status: 'active',
-      updated_at: new Date().toISOString(),
-    }
-    await saveMaster(p)
-    onCreated(p)
-  }
-  return (
-    <Sheet title="নতুন কাজ" onClose={onClose}>
-      <Field label="কাজের নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="যেমন — রামপুর বাড়ি" autoFocus /></Field>
-      <Field label="কার কাজ (ইচ্ছে হলে)"><input className="input" value={client} onChange={(e) => setClient(e.target.value)} /></Field>
-      <Field label="চুক্তির টাকা (জানা থাকলে)"><NumField value={budget} onChange={setBudget} /></Field>
-      <button className="btn primary" disabled={!name.trim()} onClick={create} style={{ marginTop: '.6rem' }}>{t("যোগ করুন")}</button>
     </Sheet>
   )
 }

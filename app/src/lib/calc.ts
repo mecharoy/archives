@@ -18,6 +18,9 @@ export const SETTLE_HEAD = 'বাকি মেটানো'
 /* Money a customer paid him for a job — an advance, a stage payment. Not SETTLE_HEAD, which every job
    total skips: this is the job's own income, and the job's "received" is built from it. */
 export const JOB_PAY_HEAD = 'কাজের টাকা'
+/* Money a job brought in before the app knew about it (set at the job's start). It is the job's income,
+   but it is not in today's cash box: cash counts only 'নগদ', so this mode keeps it out of the count. */
+export const EARLIER_MODE = 'আগে পাওয়া'
 export const OPENING_GET = 'opening_get'
 export const OPENING_OWE = 'opening_owe'
 

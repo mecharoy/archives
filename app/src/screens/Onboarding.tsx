@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Icon, Field, NumField, Chip, Pick } from '../ui/kit'
-import { saveMaster, saveSettings, useStore, allItems } from '../lib/store'
+import { saveMaster, saveSettings, saveEntries, useStore, allItems } from '../lib/store'
 import { uid } from '../lib/db'
 import { isoDate, money } from '../lib/bn'
 import type { Project, Worker } from '../lib/model'
@@ -8,6 +8,9 @@ import { seedHouse, HOUSE } from '../lib/seed'
 import { t, setLang, type Lang } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import { probeServer, restoreFromServer } from '../lib/restore'
+import { JobStartFields } from './NewJob'
+import { HOUSE_STAGES } from '../lib/seed'
+import { jobStartRows } from '../lib/jobstart'
 
 /* First run.
 
@@ -31,6 +34,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const [runsSites, setRunsSites] = useState(true)
   const [name, setName] = useState('')
   const [budget, setBudget] = useState<number | null>(null)
+  const [stageSeq, setStageSeq] = useState<number | null>(HOUSE_STAGES[0].seq)
+  const [received, setReceived] = useState<number | null>(null)
   const [men, setMen] = useState<{ name: string; rate: number | null }[]>([{ name: '', rate: null }])
   const [cash, setCash] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
@@ -71,9 +76,10 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const finish = async () => {
     setBusy(true)
     const now = new Date().toISOString()
+    const jobId = uid()
     if (name.trim()) {
       await saveMaster({
-        id: uid(), kind: 'project', name_bn: name.trim(), client_bn: '', ptype: HOUSE,
+        id: jobId, kind: 'project', name_bn: name.trim(), client_bn: '', ptype: HOUSE,
         area_sqft: null, budget, start_date: isoDate(), plan_days: null, status: 'active', updated_at: now,
       } as Project)
     }
@@ -83,6 +89,8 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       await saveMaster({ id: uid(), kind: 'worker', name_bn: m.name.trim(), rate: m.rate ?? 0, phone: '', active: true, updated_at: now } as Worker)
     }
     await seedHouse(allItems(s))
+    // A job already under way: the stages before the one it is at are done, and what came in so far is its income.
+    if (name.trim()) { const rows = jobStartRows(jobId, HOUSE_STAGES, stageSeq, received ?? 0); if (rows.length) await saveEntries(rows) }
     // Without a starting figure the first day's closing cash comes out
     // negative, which reads like an error on the very first screen he sees.
     await saveSettings({
@@ -210,6 +218,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
           <Field label="কাজের নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
           <Field label="চুক্তির টাকা (জানা থাকলে)"><NumField value={budget} onChange={setBudget} /></Field>
           {budget ? <p className="small muted">{money(budget)} — {t('এটা থাকলে খরচ আর কাজের তুলনা দেখানো যায়।')}</p> : null}
+          {name.trim() && <JobStartFields stageSeq={stageSeq} setStageSeq={setStageSeq} received={received} setReceived={setReceived} />}
         </div>
         <div className="actionbar">
           <button className="btn ghost" onClick={() => setStep('about')}>{t('ফিরে')}</button>
