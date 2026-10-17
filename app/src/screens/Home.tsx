@@ -60,7 +60,12 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
   }, [hasKey]) // eslint-disable-line
 
   const stale = briefIsStale(s.brief)
-  const brief: Brief = useMemo(() => (s.brief && !stale ? s.brief : localBrief()), [s.brief, stale, s.entries, s.masters])
+  /* A day saved after the brief was written makes the brief out of date: on the first evening it would
+     still say the book is new. Then the phone's own sums speak until the next brief. Only a saved day
+     counts — a sale at the counter in the morning should not hide last night's words all day. */
+  const lastDayAt = useMemo(() => s.entries.reduce((m, e) => (e.kind === 'day' && e.created_at > m ? e.created_at : m), ''), [s.entries])
+  const outdated = !!s.brief && lastDayAt > s.brief.generated_at
+  const brief: Brief = useMemo(() => (s.brief && !stale && !outdated ? s.brief : localBrief()), [s.brief, stale, outdated, s.entries, s.masters])
 
   const sameDraft = useMemo(() => buildSameAsYesterday(s), [s])
   const doneToday = useMemo(() => s.entries.some((e) => e.date === isoDate() && e.kind === 'day'), [s.entries])

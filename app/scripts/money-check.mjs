@@ -228,6 +228,29 @@ const finishDay = async (page) => {
   await ctx.close()
 }
 
+/* ---- D9: the first evening reads right ---- */
+{
+  const { ctx, page } = await fresh()
+  await step("home: last night's brief stands until a day is saved after it", page, async () => {
+    await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const b = await import('/src/lib/brief.ts')
+      const lastNight = new Date(Date.now() - 6 * 3600000).toISOString()
+      m.setState({ brief: b.parseBrief({ generated_at: lastNight, headline_bn: 'খাতাটা নতুন', cards: [], projects: [], alerts: [], todo_bn: [] }) })
+    })
+    await page.waitForTimeout(300)
+    const before = await page.locator('.headline').innerText()
+    if (before !== 'খাতাটা নতুন') throw new Error('the brief was not shown to begin with: ' + before)
+    await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const d = await import('/src/lib/draft.ts')
+      await m.saveEntries(d.buildEntries({ ...d.newDraft(), project_id: 'p1', cash_counted: 10000, cash_computed: 10000 }))
+    })
+    await page.waitForTimeout(300)
+    const after = await page.locator('.headline').innerText()
+    if (after === 'খাতাটা নতুন') throw new Error('still says the book is new after a day was saved')
+  })
+  await ctx.close()
+}
+
 /* ---- D8: a crash never leaves a blank screen ---- */
 {
   const { ctx, page } = await fresh()
