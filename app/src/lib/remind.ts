@@ -9,10 +9,10 @@
    current dues say. A due that has been paid off simply does not come back,
    so a settled bill can never keep nagging. */
 
-import { openDues, openReceivables } from './calc'
+import { openDues, openReceivables, owedByPerson } from './calc'
 import { billReminders } from './bills'
 import { getState } from './store'
-import { isoDate, addDays, money, fromIso } from './bn'
+import { isoDate, addDays, money, fromIso, toBn } from './bn'
 import { t, tf } from './i18n'
 import type { Bill, Entry } from './model'
 
@@ -23,7 +23,7 @@ export const REMIND_DAYS: Record<Exclude<RemindWhen, 'off'>, number> = { same: 0
 /* Ids are ours alone, so cancelling ours never touches another app's. */
 const ID_BASE = 71000
 
-interface Planned { id: number; at: Date; title: string; body: string }
+interface Planned { id: number; at: Date; title: string; body: string; extra?: { screen: string } }
 
 export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bill[] = []): Planned[] {
   if (when === 'off') return []
@@ -31,6 +31,21 @@ export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bil
   const today = isoDate()
   const out: Planned[] = []
   let n = 0
+
+  /* Monday, 9 in the morning: who still owes him, all together. Collecting is the thing he most needs
+     the book for, and a weekly nudge with the total is what gets the calls made. Tapping it opens পাবেন. */
+  const owed = owedByPerson(entries)
+  if (owed.length) {
+    const at = new Date()
+    at.setHours(hour, 0, 0, 0)
+    const wait = (1 - at.getDay() + 7) % 7                // days until Monday; 0 when today is Monday
+    at.setDate(at.getDate() + (wait === 0 && at.getTime() <= Date.now() ? 7 : wait))
+    out.push({
+      id: ID_BASE + 900, at, title: t('পাওনা টাকা'),
+      body: tf('{0} জনের কাছে {1} পাওনা', toBn(owed.length), money(owed.reduce((a, x) => a + x.amount, 0))),
+      extra: { screen: 'payments' },
+    })
+  }
 
   /* Three things can fall due on a morning: a shop bill, money a customer
      owes him, and a payment he has written down himself — rent, a fee, a
@@ -69,7 +84,7 @@ export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bil
           ? tf('{0} — {1} দিতে হবে {2}', d.what || t('খরচ'), money(d.amount), d.who ? tf('({0})', d.who) : '')
           : tf('{0} — {1} দিতে হবে', who || t('দোকান'), money(d.amount)),
     })
-    if (n >= 60) break                               // Android's own ceiling
+    if (out.length >= 60) break                      // Android's own ceiling
   }
   return out
 }
@@ -98,6 +113,7 @@ export async function reschedule(): Promise<{ ok: boolean; count: number; error:
         notifications: rows.map((r) => ({
           id: r.id, title: r.title, body: r.body,
           schedule: { at: r.at, allowWhileIdle: true },
+          extra: r.extra,
         })),
       })
     }

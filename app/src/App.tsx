@@ -107,6 +107,21 @@ export function App() {
 
   useEffect(() => { startSyncLoop() }, [])
 
+  /* A reminder that names a screen opens it: the Monday "who owes you" note lands on পাবেন. */
+  useEffect(() => {
+    let remove: (() => void) | undefined
+    void (async () => {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications')
+        const h = await LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
+          if (a.notification.extra?.screen === 'payments') setStack(['home', 'money', 'payments'])
+        })
+        remove = () => void h.remove()
+      } catch { /* browser */ }
+    })()
+    return () => remove?.()
+  }, [])
+
   /* Look for a newer build every time the app is opened, and again whenever it
      comes back to the foreground — he asked for this rather than the quiet
      twice-a-day check. The answer is parked in the store; the card on the home

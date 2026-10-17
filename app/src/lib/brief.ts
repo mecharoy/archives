@@ -6,7 +6,7 @@
 
 import { kvSet } from './db'
 import { getState, setState, apiUrl, type Brief, type Status, activeProjects, stages, coeffs, allItems, nameOf } from './store'
-import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, lastEntryDate, liveEntries, outlay, SETTLE_HEAD } from './calc'
+import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, lastEntryDate, liveEntries, outlay, owedByPerson, SETTLE_HEAD } from './calc'
 import { hoursSince, isoDate, daysBetween, addDays, money, toBn, dayLabelBn } from './bn'
 import type { Entry, StockEntry } from './model'
 import { t, tf } from './i18n'
@@ -183,7 +183,11 @@ export function localBrief(): Brief {
     cards, projects: projs, alerts,
     series: { scurve: main ? sCurve(main.id) : undefined, burn: burnRows },
     // A bill with no shop named has no name to show ('—' is what nameOf gives for nothing), and one with no date has no day.
-    todo_bn: dues.all.slice(0, 4).map((d) => `${d.party_id ? nameOf(s, d.party_id) : t('দোকান')} — ${money(d.amount)}${d.due_date ? ', ' + dayLabelBn(d.due_date) : ''}`),
+    // What he can collect comes first — the three people who owe him most — then what he must pay.
+    todo_bn: [
+      ...owedByPerson(es).slice(0, 3).map((o) => tf('{0} — {1} পাওনা', o.party_id ? nameOf(s, o.party_id) : t('খুচরো খদ্দের'), money(o.amount))),
+      ...dues.all.slice(0, 4).map((d) => `${d.party_id ? nameOf(s, d.party_id) : t('দোকান')} — ${money(d.amount)}${d.due_date ? ', ' + dayLabelBn(d.due_date) : ''}`),
+    ],
   }
 }
 

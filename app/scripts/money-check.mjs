@@ -259,6 +259,26 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- B8: the phone's own brief names the three who owe him most ---- */
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await step("brief: the to-dos start with the three largest amounts owed to him", page, async () => {
+    const todo = await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const db = await import('/src/lib/db.ts'); const b = await import('/src/lib/brief.ts')
+      const now = new Date().toISOString()
+      for (const [id, name] of [['q1', 'এক'], ['q2', 'দুই'], ['q3', 'তিন'], ['q4', 'চার']]) {
+        await m.saveMaster({ id, kind: 'party', name_bn: name, ptype: 'client', terms_days: 0, phone: '', updated_at: now })
+      }
+      const row = (party, amount) => ({ id: db.uid(), kind: 'stock', batch: db.uid(), date: '2026-09-01', project_id: '', created_at: now, item_id: '', dir: 'opening_get', qty: 0, rate: 0, amount, party_id: party, due_date: '2026-12-01', paid: false, photo_id: '' })
+      await m.saveEntries([row('q1', 1000), row('q2', 4000), row('q3', 2500), row('q4', 3000)])
+      return b.localBrief().todo_bn
+    })
+    const want = ['দুই — ₹৪,০০০ পাওনা', 'চার — ₹৩,০০০ পাওনা', 'তিন — ₹২,৫০০ পাওনা']
+    if (JSON.stringify(todo.slice(0, 3)) !== JSON.stringify(want)) throw new Error('to-dos: ' + JSON.stringify(todo))
+  })
+  await ctx.close()
+}
+
 /* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })

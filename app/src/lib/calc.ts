@@ -284,6 +284,17 @@ export function openReceivables(entries: Entry[]): Due[] {
   return netted(rows, SETTLED(entries, 'received'))
 }
 
+/** What each person owes him, largest first, with the day the oldest open row was written. */
+export function owedByPerson(entries: Entry[]): { party_id: ID; amount: number; since: string }[] {
+  const by = new Map<ID, { party_id: ID; amount: number; since: string }>()
+  for (const d of openReceivables(entries)) {
+    const cur = by.get(d.party_id)
+    if (cur) { cur.amount = paise(cur.amount + d.amount); if (d.date < cur.since) cur.since = d.date }
+    else by.set(d.party_id, { party_id: d.party_id, amount: d.amount, since: d.date })
+  }
+  return [...by.values()].sort((a, b) => b.amount - a.amount || (a.party_id < b.party_id ? -1 : 1))
+}
+
 export function receivablesSplit(entries: Entry[]) {
   const all = openReceivables(entries)
   const today = isoDate()
