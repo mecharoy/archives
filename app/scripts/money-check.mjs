@@ -163,6 +163,42 @@ const finishDay = async (page) => {
   await ctx.close()
 }
 
+/* ---- D4: nothing he typed is lost by accident ---- */
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await step('sheet: an empty sheet closes on a tap outside it', page, async () => {
+    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
+    await tap(page, 'পুরোনো বাকি', true)
+    await page.locator('.sheet').waitFor({ timeout: 3000 })
+    await page.mouse.click(12, 12)
+    await page.waitForTimeout(300)
+    if (await page.locator('.sheet').count()) throw new Error('the empty sheet stayed open')
+  })
+  await step('sheet: a sheet with a name typed in stays open on a stray tap', page, async () => {
+    await tap(page, 'পুরোনো বাকি', true)
+    await tap(page, '+ নতুন', true)
+    await page.locator('.sheet input.input').first().fill('নাম লেখা হয়েছে')
+    await page.mouse.click(12, 12)
+    await page.waitForTimeout(300)
+    if (!(await page.locator('.sheet').count())) throw new Error('the sheet with typing in it closed')
+  })
+  await ctx.close()
+}
+{
+  const { ctx, page } = await fresh()
+  await step('evening: once an expense is written, না is no longer offered', page, async () => {
+    await tap(page, 'আজকের হিসাব')
+    await page.getByText('কী মাল?').waitFor({ timeout: 4000 }); await tap(page, 'আজ মাল আসেনি')
+    await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 })
+    await page.locator('.chips button').first().click()
+    await pad(page, ['১', '২', '০'])
+    await tap(page, 'যোগ করুন', true)
+    await page.getByText('আর কোনো খরচ?').waitFor({ timeout: 3000 })
+    if (await page.getByText('না', { exact: true }).count()) throw new Error('না is still offered beside a written expense')
+  })
+  await ctx.close()
+}
+
 /* ---- B1: the evening question, in cash ---- */
 {
   const { ctx, page } = await fresh()

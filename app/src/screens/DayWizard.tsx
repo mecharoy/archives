@@ -511,7 +511,7 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
             </div>
           )}
           <div className="yesno">
-            <button onClick={next}>{t("না")}</button>
+            {!draft[field].length && <button onClick={next}>{t("না")}</button>}
             <button className="on" onClick={() => setSub('item')}>{draft[field].length ? t('আরও মাল') : t('হ্যাঁ')}</button>
           </div>
         </div>
@@ -750,7 +750,7 @@ function StepReturned({ s, draft, patch, next }: StepProps) {
           </div>
         )}
         <div className="yesno">
-          <button onClick={next}>{t("না")}</button>
+          {!rets.length && <button onClick={next}>{t("না")}</button>}
           <button className="on" onClick={() => setSub('item')}>{rets.length ? t('আরও ফেরত') : t('হ্যাঁ')}</button>
         </div>
       </div>
@@ -804,7 +804,7 @@ function StepExpense({ s, draft, patch, next, field = 'exps', personal = false, 
             </div>
           )}
           <div className="yesno">
-            <button onClick={next}>{t("না")}</button>
+            {!draft[field].length && <button onClick={next}>{t("না")}</button>}
             <button className="on" onClick={() => setSub('head')}>{draft[field].length ? t('আরও খরচ') : t('হ্যাঁ')}</button>
           </div>
         </div>
@@ -891,7 +891,7 @@ function StepReceived({ s, draft, patch, next }: StepProps) {
           </div>
         )}
         <div className="yesno">
-          <button onClick={next}>{t('না')}</button>
+          {!lines.length && <button onClick={next}>{t('না')}</button>}
           <button className="on" onClick={() => setAdding(true)}>{lines.length ? t('আরও টাকা') : t('হ্যাঁ')}</button>
         </div>
       </div>

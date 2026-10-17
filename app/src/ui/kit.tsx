@@ -108,9 +108,15 @@ export function Sheet({ title, onClose, children }: { title?: string; onClose: (
     document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }
   }, [])
+  /* A tap just outside the sheet must not throw away what he typed into it. Once he has typed a letter or
+     pressed a digit on the pad, only Back (or the sheet's own button) closes it. A figure the app filled in
+     is not typing. */
+  const typed = useRef(false)
   return (
-    <div className="sheet-backdrop" onClick={onClose}>
-      <div className="sheet" onClick={(e) => e.stopPropagation()}>
+    <div className="sheet-backdrop" onClick={() => { if (!typed.current) onClose() }}>
+      <div className="sheet"
+        onInput={() => { typed.current = true }}
+        onClick={(e) => { e.stopPropagation(); if ((e.target as HTMLElement).closest('.pad')) typed.current = true }}>
         <div className="grip" />
         {title && <h2>{t(title)}</h2>}
         {children}
