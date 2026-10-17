@@ -46,6 +46,23 @@ ck('a Monday after 9 gets it the next Monday', bn.isoDate(monday(two, 'day', '20
 ck('nothing owed, no note', monday([], 'day', '2026-10-16T04:30:00Z').length, 0)
 ck('reminders off, no note', monday(two, 'off', '2026-10-16T04:30:00Z').length, 0)
 
+/* The 8 pm nudge: once setup is done, at 8 in the evening on every day with nothing written — whatever
+   the payment-reminder setting. Saving today's day drops today's nudge. */
+const dayRow = (date) => ({ id: 'd' + date, kind: 'day', batch: 'bd' + date, date, project_id: '', created_at: date + 'T14:00:00Z', cash_counted: null, cash_computed: null, note: '' })
+const nudges = (entries, when, iso, onboarded = true) => {
+  freeze(iso)
+  try { return remind.plan(entries, when, 9, [], onboarded).filter((x) => x.extra && x.extra.screen === 'home') } finally { globalThis.Date = RealDate }
+}
+const n1 = nudges([], 'day', '2026-10-16T04:30:00Z')
+ck('nothing written today: a nudge tonight and on each of the next six evenings', n1.length, 7)
+ck('the first is tonight at 8', n1[0] && bn.isoDate(n1[0].at) + ' ' + n1[0].at.getHours(), '2026-10-16 20')
+ck('it says the day is not written yet', n1[0] && n1[0].body, 'আজকের হিসাব লেখা বাকি')
+ck("today written: tonight's nudge is gone", bn.isoDate(nudges([dayRow('2026-10-16')], 'day', '2026-10-16T04:30:00Z')[0].at), '2026-10-17')
+ck('after 8 pm the first is tomorrow', bn.isoDate(nudges([], 'day', '2026-10-16T15:30:00Z')[0].at), '2026-10-17')
+ck('before setup is done, no nudge', nudges([], 'day', '2026-10-16T04:30:00Z', false).length, 0)
+ck('payment reminders off: the nudges stay', nudges(two, 'off', '2026-10-16T04:30:00Z').length, 7)
+ck('payment reminders off: no Monday note', monday(two, 'off', '2026-10-16T04:30:00Z').length, 0)
+
 /* A job set up mid-way: the stages before the one it is at are done, and what came in so far is the
    job's income without being today's cash. */
 const { jobstart } = app

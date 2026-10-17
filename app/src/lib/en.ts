@@ -319,6 +319,7 @@ export const EN: Record<string, string> = {
   'কেনা': 'bought',
   'বাকিতে কেনা': 'bought on credit',
   'পুরোনো বাকি': 'Old balance',
+  'আজকের হিসাব লেখা বাকি': 'Today\'s entry is still to write',
   'আজ পর্যন্ত': 'Up to today',
   'আর কিছু?': 'Anything else?',
   'ফেরত': 'Returned',

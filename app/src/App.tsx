@@ -115,6 +115,7 @@ export function App() {
         const { LocalNotifications } = await import('@capacitor/local-notifications')
         const h = await LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
           if (a.notification.extra?.screen === 'payments') setStack(['home', 'money', 'payments'])
+          else if (a.notification.extra?.screen === 'home') setStack(['home'])
         })
         remove = () => void h.remove()
       } catch { /* browser */ }
@@ -143,10 +144,11 @@ export function App() {
      evening must not nag him tomorrow morning. Cheap: it cancels ours and
      schedules what the current dues say. */
   const entryCount = state.entries.length
+  // Not skipped when payment reminders are off: the 8 pm "today is not written" nudge is planned here too.
   useEffect(() => {
-    if (!ready || needsSetup || settings.remind === 'off') return
+    if (!ready || needsSetup) return
     void reschedule()
-  }, [ready, needsSetup, entryCount, settings.remind])
+  }, [ready, needsSetup, entryCount, settings.remind, settings.onboarded])
 
   /* theme and text size follow the settings, and the Android status bar
      follows the theme so the top of the screen never looks borrowed. */

@@ -929,7 +929,7 @@ function RemindPage({ s, onBack }: { s: State; onBack: () => void }) {
      off here was the reason a বill he had just added showed nothing under
      ‘এখন যা যা মনে করানো হবে’, even though the phone had it queued. */
   const planned = useMemo(
-    () => plan(s.entries, s.settings.remind, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[]),
+    () => plan(s.entries, s.settings.remind, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[], s.settings.onboarded),
     [s.entries, s.settings.remind, s.masters],
   )
 

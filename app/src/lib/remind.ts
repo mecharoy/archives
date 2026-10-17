@@ -9,7 +9,7 @@
    current dues say. A due that has been paid off simply does not come back,
    so a settled bill can never keep nagging. */
 
-import { openDues, openReceivables, owedByPerson } from './calc'
+import { openDues, openReceivables, owedByPerson, liveEntries } from './calc'
 import { billReminders } from './bills'
 import { getState } from './store'
 import { isoDate, addDays, money, fromIso, toBn } from './bn'
@@ -25,12 +25,28 @@ const ID_BASE = 71000
 
 interface Planned { id: number; at: Date; title: string; body: string; extra?: { screen: string } }
 
-export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bill[] = []): Planned[] {
-  if (when === 'off') return []
-  const before = REMIND_DAYS[when]
+export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bill[] = [], onboarded = false): Planned[] {
   const today = isoDate()
   const out: Planned[] = []
   let n = 0
+
+  /* 8 in the evening, on a day with nothing written: "today's entry is still to do". Planned for tonight
+     and the next six evenings — the app is not running at 8, so these sit in Android's own queue — and
+     rebuilt whenever the ledger changes, so saving today's day takes tonight's off. Only once setup is
+     done, and whatever the payment-reminder setting: this one is about writing, not about money. */
+  if (onboarded) {
+    const wroteToday = liveEntries(entries).some((e) => e.kind === 'day' && e.date === today)
+    for (let k = 0; k < 7; k++) {
+      if (k === 0 && wroteToday) continue
+      const at = fromIso(addDays(today, k))
+      at.setHours(20, 0, 0, 0)
+      if (at.getTime() <= Date.now()) continue
+      out.push({ id: ID_BASE + 950 + k, at, title: t('আজকের হিসাব'), body: t('আজকের হিসাব লেখা বাকি'), extra: { screen: 'home' } })
+    }
+  }
+
+  if (when === 'off') return out
+  const before = REMIND_DAYS[when]
 
   /* Monday, 9 in the morning: who still owes him, all together. Collecting is the thing he most needs
      the book for, and a weekly nudge with the total is what gets the calls made. Tapping it opens পাবেন. */
@@ -95,7 +111,7 @@ export async function reschedule(): Promise<{ ok: boolean; count: number; error:
   const when = s.settings.remind
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications')
-    const rows = plan(s.entries, when, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[])
+    const rows = plan(s.entries, when, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[], s.settings.onboarded)
     // The permission box appears when there is something to be reminded of — not on the first screen of a
     // new install, where it has nothing to do with anything he has done yet.
     if ((await LocalNotifications.checkPermissions()).display !== 'granted') {
