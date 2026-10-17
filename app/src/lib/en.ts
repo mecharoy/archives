@@ -319,6 +319,13 @@ export const EN: Record<string, string> = {
   'কেনা': 'bought',
   'বাকিতে কেনা': 'bought on credit',
   'পুরোনো বাকি': 'Old balance',
+  'পাইপ': 'Pipes',
+  'ফিটিংস': 'Fittings',
+  'ভালভ ও কল': 'Valves and taps',
+  'বাথরুম': 'Bathroom',
+  'বিদ্যুৎ': 'Electrical',
+  'নির্মাণ সামগ্রী': 'Building material',
+  'হার্ডওয়্যার': 'Hardware',
   'পুরো মজুত একবারে': 'Count the whole shop',
   'সব মাল একবারে গুনে লিখুন': 'Count and write every item in one go',
   '{0} রকম মাল গোনা হল': '{0} kinds of goods counted',
@@ -1002,7 +1009,7 @@ export const EN: Record<string, string> = {
 
   /* ---- found by scripts/i18n-check.mjs: these had no English, so an English phone showed Bengali ---- */
   '+ নতুন লোক': '+ New man',
-  'মাল, খরচের খাতের নাম (যেমন চা, ওষুধ) আর টাকার অঙ্ক কিন্তু গুগলে যায় — না হলে বাক্য লেখা যায় না।': 'Goods, expense heads (such as tea, medicine) and the amounts do go to Google — without them no sentence can be written.',
+  'মাল, খরচের ধরন (যেমন চা, ওষুধ) আর টাকার অঙ্ক কিন্তু গুগলে যায় — না হলে বাক্য লেখা যায় না।': 'Goods, expense heads (such as tea, medicine) and the amounts do go to Google — without them no sentence can be written.',
   'অনলাইন খাতায় আগের হিসাব পাওয়া গেছে': 'The online ledger already has your books',
   'এই ফোনে আবার সব নাম লিখতে হবে না — আগের হিসাব ফিরিয়ে আনা যায়।': 'You do not have to type all the names again — the earlier books can be brought back.',
   'আগের হিসাব ফিরিয়ে আনুন': 'Bring back the earlier books',

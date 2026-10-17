@@ -1219,7 +1219,7 @@ export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCr
       <p className="sectionlabel" style={{ marginTop: 0 }}>{base.trim() ? t('চেনা তালিকায় যা মিলল') : t('চেনা তালিকা থেকে বেছে নিন')}</p>
       {!base.trim() && (
         <div className="chips">
-          {CATS.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(cat === c ? null : c)}>{c}</Chip>)}
+          {CATS.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(cat === c ? null : c)}>{t(c)}</Chip>)}
         </div>
       )}
       {found.length > 0 && (

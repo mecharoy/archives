@@ -19,12 +19,13 @@ import { loadApp, ROOT } from './_app.mjs'
 import { demoData } from './_demo.mjs'
 
 const COMBOS = {
-  'bn-360': { w: 360, h: 780, lang: 'bn', scale: 1, theme: 'light' },
+  'bn-360': { w: 360, h: 780, lang: 'bn', scale: 1.12, theme: 'light' },
+  'bn-360-small': { w: 360, h: 780, lang: 'bn', scale: 1, theme: 'light' },
   'bn-320': { w: 320, h: 640, lang: 'bn', scale: 1, theme: 'light' },
   'bn-360-big': { w: 360, h: 780, lang: 'bn', scale: 1.26, theme: 'light' },
   'bn-320-big': { w: 320, h: 640, lang: 'bn', scale: 1.26, theme: 'light' },
-  'en-360': { w: 360, h: 780, lang: 'en', scale: 1, theme: 'light' },
-  'bn-360-dark': { w: 360, h: 780, lang: 'bn', scale: 1, theme: 'dark' },
+  'en-360': { w: 360, h: 780, lang: 'en', scale: 1.12, theme: 'light' },
+  'bn-360-dark': { w: 360, h: 780, lang: 'bn', scale: 1.12, theme: 'dark' },
 }
 const WANT = (process.env.UI_COMBOS || 'bn-360,bn-320-big,en-360,bn-360-dark').split(',')
 const ONLY = process.env.UI_ONLY ? process.env.UI_ONLY.split(',') : null
@@ -205,15 +206,35 @@ for (const comboName of WANT) {
       await look(page, comboName, TILES[k] + '-new')
     }
   }
-  for (const [idx, nm] of [[0, 'set-sync'], [1, 'set-ai'], [2, 'set-backup'], [3, 'set-remind'], [5, 'set-lang'], [6, 'set-display'], [8, 'set-update'], [9, 'set-reset']]) {
+  for (const [idx, nm] of [[0, 'set-me'], [1, 'set-sync'], [2, 'set-ai'], [3, 'set-backup'], [4, 'set-remind'], [8, 'set-lang'], [9, 'set-display'], [11, 'set-update'], [12, 'set-reset']]) {
     await openTile(14)
     await page.locator('.pick').nth(idx).click()
     await look(page, comboName, nm)
   }
-  // the third book, which only the home screen opens
+  // help, beside সব কিছু on the home screen
+  await fresh()
+  await page.locator('[data-tour="all"] + button').click().catch(() => {})
+  await look(page, comboName, 'help')
+  // the shop's quick credit and its full count (tiles 3 and 6 of the shop)
+  for (const [k, nm] of [[2, 'shop-credit'], [5, 'shop-fullcount']]) {
+    await openTile(6)
+    await page.locator('.tile').nth(k).click().catch(() => {})
+    await look(page, comboName, nm)
+  }
+  // the third book, which only the home screen opens, and its two new sheets
   await fresh()
   await page.locator('[data-tour="books"] > *').nth(2).click().catch(() => {})
   await look(page, comboName, 'money')
+  for (const [k, nm] of [[0, 'money-received'], [2, 'money-olddue']]) {
+    await fresh()
+    await page.locator('[data-tour="books"] > *').nth(2).click().catch(() => {})
+    await page.locator('.tile').nth(k).click().catch(() => {})
+    await look(page, comboName, nm)
+  }
+  // the crash screen (development server only)
+  await page.goto(`http://localhost:${PORT}/#crash-test`); await page.reload(); await page.waitForTimeout(500)
+  await look(page, comboName, 'crash')
+  await page.goto(`http://localhost:${PORT}/`)
   await fresh()
   await page.locator('.footbar .foot').first().click().catch(() => {})
   await look(page, comboName, 'standing')
@@ -229,14 +250,23 @@ for (const comboName of WANT) {
   dr.invs = [{ key: 'v1', item_id: mats[1].id, qty: 20, rate: 120, party_id: 's1', due_date: '', paid: true, photo_id: '' }]
   dr.progress = { stage_seq: 1, state: 'half' }
   dr.cash_counted = 43800; dr.cash_computed = 48000
-  // How many steps this ledger has: the list depends on how many jobs and men there are.
+  dr.recv = [{ key: 'rc1', project_id: 'p0', amount: 25000, mode: 'UPI' }]
+  // The steps this ledger has: the job picker only when there are two or more live jobs.
   const activeJobs = demo.masters.filter((m) => m.kind === 'project' && m.status === 'active').length
-  const STEPS = (activeJobs > 1 ? 1 : 0) + 2 + 4 + 1 + 1 + 2   // project?, attendance+wages, material…progress, personal, inventory, cash+review
-  for (let k = 0; k < STEPS; k++) {
-    await seed(page, combo, { draft: { ...dr, step: k } })
+  const STEPS = [...(activeJobs > 1 ? ['project'] : []), 'attendance', 'wages', 'material', 'expense', 'received', 'extras', 'cash', 'review']
+  for (const [k, id] of STEPS.entries()) {
+    await seed(page, combo, { draft: { ...dr, at: id } })
     await page.locator('[data-tour="today"]').click()
     await page.waitForSelector('.wizhead')
-    await look(page, comboName, 'wizard-' + String(k + 1).padStart(2, '0'))
+    await look(page, comboName, 'wizard-' + String(k + 1).padStart(2, '0') + '-' + id)
+  }
+  // The four behind আর কিছু?, each opened from the hub.
+  for (const [k, id] of ['returned', 'personal', 'inventory', 'progress'].entries()) {
+    await seed(page, combo, { draft: { ...dr, at: 'extras' } })
+    await page.locator('[data-tour="today"]').click()
+    await page.waitForSelector('.wizhead')
+    await page.locator('.pick').nth(k).click().catch(() => {})
+    await look(page, comboName, 'wizard-extra-' + id)
   }
   await ctx.close()
 }

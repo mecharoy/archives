@@ -58,7 +58,7 @@ function Card({ e, isNew }: { e: Enquiry; isNew: boolean }) {
       {e.service && <p className="small" style={{ marginTop: '.4rem' }}>{tf('যা চান: {0}', e.service)}</p>}
       {e.location && <p className="small">{tf('এলাকা: {0}', e.location)}</p>}
       {e.message && <p style={{ marginTop: '.5rem', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{e.message}</p>}
-      <div className="actionbar" style={{ borderTop: 0, padding: '.7rem 0 0' }}>
+      <div className="actionbar" style={{ borderTop: 0, padding: '.7rem 0 0', flexWrap: 'wrap' }}>
         {tel && <a className="btn primary" href={tel} style={{ textDecoration: 'none', textAlign: 'center' }}>{t('ফোন করুন')} · {e.phone}</a>}
         {wa && <a className="btn ghost" href={wa} target="_blank" rel="noopener noreferrer" style={{ textDecoration: 'none', textAlign: 'center' }}>{t('হোয়াটসঅ্যাপ')}</a>}
       </div>

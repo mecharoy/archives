@@ -82,7 +82,7 @@ export function StockCount({ s, onDone }: { s: State; onDone: (msg?: string) => 
       <div className="scroll">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('মালের নাম লিখে খুঁজুন')} />
         <div className="chips" style={{ marginTop: '.5rem' }}>
-          {CATS.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(cat === c ? null : c)}>{c}</Chip>)}
+          {CATS.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(cat === c ? null : c)}>{t(c)}</Chip>)}
         </div>
         {(ownHits.length > 0 || catHits.length > 0) && (
           <div className="rowlist" style={{ marginTop: '.6rem' }}>

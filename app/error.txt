@@ -375,3 +375,10 @@ Location: scripts/dues-check.mjs, src/screens/Estimator.tsx (patches from plan 2
 Action: patching files from a bash heredoc (python - <<'EOF' and cat > x.py <<'PYEOF').
 Cause: the Git Bash wrapper rewrites backslashes inside heredocs (logged 2026-10-01/02); writing the script itself through a heredoc has the same problem.
 Fix: any patch whose text holds a backslash goes through the Edit tool, or a script written with the Write tool. The assert stopped both before anything was written.
+
+2026-10-17
+Problem: on the Vite dev server, a phone-brief run started while the app was starting (Home's maybeMakeBrief) never finished: the try was recorded, but no request reached Google and no status was saved, even after 20 s.
+Location: src/lib/aiBrief.ts run(), seen from scripts/money-check.mjs and probes (trash/scratch/.scratch-probe*.mjs)
+Action: testing that the brief waits for the evening to be saved (plan 3, Task 10).
+Cause: specific to the dev server (no reload seen; the dynamic imports at start-up stall there). The built app (vite preview) completes the same start-up run in under a second.
+Fix: none needed in the app. Tests that need a brief run trigger it after the page has loaded (saving the evening), and the built-app check is part of the screen sweep. A first check that waited 1.2 s passed for the wrong reason; it now waits 5 s.
