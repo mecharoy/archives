@@ -15,8 +15,9 @@ import { useOnce } from '../lib/once'
 import { defaultDueDays, dueFrom } from '../lib/dues'
 import { DueChips } from '../ui/DueChips'
 import { PartyPicker } from '../ui/PartyPicker'
+import { StockCount } from './StockCount'
 
-type Flow = null | 'in' | 'sale' | 'count' | 'transfer' | 'credit'
+type Flow = null | 'in' | 'sale' | 'count' | 'transfer' | 'credit' | 'fullcount'
 
 export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' | 'parties') => void }) {
   const s = useStore((x) => x)
@@ -26,6 +27,7 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const value = levels.reduce((a, l) => a + l.value, 0)
 
+  if (flow === 'fullcount') return <StockCount s={s} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
   if (flow === 'credit') return <QuickCredit s={s} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
   if (flow) return <StockFlow s={s} flow={flow} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
 
@@ -50,6 +52,9 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
           </button>
           <button className="tile" onClick={() => setFlow('count')}>
             <Icon name="check" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("মাল গোনা")}</span><span className="s">{t("যা আছে মিলিয়ে নিন")}</span></span>
+          </button>
+          <button className="tile" onClick={() => setFlow('fullcount')}>
+            <Icon name="grid" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("পুরো মজুত একবারে")}</span><span className="s">{t("সব মাল একবারে গুনে লিখুন")}</span></span>
           </button>
         </div>
 
@@ -120,7 +125,7 @@ function padChips<T extends { id: ID }>(ranked: T[], all: T[], n: number): T[] {
   return out
 }
 
-const TITLES: Record<Exclude<Flow, null | 'credit'>, string> = {
+const TITLES: Record<Exclude<Flow, null | 'credit' | 'fullcount'>, string> = {
   in: 'মাল এসেছে', sale: 'মাল ধরে বিক্রি', transfer: 'কাজে পাঠানো', count: 'মাল গোনা',
 }
 
@@ -166,7 +171,7 @@ function QuickCredit({ s, onDone }: { s: State; onDone: (msg?: string) => void }
   )
 }
 
-function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | 'credit'>; onDone: (msg?: string) => void }) {
+function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | 'credit' | 'fullcount'>; onDone: (msg?: string) => void }) {
   const [step, setStep] = useState<'item' | 'qty' | 'rate' | 'who'>('item')
   // One step back, not out of the whole flow with the entry lost. A count has no rate step.
   const before = (st: typeof step) => (st === 'who' ? (flow === 'count' ? 'qty' : 'rate') : st === 'rate' ? 'qty' : 'item')

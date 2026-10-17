@@ -228,6 +228,52 @@ const finishDay = async (page) => {
   await ctx.close()
 }
 
+/* ---- S1: the whole shop counted in one sitting ---- */
+{
+  const { ctx, page } = await fresh({ shop: true })
+  const openCount = async () => {
+    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
+    await tap(page, 'পুরো মজুত একবারে')
+    await page.locator('input.input').first().waitFor({ timeout: 3000 })
+  }
+  const addRow = async (search, name, qty, rate) => {
+    await page.locator('input.input').first().fill(search)
+    await page.locator('.pick', { hasText: name }).first().click()
+    await pad(page, qty)
+    if (rate) await page.locator('.sheet .field', { hasText: 'কেনা দর' }).locator('input').fill(rate)
+    await page.locator('.sheet .btn.primary').click()
+    await page.waitForTimeout(200)
+  }
+  await step('count: rows typed so far survive leaving the screen', page, async () => {
+    await openCount()
+    await addRow('পাইপ', 'পাইপ', ['৫', '০'], '400')
+    await addRow('পিভিসি পাইপ ১"', 'পিভিসি পাইপ ১"', ['২', '০'], '')
+    await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+    await openCount()
+    const txt = await page.locator('.scroll').first().innerText()
+    if (!txt.includes('পিভিসি পাইপ ১"') || !txt.includes('৫০')) throw new Error('the draft came back as: ' + txt.replace(/\n+/g, ' | ').slice(0, 200))
+  })
+  await step('count: saving sets the shelf, once, even on a double tap', page, async () => {
+    await page.locator('.actionbar .btn.primary').dblclick()
+    await page.waitForTimeout(600)
+    const r = await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts')
+      const s = m.getState()
+      const lv = c.shopStock(s.entries, m.items(s))
+      const pvc = m.items(s).find((i) => i.name_bn === 'পিভিসি পাইপ ১"')
+      return {
+        counts: s.entries.filter((e) => e.kind === 'stock' && e.dir === 'count').length,
+        pipe: lv.find((l) => l.item_id === 'i1'),
+        pvc: pvc ? lv.find((l) => l.item_id === pvc.id) : null,
+      }
+    })
+    if (r.counts !== 2) throw new Error(r.counts + ' count rows, not 2')
+    if (!r.pipe || r.pipe.qty !== 50 || r.pipe.value !== 20000) throw new Error('pipe: ' + JSON.stringify(r.pipe))
+    if (!r.pvc || r.pvc.qty !== 20) throw new Error('catalogue pipe: ' + JSON.stringify(r.pvc))
+  })
+  await ctx.close()
+}
+
 /* ---- D9: the first evening reads right ---- */
 {
   const { ctx, page } = await fresh()
