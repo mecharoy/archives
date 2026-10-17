@@ -324,6 +324,32 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- C2: the job card says it plainly ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('job card: agreed, received, spent, left in hand, and the stage it is at', page, async () => {
+    const hasCurve = await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const seed = await import('/src/lib/seed.ts'); const js = await import('/src/lib/jobstart.ts'); const db = await import('/src/lib/db.ts')
+      await seed.seedHouse([])
+      const p = m.getState().masters.find((x) => x.id === 'p1')
+      await m.saveMaster({ ...p, ptype: seed.HOUSE, plan_days: 180, area_sqft: 1000 })
+      await m.saveEntries(js.jobStartRows('p1', seed.HOUSE_STAGES, 3, 200000))
+      await m.saveEntries([{ id: db.uid(), kind: 'money', batch: db.uid(), date: (await import('/src/lib/bn.ts')).isoDate(), project_id: 'p1', created_at: new Date().toISOString(), head_bn: 'ঠিকা কাজ', dir: 'paid', amount: 50000, party_id: '', mode: 'নগদ', note: '', personal: false, photo_id: '' }])
+      return !!(await import('/src/lib/brief.ts')).localBrief().series?.scurve
+    })
+    await page.locator('.bookcard', { hasText: 'কাজ' }).first().click()
+    await page.getByText('হাতে থাকল').first().waitFor({ timeout: 3000 })
+    const card = await page.locator('.jobcard').first().innerText()
+    for (const w of ['চুক্তি', '১০,০০,০০০', 'পেয়েছেন', '২,০০,০০০', 'খরচ', '৫০,০০০', 'হাতে থাকল', '১,৫০,০০০', 'প্লিন্থ ঢালাই']) {
+      if (!card.includes(w)) throw new Error('the card does not say ' + w + ': ' + card.replace(/\n+/g, ' | '))
+    }
+    if (await page.getByText('খরচ আর পরিকল্পনা').count()) throw new Error('the S-curve shows before আরও দেখুন')
+    await tap(page, 'আরও দেখুন')
+    if (hasCurve && !(await page.getByText('খরচ আর পরিকল্পনা').count())) throw new Error('আরও দেখুন did not show the S-curve')
+  })
+  await ctx.close()
+}
+
 /* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })
