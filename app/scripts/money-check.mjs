@@ -279,6 +279,25 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- his name and number, and the helper's, can be set and changed ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('settings: names and phone numbers are kept on a page of their own', page, async () => {
+    await page.getByLabel('সেটিংস').click()
+    await tap(page, 'নাম ও ফোন')
+    const box = (label) => page.locator('.field', { hasText: label }).locator('input')
+    await box('আপনার নাম').fill('সুবীর রায়')
+    await box('আপনার ফোন').fill('98300 12345')
+    await box('যিনি পাশে থেকে সাহায্য করবেন').fill('অমল')
+    await box('তাঁর ফোন').fill('90000 11111')
+    await page.locator('.actionbar .btn.primary').click()
+    await page.waitForTimeout(300)
+    const st = await page.evaluate(async () => { const s = (await import('/src/lib/store.ts')).getState().settings; return [s.owner_bn, s.owner_phone, s.helper_name, s.helper_phone].join('|') })
+    if (st !== 'সুবীর রায়|98300 12345|অমল|90000 11111') throw new Error('saved: ' + st)
+  })
+  await ctx.close()
+}
+
 /* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })

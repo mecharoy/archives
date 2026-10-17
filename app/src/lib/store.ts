@@ -32,6 +32,11 @@ export interface Settings {
   lang: Lang
   remind: RemindWhen
   owner_bn: string
+  /* His own number, printed on a quote; and the person nearby who sits with him and whom the help
+     button and the crash screen tell him to ring. All set at setup, all editable in সেটিংস → নাম ও ফোন. */
+  owner_phone: string
+  helper_name: string
+  helper_phone: string
   runs_shop: boolean
   runs_sites: boolean
   /* The Google AI key typed into Settings. Lives only in this phone's storage;
@@ -54,7 +59,7 @@ export const DEFAULT_SETTINGS: Settings = {
   auto_sync: true, onboarded: false, toured: false, update_url: '', update_checked_at: '',
   chips_taken: 0, chips_expanded: 0,
   theme: 'system', text_scale: 1,
-  lang: 'bn', remind: 'day', owner_bn: '', runs_shop: true, runs_sites: true, ai_key: '',
+  lang: 'bn', remind: 'day', owner_bn: '', owner_phone: '', helper_name: '', helper_phone: '', runs_shop: true, runs_sites: true, ai_key: '',
 }
 
 export interface OutboxRow {

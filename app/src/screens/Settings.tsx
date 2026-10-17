@@ -28,7 +28,7 @@ import {
 } from '../lib/update'
 import { BUILD_CODE, BUILD_NAME } from '../lib/buildinfo'
 
-type Page = null | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update' | 'ai'
+type Page = null | 'me' | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update' | 'ai'
 
 export function Settings({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -38,6 +38,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
   // Back out of লোকজন and you land on সেটিংস, not on the home screen.
   useBackHandler(() => setPage(null), page !== null)
 
+  if (page === 'me') return <MePage s={s} onBack={() => setPage(null)} />
   if (page === 'sync') return <SyncPage s={s} onBack={() => setPage(null)} />
   if (page === 'projects') return <ProjectsPage s={s} onBack={() => setPage(null)} />
   if (page === 'workers') return <WorkersPage s={s} onBack={() => setPage(null)} />
@@ -66,6 +67,8 @@ export function Settings({ onBack }: { onBack: () => void }) {
             how it talks to the server, backups and the passcode. */}
         <p className="sectionlabel">{t("টাকা ও খাতা")}</p>
         <div className="rowlist">
+          <Pick title="নাম ও ফোন" sub={[s.settings.owner_bn, s.settings.helper_name && tf('সাহায্য: {0}', s.settings.helper_name)].filter(Boolean).join(' · ') || t('দেওয়া নেই')}
+            right={<Icon name="fwd" size={18} />} onClick={() => setPage('me')} />
           <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? t('জোড়া লাগানো আছে') : t('শুধু ফোনে রাখা হচ্ছে')}
             right={<Icon name="fwd" size={18} />} onClick={() => setPage('sync')} />
           <Pick title="এআই কী (রাতের হিসাব)" sub={s.settings.ai_key.trim() ? t('বসানো আছে') : t('বসানো নেই')}
@@ -1017,6 +1020,35 @@ function ResetPage({ onBack }: { onBack: () => void }) {
             {busy ? t('মোছা হচ্ছে…') : t('হ্যাঁ, সব মুছে দিন')}
           </button>
         )}
+      </div>
+    </>
+  )
+}
+
+/* His name and number (a quote carries them), and the helper's — the person the help button rings. */
+function MePage({ s, onBack }: { s: State; onBack: () => void }) {
+  const [owner, setOwner] = useState(s.settings.owner_bn)
+  const [ownerPhone, setOwnerPhone] = useState(s.settings.owner_phone)
+  const [helper, setHelper] = useState(s.settings.helper_name)
+  const [helperPhone, setHelperPhone] = useState(s.settings.helper_phone)
+  const [book, setBook] = useState(false)
+  if (book) return <ContactPicker onClose={() => setBook(false)} onPicked={(c) => { setHelper(helper.trim() || c.name); setHelperPhone(c.phone); setBook(false) }} />
+  return (
+    <>
+      <TopBar title="নাম ও ফোন" onBack={onBack} />
+      <div className="scroll">
+        <Field label="আপনার নাম"><input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} /></Field>
+        <Field label="আপনার ফোন"><input className="input" value={ownerPhone} onChange={(e) => setOwnerPhone(e.target.value)} inputMode="tel" /></Field>
+        <p className="small muted" style={{ margin: '-.2rem 0 1rem' }}>{t('দরপত্রে এই নাম আর ফোন থাকবে।')}</p>
+        <Field label="যিনি পাশে থেকে সাহায্য করবেন"><input className="input" value={helper} onChange={(e) => setHelper(e.target.value)} /></Field>
+        <Field label="তাঁর ফোন"><PhoneField value={helperPhone} onChange={setHelperPhone} onBook={() => setBook(true)} /></Field>
+        <p className="small muted" style={{ marginTop: '-.2rem' }}>{t('কিছু আটকে গেলে অ্যাপ এঁকে ফোন করতে বলবে।')}</p>
+      </div>
+      <div className="actionbar">
+        <button className="btn primary" onClick={async () => {
+          await saveSettings({ owner_bn: owner.trim(), owner_phone: ownerPhone.trim(), helper_name: helper.trim(), helper_phone: helperPhone.trim() })
+          onBack()
+        }}>{t('সেভ করুন')}</button>
       </div>
     </>
   )

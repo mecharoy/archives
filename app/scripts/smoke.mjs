@@ -301,6 +301,15 @@ await step('estimator: quote comes out whole', async () => {
   const quote = await page.locator('.card').first().innerText()
   if (!quote.includes('তলা')) throw new Error('quote should name the floors')
 })
+await step('estimator: the quote a customer sees shows the price, not his margins', async () => {
+  await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ owner_bn: 'সুবীর রায়', owner_phone: '98300 12345' }))
+  await page.waitForTimeout(300)
+  const quote = await page.locator('.card').first().innerText()
+  for (const w of ['মোট', 'প্রতি বর্গফুট', 'শর্ত', 'সুবীর রায়', '98300 12345']) if (!quote.includes(w)) throw new Error('the quote does not say ' + w)
+  for (const w of ['অনিশ্চয়তা', 'ওভারহেড', 'লাভ']) if (quote.includes(w)) throw new Error('the quote shows ' + w)
+  // The terms may say "মাল ও মজুরির দর"; what must not be there is a line of each with its amount.
+  for (const w of ['মাল ও সরঞ্জাম', 'মজুরি']) if (new RegExp('^' + w + '\\s', 'm').test(quote)) throw new Error('the quote has a line for ' + w)
+})
 await step('history lists days and can reverse', async () => {
   await home()
   await page.locator('.bookhead', { hasText: 'হিসাব' }).click()

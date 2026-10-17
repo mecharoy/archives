@@ -369,7 +369,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
 
   const quote = quoteText({
     ptype, perFloor, floors: floors || 1, builtUp, foundation, days, client,
-    material, labour, extrasCost, contingency, overhead, profit, total, prefs,
+    total, owner: s.settings.owner_bn, phone: s.settings.owner_phone,
   })
   return (
     <>
@@ -397,10 +397,12 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   )
 }
 
+/* What the customer sees: the job, its size, the price and the terms — and whom to ring. How the
+   price was built (material, wages, contingency, overhead, profit) stays on his own screen: a
+   breakdown sent on WhatsApp is his margin handed to the customer to bargain with. */
 function quoteText(q: {
   ptype: string; perFloor: number; floors: number; builtUp: number; foundation: string; days: number | null
-  client: string; material: number; labour: number; extrasCost: number
-  contingency: number; overhead: number; profit: number; total: number; prefs: Prefs
+  client: string; total: number; owner: string; phone: string
 }): string {
   const L: string[] = []
   L.push(tf('দরপত্র · {0}', dateBn(isoDate(), false)))
@@ -409,17 +411,11 @@ function quoteText(q: {
   L.push(tf('ভিত: {0}', q.foundation))
   if (q.days) L.push(tf('সময়: প্রায় {0} দিন', toBn(q.days)))
   L.push('')
-  L.push(tf('মাল ও সরঞ্জাম     {0}', money(q.material)))
-  L.push(tf('মজুরি             {0}', money(q.labour)))
-  if (q.extrasCost > 0) L.push(tf('অন্য খরচ          {0}', money(q.extrasCost)))
-  L.push(tf('অনিশ্চয়তা {0}%     {1}', toBn(q.prefs.contingency_pct), money(q.contingency)))
-  L.push(tf('ওভারহেড {0}%      {1}', toBn(q.prefs.overhead_pct), money(q.overhead)))
-  L.push(tf('লাভ {0}%           {1}', toBn(q.prefs.profit_pct), money(q.profit)))
-  L.push('—')
   L.push(tf('মোট               {0}', money(q.total)))
   L.push(tf('প্রতি বর্গফুট       {0}', moneyExact(q.builtUp ? q.total / q.builtUp : 0)))
   L.push('')
   L.push(t('শর্ত: মাল ও মজুরির দর বদলালে হিসাব বদলাতে পারে। কাজ শুরুর আগে ৩০% অগ্রিম।'))
+  if (q.owner.trim() || q.phone.trim()) { L.push(''); L.push(['—', q.owner.trim(), q.phone.trim()].filter(Boolean).join(' ')) }
   return L.join('\n')
 }
 
