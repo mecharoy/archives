@@ -140,6 +140,13 @@ export async function buildSummary(db, hid) {
                (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1 AND ${LIVE('day')}
                  AND date >= ${PREV_FROM} AND date < ${PREV_TO}) AS days_prev,
                (SELECT MAX(date) FROM ${LIVE_ROWS}) AS last_date,
+               -- When the phone last sent anything at all: the moment the Worker stored a row, any book.
+               (SELECT MAX(t) FROM (
+                  SELECT MAX(received_at) AS t FROM day WHERE household_id = ?1
+                  UNION ALL SELECT MAX(received_at) FROM attendance WHERE household_id = ?1
+                  UNION ALL SELECT MAX(received_at) FROM stock WHERE household_id = ?1
+                  UNION ALL SELECT MAX(received_at) FROM money WHERE household_id = ?1
+                  UNION ALL SELECT MAX(received_at) FROM progress WHERE household_id = ?1)) AS last_received,
                (SELECT COUNT(*) FROM projects WHERE household_id = ?1 AND status = 'active') AS active,
                (SELECT COUNT(*) FROM workers WHERE household_id = ?1 AND active = 1) AS men`, hid),
 
@@ -371,6 +378,7 @@ export async function buildSummary(db, hid) {
       days_entered_this_week: n(activity.days_week),
       days_entered_prev_week: n(activity.days_prev),
       last_entry_date: activity.last_date || null,
+      last_received_at: activity.last_received || null,
       // How long he has been quiet, worked out here so nobody downstream has to
       // subtract two dates — a model quoting this is quoting a figure, not doing sums.
       days_since_last_entry: activity.last_date ? daysBetween(activity.last_date, TODAY) : null,

@@ -1,3 +1,4 @@
+import { topLine } from './topline.js'
 /* The page you open from Delhi.
  *
  * Served from the same origin as the data, so there is no CORS story and no
@@ -141,6 +142,8 @@ export function dashboardHtml() {
 
     <p class="msg" id="msg"></p>
 
+    <p class="topline" id="topline"></p>
+
     <h2>The business <span class="sub" id="period"></span></h2>
     <div class="grid" id="stats"></div>
 
@@ -273,8 +276,13 @@ export function dashboardHtml() {
     }).catch(function () { $('briefstate').textContent = '—'; });
   }
 
+  ${topLine.toString()}
+
   function render(d) {
     var b = d.business || {};
+    /* First line: how long since he wrote, and since the phone sent. Red at two quiet days. */
+    var tl = topLine(b, new Date(Date.now() + 19800000).toISOString().slice(0, 10));
+    $('topline').innerHTML = '<span class="pill ' + tl.status + '">' + tl.wrote + '</span> <span class="pill ' + tl.status + '">' + tl.sent + '</span>';
     var variance = b.cash_variance;
     var cards = [
       ['Cash in hand', money(b.cash_counted), b.cash_counted_on ? 'counted ' + b.cash_counted_on : 'never counted',

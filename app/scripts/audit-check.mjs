@@ -242,6 +242,9 @@ ck('server: a cancelled day is not counted as writing', sb.entries_last_3_days, 
 ck('phone: a cancelled day is not counted as writing', calc.entriesInLastDays(A.entries, 3), 1)
 ck('server: the last thing he wrote is the last thing that stands', sb.last_entry_date, d(1))
 ck('phone: the last thing he wrote is the last thing that stands', calc.lastEntryDate(A.entries), d(1))
+// When the phone last sent anything: every row carries the moment the server received it.
+ck('server: when the phone last sent is known', Number.isFinite(Date.parse(sb.last_received_at)), true)
+ck('server: a household that never sent has no such moment', (await serverSummary(ledger(() => {}))).business.last_received_at, null)
 
 const C = ledger(({ entries }) => {
   const w = draft.newDraft(d(1), '')
