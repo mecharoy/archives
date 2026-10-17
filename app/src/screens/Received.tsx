@@ -91,7 +91,7 @@ export function ReceivedSheet({ s, onClose, onDone }: { s: State; onClose: () =>
         <Chip on={date === addDays(isoDate(), -1)} onClick={() => setDate(addDays(isoDate(), -1))}>{t('গতকাল')}</Chip>
       </div>
       <button className="btn primary" disabled={!Number(amount) || !project} onClick={saveOnce} style={{ marginTop: '.8rem', width: '100%' }}>
-        {t('সেভ করুন')}
+        {t('খাতায় তুলুন')}
       </button>
     </Sheet>
   )

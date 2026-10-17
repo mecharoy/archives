@@ -3,7 +3,7 @@ import { Icon, TopBar, Pick, Sheet, useToast, Toast, Empty } from '../ui/kit'
 import { useStore, saveEntries, nameOf, type State } from '../lib/store'
 import { money, toBn, num, dateBn, dayLabelBn, isoDate, addDays } from '../lib/bn'
 import type { Entry } from '../lib/model'
-import { liveEntries, outlay, noItemLabel } from '../lib/calc'
+import { liveEntries, outlay, noItemLabel, modeLabel } from '../lib/calc'
 import { reversalOf, newDraft, type Draft } from '../lib/draft'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
@@ -127,7 +127,7 @@ function label(e: Entry): string {
     case 'attendance': return e.presence === 'half' ? t('আধা দিন') : e.presence === 'ot' ? t('ওভারটাইম') : t('পুরো দিন')
     case 'stock': return e.dir === 'in' ? (e.paid ? t('কেনা') : t('বাকিতে কেনা')) : e.dir === 'sale' ? t('বিক্রি') : e.dir === 'transfer' ? (e.qty < 0 ? t('কাজ থেকে ফেরত') : t('কাজে পাঠানো'))
       : e.dir === 'opening_get' ? t('উনি দেবেন') : e.dir === 'opening_owe' ? t('আমি দেব') : t('গোনা')
-    case 'money': return e.personal ? t('নিজের খাতা') : e.mode
+    case 'money': return e.personal ? t('নিজের খাতা') : modeLabel(e.mode)
     case 'progress': return e.state === 'done' ? t('ধাপ শেষ') : t('অর্ধেক')
     default: return ''
   }

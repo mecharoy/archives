@@ -213,7 +213,7 @@ const finishDay = async (page) => {
     await finishDay(page)
     const review = await page.locator('.scroll').first().innerText()
     if (!review.includes('টাকা পেলাম') || !review.includes('৫,০০০')) throw new Error('the review does not show the ₹5,000 received')
-    await page.getByText('সেভ করুন').click()
+    await page.getByText('খাতায় তুলুন').click()
     await page.getByText('আজকের হিসাব লেখা হল').waitFor({ timeout: 5000 })
     const b = await book(page)
     if (b.received !== 5000) throw new Error('job received is ' + b.received)

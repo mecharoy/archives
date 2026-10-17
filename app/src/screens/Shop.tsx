@@ -159,7 +159,7 @@ function QuickCredit({ s, onDone }: { s: State; onDone: (msg?: string) => void }
         <p className="small muted" style={{ marginTop: '.8rem' }}>{t('মজুত যেমন আছে থাকবে — পরে মাল গুনলে ঠিক হয়ে যাবে।')}</p>
       </div>
       <div className="actionbar">
-        <button className="btn primary" disabled={!party || !(Number(amount) > 0)} onClick={saveOnce}>{t('সেভ করুন')}</button>
+        <button className="btn primary" disabled={!party || !(Number(amount) > 0)} onClick={saveOnce}>{t('খাতায় তুলুন')}</button>
       </div>
       {newParty && <NewPartySheet kind="client" onClose={() => setNewParty(false)} onCreated={(p) => { setParty(p.id); setDueDays(null); setNewParty(false) }} />}
     </>
@@ -271,7 +271,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | '
             <MoneyPad value={qty} onChange={setQty} prefix="" allowDecimal chips={qtyChips(s.entries, item.id)} onChipTaken={() => noteChip(true)} />
             {flow !== 'in' && flow !== 'count' && Number(qty) > held && (
               <div className="alert warn" style={{ marginTop: '.8rem' }}>
-                <span className="dot" /><span>{t("দোকানে এত নেই। মজুত মাইনাসে চলে যাবে — আগে ‘মাল গোনা’ করে নিন।")}</span>
+                <span className="dot" /><span>{t("দোকানে এত নেই। মজুত শেষ হয়ে যাবে — আগে ‘মাল গোনা’ করে নিন।")}</span>
               </div>
             )}
           </div>
@@ -382,7 +382,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | '
           <div className="actionbar">
             <button className="btn primary"
               disabled={((flow === 'in' || flow === 'sale') && paid === null) || (flow === 'transfer' && !project) || (flow === 'in' && paid === false && !party)}
-              onClick={commitOnce}>{t("সেভ করুন")}</button>
+              onClick={commitOnce}>{t("খাতায় তুলুন")}</button>
           </div>
           {newParty && <NewPartySheet kind={kind} onClose={() => setNewParty(false)} onCreated={(p) => { choose(p.id); setNewParty(false) }} />}
         </>

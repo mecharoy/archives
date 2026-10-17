@@ -19,7 +19,7 @@ await page.getByText('না', { exact: true }).first().click(); await page.wait
 console.log(await page.locator('.app').innerText())
 await page.getByText('অর্ধেক হয়েছে').first().click(); await page.waitForTimeout(300)
 await page.getByText('হ্যাঁ, এটাই আছে').click(); await page.waitForTimeout(200)
-await t('সেভ করুন'); await page.waitForTimeout(900)
+await t('খাতায় তুলুন'); await page.waitForTimeout(900)
 const rows = await page.evaluate(() => new Promise(res => {
   const r = indexedDB.open('sitekhata')
   r.onsuccess = () => { const q = r.result.transaction('entries').objectStore('entries').getAll(); q.onsuccess = () => res(q.result.filter(e=>e.kind==='progress')) }

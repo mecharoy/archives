@@ -271,7 +271,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       </div>
       <div className="actionbar">
         <button className="btn ghost" onClick={() => setStep(runsSites ? 'people' : 'about')}>{t('ফিরে')}</button>
-        <button className="btn primary" disabled={busy} onClick={finish}>{busy ? t('সেভ হচ্ছে…') : t('হয়ে গেল')}</button>
+        <button className="btn primary" disabled={busy} onClick={finish}>{busy ? t('তোলা হচ্ছে…') : t('হয়ে গেল')}</button>
       </div>
     </>
   )

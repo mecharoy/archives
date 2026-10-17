@@ -1,6 +1,6 @@
 /* The day in progress.
    Held in IndexedDB from the first tap, so walking away halfway — a phone
-   call, a truck arriving — costs nothing. Only the review screen's সেভ করুন
+   call, a truck arriving — costs nothing. Only the review screen's খাতায় তুলুন
    turns it into entries; before that the ledger is untouched. */
 
 import type { ID, Presence, Entry, DayEntry, AttendanceEntry, StockEntry, MoneyEntry, ProgressEntry } from './model'

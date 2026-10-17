@@ -198,7 +198,7 @@ await step('review shows day total 5250', async () => {
   if (!t.includes('৫,২৫০')) throw new Error('expected ৫,২৫০ got ' + t)
 })
 await step('save the day', async () => {
-  await page.getByText('সেভ করুন').click()
+  await page.getByText('খাতায় তুলুন').click()
   await page.getByText('আজকের হিসাব লেখা হল').waitFor({ timeout: 5000 })
 })
 await step('dashboard reflects the entry', async () => {
@@ -232,7 +232,7 @@ await step('same-as-yesterday lands on review', async () => {
   await page.getByText('একবার দেখে নিন').waitFor({ timeout: 4000 })
   const t = await page.locator('.total .v').first().innerText()
   if (!t.includes('১,১৫০')) throw new Error('expected wages-only ১,১৫০ got ' + t)
-  await page.getByText('সেভ করুন').click()
+  await page.getByText('খাতায় তুলুন').click()
   await page.waitForTimeout(600)
 })
 const home = async () => { await page.goto('http://localhost:5199/'); await page.waitForTimeout(700) }
@@ -248,7 +248,7 @@ await step('shop flow: goods in', async () => {
   await tap('এগিয়ে যান')
   await page.locator('.chip').first().click()
   await page.getByText('হ্যাঁ', { exact: true }).click()
-  await tap('সেভ করুন')
+  await tap('খাতায় তুলুন')
   await page.waitForTimeout(600)
   const body = await page.locator('.scroll').first().innerText()
   if (!body.includes('এখন যা আছে')) throw new Error('stock list missing')
@@ -341,7 +341,7 @@ await step('personal book with pin', async () => {
   await tap('খরচ লিখুন')
   await page.locator('.chip').first().click()
   for (const d of ['৫', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
-  await tap('সেভ করুন')
+  await tap('খাতায় তুলুন')
   await page.waitForTimeout(500)
 })
 /* The whole point of the reminder: he writes a date down once, and the app
@@ -434,7 +434,7 @@ await step('personal spending takes a name of his own', async () => {
   await page.locator('input.input').first().fill('সাইকেল সারানো')
   await tap('এগিয়ে যান')
   for (const d of ['২', '৫', '০']) await page.locator('.pad button', { hasText: d }).first().click()
-  await tap('সেভ করুন')
+  await tap('খাতায় তুলুন')
   await page.waitForTimeout(700)
 })
 
@@ -466,7 +466,7 @@ await step('a credit sale becomes a receivable', async () => {
   await page.locator('.sheet input.input').first().fill('হালদার বাবু')
   await page.locator('.sheet .btn.primary').click()
   await tap('না, বাকি')
-  await tap('সেভ করুন')
+  await tap('খাতায় তুলুন')
   await page.waitForTimeout(700)
   await home()
   const foot = await page.locator('.footbar').innerText()
@@ -694,7 +694,7 @@ await step('ai key: a good key passes the test and is saved', async () => {
   await page.locator('input.input').fill(`  GEMINI_API_KEY="${GOOD_KEY}"  `)   // pasted the way people paste it
   await tap('পরীক্ষা করুন')
   await page.getByText('কী ঠিক আছে').first().waitFor({ timeout: 6000 })
-  await tap('সেভ করুন')
+  await tap('খাতায় তুলুন')
   await page.getByText('কী সেভ হয়েছে').first().waitFor({ timeout: 4000 })
   const kept = await page.locator('input.input').inputValue()
   if (kept !== GOOD_KEY) throw new Error('the pasted wrapper was not stripped: ' + kept)
@@ -803,7 +803,7 @@ await step('website: an item can be kept off the site, and the choice goes up', 
   const on = await page.locator('.chip.on', { hasText: 'হ্যাঁ' }).count()
   if (!on) throw new Error('an item should be shown on the site by default')
   await page.locator('.chip', { hasText: /^না$/ }).click()
-  await tap('সেভ করুন')
+  await tap('খাতায় তুলুন')
   await page.waitForTimeout(400)
   const sent = await page.evaluate(async () => (await import('/src/lib/store.ts')).getState().outbox.concat([]).filter((r) => r.tab === 'Items'))
   const hidden = sent.some((r) => r.values[6] === true)

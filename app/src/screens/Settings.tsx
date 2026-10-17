@@ -326,7 +326,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
             setKey(await setAiKey(key))
             setBusy('')
             toast.show(t('কী সেভ হয়েছে'))
-          }}>{t('সেভ করুন')}</button>
+          }}>{t('খাতায় তুলুন')}</button>
         </div>
 
         {saved && (
@@ -405,7 +405,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
             setBusy('')
             toast.show(err || 'যোগাযোগ ঠিক আছে')
           }}>{busy === 'test' ? t('দেখছি…') : t('পরীক্ষা করুন')}</button>
-          <button className="btn primary" onClick={save}>{t("সেভ করুন")}</button>
+          <button className="btn primary" onClick={save}>{t("খাতায় তুলুন")}</button>
         </div>
 
         <div className="divider" />
@@ -514,7 +514,7 @@ export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
             </div>
           </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("খাতায় তুলুন")}</button>
           {/* Delete only shows once a job actually exists. Two taps, because it
               takes the job off every list — its already-written rows stay in the
               ledger (nothing there can be un-happened), but the job stops
@@ -568,7 +568,7 @@ export function WorkersPage({ s, onBack }: { s: State; onBack: () => void }) {
             </div>
           </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim() || !edit.rate} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("খাতায় তুলুন")}</button>
         </Sheet>
       )}
       {book && edit && (
@@ -617,7 +617,7 @@ export function ItemsPage({ s, onBack }: { s: State; onBack: () => void }) {
             <p className="small muted" style={{ marginTop: '.4rem' }}>{t('ওয়েবসাইটে শুধু নাম আর "আছে / নেই" দেখায় — কত আছে বা কত দাম, কিছুই না।')}</p>
           </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("খাতায় তুলুন")}</button>
         </Sheet>
       )}
       {pick && <NewItemSheet onClose={() => setPick(false)} onCreated={() => setPick(false)} />}
@@ -731,7 +731,7 @@ export function PartiesPage({ s, onBack }: { s: State; onBack: () => void }) {
             <PhoneField value={edit.phone} onChange={(v) => setEdit({ ...edit, phone: v })} onBook={() => setBook(true)} />
           </Field>
           <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
+            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("খাতায় তুলুন")}</button>
         </Sheet>
       )}
     </>
@@ -808,13 +808,13 @@ export function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
           <p className="small muted" style={{ marginTop: '-.5rem', marginBottom: '.8rem' }}>
             {t('সব ধাপের ভাগ যোগ করলে ১০০ হওয়া চাই। ছাদ ঢালাই গোটা কাজের প্রায় এক-পঞ্চমাংশ হলে এখানে ২০ বসান।')}
           </p>
-          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("সেভ করুন")}</button>
+          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("খাতায় তুলুন")}</button>
         </Sheet>
       )}
       {editC && (
         <Sheet title={nameOf(s, editC.item_id)} onClose={() => setEditC(null)}>
           <Field label="প্রতি বর্গফুটে কত"><NumField value={editC.per_sqft} onChange={(v) => setEditC({ ...editC, per_sqft: v ?? 0 })} decimal /></Field>
-          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(editC); setEditC(null) }}>{t("সেভ করুন")}</button>
+          <button className="btn primary" style={{ marginTop: '.5rem' }} onClick={async () => { await saveMaster(editC); setEditC(null) }}>{t("খাতায় তুলুন")}</button>
         </Sheet>
       )}
       {toast.msg && <Toast text={toast.msg} />}
@@ -849,7 +849,7 @@ export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
             <button className="btn primary" style={{ width: '100%' }} onClick={async () => {
               await saveSettings({ opening_cash: amount ?? 0, opening_date: isoDate() })
               toast.show('সেভ হয়েছে')
-            }}>{t("সেভ করুন")}</button>
+            }}>{t("খাতায় তুলুন")}</button>
           </>
         )}
       </div>
@@ -1048,7 +1048,7 @@ function MePage({ s, onBack }: { s: State; onBack: () => void }) {
         <button className="btn primary" onClick={async () => {
           await saveSettings({ owner_bn: owner.trim(), owner_phone: ownerPhone.trim(), helper_name: helper.trim(), helper_phone: helperPhone.trim() })
           onBack()
-        }}>{t('সেভ করুন')}</button>
+        }}>{t('খাতায় তুলুন')}</button>
       </div>
     </>
   )

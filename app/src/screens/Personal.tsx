@@ -5,7 +5,7 @@ import { uid } from '../lib/db'
 import { money, toBn, isoDate, dateBn, dayLabelBn, addDays } from '../lib/bn'
 import { MONEY_HEADS_PERSONAL, PAY_MODES, type Bill, type MoneyEntry } from '../lib/model'
 import { rankHeads, amountChips } from '../lib/suggest'
-import { DRAWING_HEAD, liveEntries } from '../lib/calc'
+import { DRAWING_HEAD, liveEntries, modeLabel } from '../lib/calc'
 import { openBills, billTotals, blankBill, payBill, daysAway, isOverdue } from '../lib/bills'
 import { isMonthly } from '../lib/monthly'
 import { hashPin, checkPin } from '../lib/pin'
@@ -95,7 +95,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
           <div className="card">
             {rows.map((r) => (
               <div className="review-row" key={r.id}>
-                <span><span className="t">{r.head_bn}</span><span className="k">{dayLabelBn(r.date)} · {r.mode}</span></span>
+                <span><span className="t">{r.head_bn}</span><span className="k">{dayLabelBn(r.date)} · {modeLabel(r.mode)}</span></span>
                 <span className="v num">{money(r.amount)}</span>
               </div>
             ))}
@@ -211,7 +211,7 @@ function BillSheet({ bill, onClose, onSaved }: {
         </div>
       </Field>
       <button className="btn primary" disabled={!ok} style={{ marginTop: '.4rem', width: '100%' }} onClick={saveOnce}>
-        {t("সেভ করুন")}
+        {t("খাতায় তুলুন")}
       </button>
       {!fresh && (
         <button className="btn" style={{ marginTop: '.6rem', width: '100%' }}
@@ -287,10 +287,10 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
         {kind === 'drawing' && <p className="hint">{t("ব্যবসার হাতের টাকা থেকে এই টাকাটা কমে যাবে।")}</p>}
         <MoneyPad value={amount} onChange={setAmount} chips={chips} onChipTaken={() => noteChip(true)} />
         <p className="sectionlabel">{t("কীভাবে")}</p>
-        <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{m}</Chip>)}</div>
+        <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{modeLabel(m)}</Chip>)}</div>
       </div>
       <div className="actionbar">
-        <button className="btn primary" disabled={!Number(amount)} onClick={saveOnce}>{t("সেভ করুন")}</button>
+        <button className="btn primary" disabled={!Number(amount)} onClick={saveOnce}>{t("খাতায় তুলুন")}</button>
       </div>
     </>
   )
@@ -316,7 +316,7 @@ export function PinSheet({ onClose, onSaved }: { onClose: () => void; onSaved: (
           onChange={(v) => (stage === 'first' ? setPin(v.slice(0, 4)) : setAgain(v.slice(0, 4)))} />
         {stage === 'again' && (
           <button className="btn primary" style={{ marginTop: '.8rem' }} disabled={again !== pin} onClick={save}>
-            {again.length === 4 && again !== pin ? t('মিলছে না') : t('সেভ করুন')}
+            {again.length === 4 && again !== pin ? t('মিলছে না') : t('খাতায় তুলুন')}
           </button>
         )}
         {stage === 'first' && <button className="btn ghost" style={{ marginTop: '.8rem', width: '100%' }} onClick={onClose}>{t("থাক")}</button>}

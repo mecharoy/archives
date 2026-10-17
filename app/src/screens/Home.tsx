@@ -60,7 +60,6 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
 
   const stale = briefIsStale(s.brief)
   const brief: Brief = useMemo(() => (s.brief && !stale ? s.brief : localBrief()), [s.brief, stale, s.entries, s.masters])
-  const usingLocal = !s.brief || stale
 
   const sameDraft = useMemo(() => buildSameAsYesterday(s), [s])
   const doneToday = useMemo(() => s.entries.some((e) => e.date === isoDate() && e.kind === 'day'), [s.entries])
@@ -90,7 +89,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
         <div className="hero" data-tour="brief">
           <p className="greet">
             {who ? `${who} · ` : ''}
-            {usingLocal ? t('ফোনের নিজের হিসাব') : `${t('রাতের হিসাব')} · ${agoBn(brief.generated_at)}`}
+            {t('আজ পর্যন্ত')}
           </p>
           <p className="headline">{pick(brief.headline_bn, brief.headline_en)}</p>
         </div>
@@ -268,7 +267,7 @@ function StockSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
           </div>
           <p className="booknote">
             {toBn(levels.length)} {t('রকম মাল')}
-            {low.length > 0 ? ` · ${toBn(low.length)} ${t('রকম শেষ বা মাইনাসে')}` : ''}
+            {low.length > 0 ? ` · ${toBn(low.length)} ${t('রকম শেষ')}` : ''}
           </p>
         </>
       )}

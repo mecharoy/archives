@@ -8,7 +8,7 @@ import { ContactPicker } from './Settings'
 import { uid } from '../lib/db'
 import { money, isoDate, dateBn, addDays } from '../lib/bn'
 import { PAY_MODES, type ID, type MoneyEntry } from '../lib/model'
-import { openDues, openReceivables, SETTLE_HEAD } from '../lib/calc'
+import { openDues, openReceivables, SETTLE_HEAD, modeLabel } from '../lib/calc'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
 import { OldDueSheet } from './OldDue'
@@ -154,7 +154,7 @@ function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
       </p>
       <MoneyPad value={value} onChange={setValue} chips={[Math.round(owed)]} />
       <Field label="কীভাবে">
-        <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{m}</Chip>)}</div>
+        <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{modeLabel(m)}</Chip>)}</div>
       </Field>
       <Field label="কবেকার">
         <div className="chips">
@@ -170,7 +170,7 @@ function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
       )}
       <button className="btn primary" disabled={amount <= 0} onClick={saveOnce} style={{ marginTop: '.4rem', width: '100%' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}>
-          <Icon name="check" size={18} />{t('সেভ করুন')}
+          <Icon name="check" size={18} />{t('খাতায় তুলুন')}
         </span>
       </button>
     </Sheet>

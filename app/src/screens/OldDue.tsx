@@ -105,7 +105,7 @@ export function OldDueSheet({ s, way: initialWay, onClose, onDone }: {
 
       <DueChips question={way === 'owe' ? 'কবে দিতে হবে?' : 'কবে দেবে?'} days={days} onChange={setDueDays} own={picked?.terms_days} from={isoDate()} />
 
-      <button className="btn primary" disabled={!ready} onClick={saveOnce} style={{ marginTop: '.9rem', width: '100%' }}>{t('সেভ করুন')}</button>
+      <button className="btn primary" disabled={!ready} onClick={saveOnce} style={{ marginTop: '.9rem', width: '100%' }}>{t('খাতায় তুলুন')}</button>
     </Sheet>
   )
 }

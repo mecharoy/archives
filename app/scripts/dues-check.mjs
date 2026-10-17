@@ -71,6 +71,24 @@ ck('at the first stage nothing is done', jobstart.jobStartRows('p9', st4, 1, 0, 
   ck('an empty number finds nobody, not the person with no number', phone.findByPhone(people, ''), undefined)
 }
 
+/* Plainer words (design D5). What is stored never changes; only what is shown. */
+ck('UPI is shown as online', calc.modeLabel('UPI'), 'অনলাইনে (UPI)')
+ck('received-earlier is shown as it is', calc.modeLabel('আগে পাওয়া'), 'আগে পাওয়া')
+ck('cash is shown as it is', calc.modeLabel('নগদ'), 'নগদ')
+{
+  const { readdirSync, readFileSync, statSync } = await import('fs')
+  const { join } = await import('path')
+  const walk = (d) => readdirSync(d).flatMap((f) => (statSync(join(d, f)).isDirectory() ? walk(join(d, f)) : [join(d, f)]))
+  const files = walk(join(app.ROOT, 'src')).filter((f) => f.endsWith('.tsx'))
+  const holding = (re) => files.filter((f) => re.test(readFileSync(f, 'utf8'))).map((f) => f.split(/[\\/]/).pop()).join()
+  ck('no button says সেভ করুন', holding(/['"]সেভ করুন['"]|['"]সেভ হচ্ছে…['"]/), '')
+  ck('nothing says মাইনাসে', holding(/মাইনাসে/), '')
+  ck('the expense list says খরচের ধরন, not খাত', holding(/সব খরচের খাত/), '')
+  ck("home no longer labels the brief 'ফোনের নিজের হিসাব'", holding(/t\('ফোনের নিজের হিসাব'\)/), '')
+  ck('the evening drops the sentence about stage weights', files.filter((f) => f.endsWith('DayWizard.tsx') && /ধাপের ওজন/.test(readFileSync(f, 'utf8'))).length, 0)
+  ck('every payment-mode chip shows its label, not the stored value', holding(/PAY_MODES\.map\([^\n]*>\{m\}<\/Chip>/), '')
+}
+
 /* Hints name the place a thing really is. Stages and thumb rules live in কাজ → কাজের ধাপ ও থাম্ব রুল
    now; a hint sending him to "সেটিংস → ধাপ" sends him to a page that no longer has them. */
 {

@@ -102,7 +102,7 @@ await step('a full day is entered', async () => {
   await page.getByText('না', { exact: true }).first().click()
   await page.getByText('অর্ধেক হয়েছে').first().click()
   await page.getByText('হ্যাঁ, এটাই আছে').click()
-  await tap('সেভ করুন')
+  await tap('খাতায় তুলুন')
   await page.getByText('আজকের হিসাব লেখা হল').waitFor({ timeout: 6000 })
 })
 

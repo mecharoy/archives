@@ -21,6 +21,11 @@ export const JOB_PAY_HEAD = 'কাজের টাকা'
 /* Money a job brought in before the app knew about it (set at the job's start). It is the job's income,
    but it is not in today's cash box: cash counts only 'নগদ', so this mode keeps it out of the count. */
 export const EARLIER_MODE = 'আগে পাওয়া'
+
+/** How a payment mode is shown. Stored values never change ('UPI' is what cash sums ignore); only the words. */
+export function modeLabel(mode: string): string {
+  return mode === 'UPI' ? t('অনলাইনে (UPI)') : t(mode)
+}
 export const OPENING_GET = 'opening_get'
 export const OPENING_OWE = 'opening_owe'
 

@@ -6,7 +6,7 @@ import { money, toBn, dayLabelBn, dateBn, isoDate, num } from '../lib/bn'
 import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Worker } from '../lib/model'
 import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, cashAfterDay, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, recvTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, attendanceDone, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
-import { cashState, currentStage } from '../lib/calc'
+import { cashState, currentStage, modeLabel } from '../lib/calc'
 import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
 import { ContactPicker } from './Settings'
@@ -795,7 +795,7 @@ function StepExpense({ s, draft, patch, next, field = 'exps', personal = false, 
             <div className="card" style={{ marginBottom: '.9rem' }}>
               {draft[field].map((e) => (
                 <div key={e.key} className="review-row">
-                  <span><span className="t">{t(e.head_bn)}</span><span className="k">{t(e.mode)}</span></span>
+                  <span><span className="t">{t(e.head_bn)}</span><span className="k">{modeLabel(e.mode)}</span></span>
                   <span className="v num">{money(e.amount)}</span>
                   <button className="iconbtn" onClick={() => patch({ [field]: draft[field].filter((x) => x.key !== e.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
                 </div>
@@ -830,7 +830,7 @@ function StepExpense({ s, draft, patch, next, field = 'exps', personal = false, 
             : <button className="btn ghost" style={{ flex: 1 }} onClick={next}>{t("আর কোনো খরচ নেই")}</button>}
         </div>
         {showAll && (
-          <Sheet title="সব খরচের খাত" onClose={() => setShowAll(false)}>
+          <Sheet title="সব খরচের ধরন" onClose={() => setShowAll(false)}>
             <div className="rowlist">
               {ordered.map((h) => <Pick key={h} title={h} onClick={() => { setHead(h); setShowAll(false); setSub('amount') }} />)}
             </div>
@@ -847,7 +847,7 @@ function StepExpense({ s, draft, patch, next, field = 'exps', personal = false, 
         <MoneyPad value={amount} onChange={setAmount} chips={chips} onChipTaken={() => noteChip(true)} />
         <p className="sectionlabel">{t("কীভাবে দিলেন")}</p>
         <div className="chips">
-          {PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{m}</Chip>)}
+          {PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{modeLabel(m)}</Chip>)}
         </div>
         <button className="btn quiet small" style={{ marginTop: '1rem' }}
           onClick={async () => { const id = await capture(); if (id) setPhoto(id) }}>
@@ -882,7 +882,7 @@ function StepReceived({ s, draft, patch, next }: StepProps) {
           <div className="card" style={{ marginBottom: '.9rem' }}>
             {lines.map((r) => (
               <div key={r.key} className="review-row">
-                <span><span className="t">{nameOf(s, r.project_id)}</span><span className="k">{r.mode === 'UPI' ? t('অনলাইনে (UPI)') : t(r.mode)}</span></span>
+                <span><span className="t">{nameOf(s, r.project_id)}</span><span className="k">{modeLabel(r.mode)}</span></span>
                 <span className="v num">{money(r.amount)}</span>
                 <button className="iconbtn" onClick={() => patch({ recv: lines.filter((x) => x.key !== r.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
               </div>
@@ -931,7 +931,6 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
           <Pick on={chosen === 'done'} title={tf('{0} — শেষ হয়েছে', t(cur.name_bn))} sub={info.next ? tf('কাল থেকে {0}', t(info.next.name_bn)) : t('কাজ শেষের দিকে')}
             onClick={() => { patch({ progress: { stage_seq: cur.seq, state: 'done' } }); next() }} />
         </div>
-        <p className="hint" style={{ marginTop: '1.2rem' }}>{t("শতকরা কত হল সেটা আপনাকে আন্দাজ করতে হবে না — ধাপের ওজন থেকে নিজে থেকে হিসাব হয়ে যায়।")}</p>
       </div>
     </>
   )
@@ -1122,7 +1121,7 @@ function StepReview({ s, draft, project_bn, onJump, onSave, extrasAvailable, onE
       </div>
       <div className="actionbar">
         <button className="btn primary" disabled={saving} onClick={() => { setSaving(true); void onSave() }}>
-          {saving ? t('সেভ হচ্ছে…') : t('সেভ করুন')}
+          {saving ? t('তোলা হচ্ছে…') : t('খাতায় তুলুন')}
         </button>
       </div>
     </>
