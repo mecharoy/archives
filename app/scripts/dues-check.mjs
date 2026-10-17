@@ -63,6 +63,22 @@ ck('before setup is done, no nudge', nudges([], 'day', '2026-10-16T04:30:00Z', f
 ck('payment reminders off: the nudges stay', nudges(two, 'off', '2026-10-16T04:30:00Z').length, 7)
 ck('payment reminders off: no Monday note', monday(two, 'off', '2026-10-16T04:30:00Z').length, 0)
 
+/* When the phone writes its brief: after 6 pm, once today's day is saved; again whenever the day is saved
+   after the last brief; a missed evening is caught up the next morning; a refused key or a try in the last
+   half hour waits. Times below are UTC; Kolkata is 5½ hours ahead. */
+const { briefDue } = app
+const due = (o) => briefDue.briefDue({ hasKey: true, badKey: false, triedAt: '', doneDay: '2026-10-15', madeAt: '2026-10-15T14:00:00Z', dayRowAt: '', ...o, now: new RealDate(o.now) })
+ck('5 pm with the day saved: not yet', due({ now: '2026-10-16T11:30:00Z', dayRowAt: '2026-10-16T11:00:00Z' }), false)
+ck('7 pm with no day saved today: not yet', due({ now: '2026-10-16T13:30:00Z', dayRowAt: '2026-10-15T14:00:00Z' }), false)
+ck('7 pm, the day saved, no brief today: now', due({ now: '2026-10-16T13:30:00Z', dayRowAt: '2026-10-16T13:20:00Z' }), true)
+ck('the day saved again after the brief: again', due({ now: '2026-10-16T14:05:00Z', doneDay: '2026-10-16', madeAt: '2026-10-16T13:35:00Z', dayRowAt: '2026-10-16T14:00:00Z' }), true)
+ck('the brief already covers the day: no', due({ now: '2026-10-16T14:05:00Z', doneDay: '2026-10-16', madeAt: '2026-10-16T13:35:00Z', dayRowAt: '2026-10-16T13:20:00Z' }), false)
+ck('next morning after a missed evening: now', due({ now: '2026-10-17T02:30:00Z', doneDay: '2026-10-15' }), true)
+ck('next morning after a brief last night: no', due({ now: '2026-10-17T02:30:00Z', doneDay: '2026-10-16' }), false)
+ck('tried ten minutes ago: wait', due({ now: '2026-10-16T13:30:00Z', dayRowAt: '2026-10-16T13:20:00Z', triedAt: '2026-10-16T13:20:00Z' }), false)
+ck('a key Google refused: wait for a new one', due({ now: '2026-10-16T13:30:00Z', dayRowAt: '2026-10-16T13:20:00Z', badKey: true }), false)
+ck('no key: never', due({ now: '2026-10-16T13:30:00Z', dayRowAt: '2026-10-16T13:20:00Z', hasKey: false }), false)
+
 /* A job set up mid-way: the stages before the one it is at are done, and what came in so far is the
    job's income without being today's cash. */
 const { jobstart } = app

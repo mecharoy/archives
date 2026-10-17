@@ -11,6 +11,7 @@ import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
 import { ContactPicker } from './Settings'
 import { ReceivedForm } from './Received'
+import { maybeMakeBrief } from '../lib/aiBrief'
 import { NewProjectSheet } from './NewJob'
 import { defaultDueDays, dueFrom } from '../lib/dues'
 import { DueChips } from '../ui/DueChips'
@@ -151,6 +152,8 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
     }
     await clearDraft(draft.date)
     scheduleSync(300)
+    // The evening is written: if it is after six, this is when the phone's brief is due (see briefDue.ts).
+    void maybeMakeBrief()
     onExit(true, draft.date)
   }
 

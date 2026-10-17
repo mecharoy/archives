@@ -228,6 +228,62 @@ const finishDay = async (page) => {
   await ctx.close()
 }
 
+/* ---- G: the phone's brief after the evening is saved, and no name reaches Google ---- */
+{
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } })
+  const page = await ctx.newPage()
+  page.on('pageerror', (e) => log.push('PAGEERROR ' + e.message))
+  const asked = []
+  await page.route('https://generativelanguage.googleapis.com/**', (route) => {
+    const req = route.request()
+    if (req.method() === 'POST') asked.push(req.postData() || '')
+    return route.fulfill({ status: 200, headers: { 'access-control-allow-origin': '*' }, contentType: 'application/json', body: JSON.stringify({ candidates: [] }) })
+  })
+  // 7:10 in the evening in Kolkata.
+  await page.clock.setFixedTime(new Date('2026-10-16T13:40:00Z'))
+  await page.goto(ORIGIN)
+  await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 8000 })
+  await page.evaluate(async () => {
+    const m = await import('/src/lib/store.ts'); const bn = await import('/src/lib/bn.ts'); const db = await import('/src/lib/db.ts')
+    const now = new Date().toISOString()
+    await m.saveMaster({ id: 'p1', kind: 'project', name_bn: 'রায়বাড়ি', client_bn: 'সুবীর রায়', ptype: 'বাড়ি', area_sqft: null, budget: 1000000, start_date: bn.isoDate(), plan_days: null, status: 'active', updated_at: now })
+    await m.saveMaster({ id: 'w1', kind: 'worker', name_bn: 'রতন মিস্ত্রি', rate: 600, phone: '', active: true, updated_at: now })
+    await m.saveMaster({ id: 's1', kind: 'party', name_bn: 'শর্মা ট্রেডার্স', ptype: 'supplier', terms_days: 15, phone: '', updated_at: now })
+    await m.saveMaster({ id: 'c9', kind: 'party', name_bn: 'পুরোনো খদ্দের দাস', ptype: 'client', terms_days: 0, phone: '', updated_at: now })
+    await m.saveEntries([
+      { id: db.uid(), kind: 'stock', batch: db.uid(), date: bn.addDays(bn.isoDate(), -3), project_id: 'p1', created_at: now, item_id: '', dir: 'in', qty: 0, rate: 0, amount: 4000, party_id: 's1', due_date: bn.isoDate(), paid: false, photo_id: '' },
+      { id: db.uid(), kind: 'stock', batch: db.uid(), date: bn.addDays(bn.isoDate(), -40), project_id: '', created_at: now, item_id: '', dir: 'opening_get', qty: 0, rate: 0, amount: 7000, party_id: 'c9', due_date: bn.isoDate(), paid: false, photo_id: '' },
+    ])
+    await m.saveSettings({ onboarded: true, toured: true, runs_shop: false, opening_cash: 10000, opening_date: bn.addDays(bn.isoDate(), -5),
+      owner_bn: 'বিমল ঘোষ', helper_name: 'অমল বসু', ai_key: 'AIza' + 'TESTKEY0123456789abcdefghijklmnop' })
+  })
+  await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 6000 })
+  await step('brief: after 6 pm nothing is sent until the evening is saved', page, async () => {
+    // Building a brief takes a few seconds (the figures are worked out first); wait long enough to see one.
+    await page.waitForTimeout(5000)
+    if (asked.length) throw new Error(asked.length + ' brief request(s) sent before the day was saved')
+  })
+  await step('brief: saving the evening sends it', page, async () => {
+    await tap(page, 'আজকের হিসাব')
+    await page.getByText('আজ কে কে এসেছে?').waitFor({ timeout: 4000 })
+    await page.locator('.pick').first().click(); await tap(page, 'এগিয়ে যান')
+    await page.getByText('মজুরি কত দিলেন?').waitFor({ timeout: 3000 }); await tap(page, 'এগিয়ে যান')
+    await page.getByText('কী মাল?').waitFor({ timeout: 3000 }); await tap(page, 'আজ মাল আসেনি')
+    await page.getByText('কীসের খরচ?').waitFor({ timeout: 3000 }); await tap(page, 'আর কোনো খরচ নেই')
+    await page.getByText('আজ কেউ টাকা দিয়েছেন?').waitFor({ timeout: 3000 }); await page.getByText('না', { exact: true }).first().click()
+    await finishDay(page)
+    await page.getByText('খাতায় তুলুন').click()
+    for (let k = 0; k < 40 && !asked.length; k++) await page.waitForTimeout(250)
+    if (!asked.length) throw new Error('no brief request after the evening was saved')
+  })
+  await step('brief: no name goes to Google', page, async () => {
+    const sent = asked.join('\n')
+    const leaked = ['রায়বাড়ি', 'সুবীর রায়', 'রতন মিস্ত্রি', 'শর্মা ট্রেডার্স', 'পুরোনো খদ্দের দাস', 'বিমল ঘোষ', 'অমল বসু'].filter((n) => sent.includes(n))
+    if (leaked.length) throw new Error('sent to Google: ' + leaked.join(', '))
+  })
+  await ctx.close()
+}
+
 /* ---- S1: the whole shop counted in one sitting ---- */
 {
   const { ctx, page } = await fresh({ shop: true })

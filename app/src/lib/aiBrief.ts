@@ -17,12 +17,11 @@ import { getState, setState, saveSettings } from './store'
 import { rowForEntry, rowForMaster } from './model'
 import { parseBrief, shouldReplace } from './brief'
 import { t } from './i18n'
+import { briefDue } from './briefDue'
 import schemaSql from '../../server/schema.sql?raw'
 import prompt from '../../nightly/prompt.md?raw'
 import wasmUrl from 'sql.js/dist/sql-wasm-browser.wasm?url'
 
-const EVENING_HOUR = 18
-const RETRY_MINUTES = 30
 
 export interface AiStatus {
   at: string
@@ -60,18 +59,20 @@ export async function setAiKey(raw: string): Promise<string> {
   return key
 }
 
-/** Is today's brief due? Once per evening; a missed evening is caught up next morning. */
+/** Is a brief due? After the evening is saved, and again when it is saved again; see briefDue.ts. */
 async function isDue(): Promise<boolean> {
-  const now = istNow()
-  const today = ymd(now)
-  const yesterday = ymd(new Date(now.getTime() - 86400000))
-  const done = await kvGet<string>('ai_brief_day', '')
-  const triedAt = await kvGet<string>('ai_brief_tried_at', '')
-  // A key Google already refused will be refused again; wait for a new one.
-  if (fingerprint(currentKey()) === (await kvGet<string>('ai_key_bad', ''))) return false
-  if (triedAt && Date.now() - new Date(triedAt).getTime() < RETRY_MINUTES * 60000) return false
-  if (now.getHours() >= EVENING_HOUR) return done !== today
-  return done < yesterday
+  const today = ymd(istNow())
+  // The latest day row written for today, by the moment it was written.
+  const dayRowAt = getState().entries.reduce((m, e) => (e.kind === 'day' && e.date === today && e.created_at > m ? e.created_at : m), '')
+  return briefDue({
+    now: new Date(), hasKey: hasAiKey(),
+    // A key Google already refused will be refused again; wait for a new one.
+    badKey: fingerprint(currentKey()) === (await kvGet<string>('ai_key_bad', '')),
+    triedAt: await kvGet<string>('ai_brief_tried_at', ''),
+    doneDay: await kvGet<string>('ai_brief_day', ''),
+    madeAt: await kvGet<string>('ai_brief_made_at', ''),
+    dayRowAt,
+  })
 }
 
 /** Run if it is due. Silent: never throws, never nags. */
@@ -140,7 +141,7 @@ async function run(): Promise<string> {
     await kvSet('ai_brief_status', status)
     // Only a brief with the model's words counts as done for the day; a
     // computed-only one is kept, and the words are tried again later.
-    if (out.model) await kvSet('ai_brief_day', ymd(istNow()))
+    if (out.model) { await kvSet('ai_brief_day', ymd(istNow())); await kvSet('ai_brief_made_at', at) }
     if (out.modelError && out.modelError.kind === 'key') await kvSet('ai_key_bad', fingerprint(key))
     return out.model ? '' : explainAiError(out.modelError ? out.modelError.kind : 'other')
   } catch (e) {
