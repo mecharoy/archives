@@ -382,3 +382,10 @@ Location: src/lib/aiBrief.ts run(), seen from scripts/money-check.mjs and probes
 Action: testing that the brief waits for the evening to be saved (plan 3, Task 10).
 Cause: specific to the dev server (no reload seen; the dynamic imports at start-up stall there). The built app (vite preview) completes the same start-up run in under a second.
 Fix: none needed in the app. Tests that need a brief run trigger it after the page has loaded (saving the evening), and the built-app check is part of the screen sweep. A first check that waited 1.2 s passed for the wrong reason; it now waits 5 s.
+
+2026-10-17
+Problem: counting the live household's rows failed: "too many terms in compound SELECT" (D1 error 7500).
+Location: wrangler d1 execute site-khata --remote (live step L4)
+Action: one query joining 14 per-table counts with UNION ALL.
+Cause: D1 caps the number of terms in a compound SELECT.
+Fix: one SELECT with a scalar sub-query per table: SELECT (SELECT COUNT(*) FROM t1 WHERE …) AS t1, (…) AS t2, …
