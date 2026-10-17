@@ -228,6 +228,21 @@ const finishDay = async (page) => {
   await ctx.close()
 }
 
+/* ---- D8: a crash never leaves a blank screen ---- */
+{
+  const { ctx, page } = await fresh()
+  await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ helper_name: 'অমল', helper_phone: '90000 11111' }))
+  await step('crash: a calm screen, a way back, and whom to ring', page, async () => {
+    // A change after # alone does not reload the page; reload so the app starts with it.
+    await page.goto(ORIGIN + '#crash-test'); await page.reload()
+    await page.getByText('কিছু একটা গোলমাল হয়েছে। আপনার লেখা হিসাব হারায়নি।').waitFor({ timeout: 6000 })
+    await page.getByText('আবার খুলুন').first().waitFor({ timeout: 2000 })
+    const tel = await page.locator('a[href^="tel:"]').first().getAttribute('href')
+    if (tel !== 'tel:+919000011111') throw new Error('call link: ' + tel)
+  })
+  await ctx.close()
+}
+
 /* ---- B1: the evening question, in cash ---- */
 {
   const { ctx, page } = await fresh()

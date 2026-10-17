@@ -319,6 +319,8 @@ export const EN: Record<string, string> = {
   'কেনা': 'bought',
   'বাকিতে কেনা': 'bought on credit',
   'পুরোনো বাকি': 'Old balance',
+  'কিছু একটা গোলমাল হয়েছে। আপনার লেখা হিসাব হারায়নি।': 'Something went wrong. Nothing you wrote is lost.',
+  'আবার খুলুন': 'Open again',
   'সাহায্য': 'Help',
   'রোজ সন্ধেবেলা': 'Every evening',
   '‘আজকের হিসাব’-এ চাপুন।': 'Tap ‘Today\'s entry’.',

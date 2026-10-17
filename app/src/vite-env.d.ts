@@ -3,6 +3,8 @@ declare module '*.css'
 interface ImportMetaEnv {
   readonly VITE_SYNC_ENDPOINT?: string
   readonly VITE_SYNC_TOKEN?: string
+  /** True on the development server, false in a built app (Vite sets it). */
+  readonly DEV: boolean
 }
 interface ImportMeta {
   readonly env: ImportMetaEnv
