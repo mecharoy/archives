@@ -14,6 +14,7 @@ import { useBackHandler } from '../lib/back'
 import { useOnce } from '../lib/once'
 import { defaultDueDays, dueFrom } from '../lib/dues'
 import { DueChips } from '../ui/DueChips'
+import { PartyPicker } from '../ui/PartyPicker'
 
 type Flow = null | 'in' | 'sale' | 'count' | 'transfer' | 'credit'
 
@@ -151,10 +152,7 @@ function QuickCredit({ s, onDone }: { s: State; onDone: (msg?: string) => void }
       <TopBar title="বাকিতে দিলাম" onBack={() => onDone()} />
       <div className="scroll">
         <h2 className="question">{t('কাকে?')}</h2>
-        <div className="chips">
-          {clients.slice(0, 8).map((p) => <Chip key={p.id} on={party === p.id} onClick={() => { setParty(p.id); setDueDays(null) }}>{p.name_bn}</Chip>)}
-          <Chip onClick={() => setNewParty(true)}>{t('+ নতুন')}</Chip>
-        </div>
+        <PartyPicker list={clients} top={clients.slice(0, 6)} value={party} onPick={(id) => { setParty(id); setDueDays(null) }} onNew={() => setNewParty(true)} />
         <p className="sectionlabel">{t('মোট কত টাকার মাল?')}</p>
         <MoneyPad value={amount} onChange={setAmount} />
         <DueChips question="কবে দেবে?" days={days} onChange={setDueDays} own={picked?.terms_days} from={today} />
@@ -337,11 +335,8 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | '
             ) : (
               <>
                 <h2 className="question">{flow === 'sale' ? t('কাকে বিক্রি?') : t('কার কাছ থেকে?')}</h2>
-                <div className="chips">
-                  {topParties.map((p) => <Chip key={p.id} on={party === p.id} onClick={() => choose(party === p.id ? '' : p.id)}>{p.name_bn}</Chip>)}
-                  <Chip onClick={() => setNewParty(true)}>{t("+ নতুন")}</Chip>
-                  {flow === 'sale' && <Chip on={party === ''} onClick={() => choose('')}>{t("খুচরো খদ্দের")}</Chip>}
-                </div>
+                <PartyPicker list={list} top={topParties} value={party} onPick={choose} onNew={() => setNewParty(true)}
+                  extra={flow === 'sale' ? <Chip on={party === ''} onClick={() => choose('')}>{t("খুচরো খদ্দের")}</Chip> : undefined} />
                 {(flow === 'in' || flow === 'sale') && (
                   <>
                     <p className="sectionlabel">{flow === 'sale' ? t('টাকা পেয়েছেন?') : t('টাকা দিয়েছেন?')}</p>

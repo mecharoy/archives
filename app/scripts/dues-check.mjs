@@ -60,6 +60,17 @@ ck('marked as received earlier, so it is not counted as cash', recv[0] && recv[0
 ck('cash is untouched by it', calc.cashState(rows, 10000, '2026-10-01').computed, 10000)
 ck('at the first stage nothing is done', jobstart.jobStartRows('p9', st4, 1, 0, '2026-10-17').length, 0)
 
+/* A number picked from the phone book that is already on a person is that person, however it is
+   written: a second record splits one man's dues in two. */
+{
+  const { phone } = app
+  const people = [{ id: 'a', phone: '98300 12345' }, { id: 'b', phone: '' }, { id: 'c', phone: '+91 90000-11111' }]
+  ck('the same number written another way finds the same person', phone.findByPhone(people, '+919830012345')?.id, 'a')
+  ck('with a leading 0', phone.findByPhone(people, '090000 11111')?.id, 'c')
+  ck('a new number finds nobody', phone.findByPhone(people, '91234 56789'), undefined)
+  ck('an empty number finds nobody, not the person with no number', phone.findByPhone(people, ''), undefined)
+}
+
 /* Hints name the place a thing really is. Stages and thumb rules live in কাজ → কাজের ধাপ ও থাম্ব রুল
    now; a hint sending him to "সেটিংস → ধাপ" sends him to a page that no longer has them. */
 {

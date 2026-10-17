@@ -373,6 +373,51 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- every person can be reached: the tenth customer is picked, never typed again ---- */
+{
+  const { ctx, page } = await fresh({ shop: true })
+  await page.evaluate(async () => {
+    const m = await import('/src/lib/store.ts')
+    const now = new Date().toISOString()
+    for (let k = 1; k <= 10; k++) await m.saveMaster({ id: 'cc' + k, kind: 'party', name_bn: 'খদ্দের নম্বর ' + k, ptype: 'client', terms_days: 0, phone: '', updated_at: now })
+  })
+  const pickTenth = async () => {
+    await tap(page, 'আরও…', true)
+    await page.locator('.sheet input').first().fill('10')
+    await page.locator('.sheet .pick', { hasText: 'খদ্দের নম্বর 10' }).first().click()
+  }
+  const partyOf = (dir) => page.evaluate(async (dir) => (await import('/src/lib/store.ts')).getState().entries.filter((e) => e.kind === 'stock' && e.dir === dir).pop()?.party_id, dir)
+  await step('people: "বাকিতে দিলাম" can reach the tenth customer', page, async () => {
+    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
+    await tap(page, 'শুধু টাকার হিসাব — বাকিতে দিলাম')
+    await pickTenth()
+    await pad(page, ['৫', '০', '০'])
+    await page.locator('.actionbar .btn.primary').click()
+    await page.waitForTimeout(400)
+    if ((await partyOf('sale')) !== 'cc10') throw new Error('sold to ' + (await partyOf('sale')))
+  })
+  await step('people: a sale of goods can reach the tenth customer', page, async () => {
+    await toWho(page, 'মাল ধরে বিক্রি', ['১'], ['১', '০', '০'])
+    await pickTenth()
+    await tap(page, 'হ্যাঁ', true)
+    await page.locator('.actionbar .btn.primary').click()
+    await page.waitForTimeout(400)
+    if ((await partyOf('sale')) !== 'cc10') throw new Error('sold to ' + (await partyOf('sale')))
+  })
+  await step('people: an old balance can reach the tenth customer', page, async () => {
+    await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
+    await tap(page, 'পুরোনো বাকি', true)
+    await tap(page, 'উনি আমাকে দেবেন')
+    await pickTenth()
+    await pad(page, ['৯', '০', '০'])
+    await page.locator('.sheet .btn.primary').last().click()
+    await page.waitForTimeout(400)
+    if ((await partyOf('opening_get')) !== 'cc10') throw new Error('owed by ' + (await partyOf('opening_get')))
+  })
+  await ctx.close()
+}
+
 /* ---- B4: old dues from the paper khata ---- */
 {
   const { ctx, page } = await fresh({ shop: true })

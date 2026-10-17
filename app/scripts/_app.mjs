@@ -11,7 +11,7 @@ import initSqlJs from 'sql.js'
 
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..')
 
-const ENTRIES = ['calc', 'model', 'draft', 'bn', 'monthly', 'restore', 'sync', 'remind', 'i18n', 'dues', 'jobstart']
+const ENTRIES = ['calc', 'model', 'draft', 'bn', 'monthly', 'restore', 'sync', 'remind', 'i18n', 'dues', 'jobstart', 'phone']
 
 export async function loadApp() {
   const out = mkdtempSync(join(tmpdir(), 'sitekhata-app-'))

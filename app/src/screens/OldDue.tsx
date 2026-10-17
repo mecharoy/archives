@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Chip, Sheet, MoneyPad, Field } from '../ui/kit'
 import { DueChips } from '../ui/DueChips'
+import { PartyPicker } from '../ui/PartyPicker'
+import { findByPhone } from '../lib/phone'
 import { ContactPicker } from './Settings'
 import { parties, saveEntries, saveMaster, type State } from '../lib/store'
 import { uid } from '../lib/db'
@@ -66,7 +68,12 @@ export function OldDueSheet({ s, way: initialWay, onClose, onDone }: {
 
   if (book) {
     return <ContactPicker onClose={() => setBook(false)}
-      onPicked={(c) => { setParty(''); setNewName(c.name); setNewPhone(c.phone); setBook(false) }} />
+      onPicked={(c) => {
+        // Already on the books under this number: that person, not a second record splitting his dues.
+        const known = findByPhone(all, c.phone)
+        if (known) { setParty(known.id); setNewName(null) } else { setParty(''); setNewName(c.name); setNewPhone(c.phone) }
+        setDueDays(null); setBook(false)
+      }} />
   }
 
   return (
@@ -78,13 +85,10 @@ export function OldDueSheet({ s, way: initialWay, onClose, onDone }: {
       </div>
 
       <p className="sectionlabel">{t('কে?')}</p>
-      <div className="chips">
-        {people.slice(0, 8).map((p) => (
-          <Chip key={p.id} on={party === p.id} onClick={() => { setParty(p.id); setNewName(null); setDueDays(null) }}>{p.name_bn}</Chip>
-        ))}
-        <Chip onClick={() => setBook(true)}>{t('ফোনবুক থেকে')}</Chip>
-        <Chip on={newName !== null && !party} onClick={() => { setParty(''); setNewName(newName ?? ''); setDueDays(null) }}>{t('+ নতুন')}</Chip>
-      </div>
+      <PartyPicker list={people} top={people.slice(0, 6)} value={party}
+        onPick={(id) => { setParty(id); setNewName(null); setDueDays(null) }}
+        onNew={() => { setParty(''); setNewName(newName ?? ''); setDueDays(null) }}
+        extra={<Chip onClick={() => setBook(true)}>{t('ফোনবুক থেকে')}</Chip>} />
       {newName !== null && !party && (
         <Field label="নাম"><input className="input" value={newName} onChange={(e) => setNewName(e.target.value)} autoFocus /></Field>
       )}
