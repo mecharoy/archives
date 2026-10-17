@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Icon } from '../ui/kit'
+import { Icon, Sheet } from '../ui/kit'
+import { telHref } from '../lib/phone'
 import { useStore, activeProjects, workers, stages, type State, type Brief } from '../lib/store'
 import { money, toBn, isoDate, agoBn, dayLabelBn, addDays, daysBetween } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
 import { maybeMakeBrief } from '../lib/aiBrief'
-import { statusWord } from '../lib/i18n'
 import { cashState, projectTotals, daysWritten, lastEntryDate, shopStock, shopEverHandled, duesSplit, receivablesSplit } from '../lib/calc'
 import { lastAttendance, lastAttendanceDay, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
@@ -31,6 +31,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
 }) {
   const s = useStore((x) => x)
   const [refreshing, setRefreshing] = useState(false)
+  const [help, setHelp] = useState(false)
 
   // The server's brief (written by the PC job) is always looked at; it only
   // replaces what the phone holds when it is newer and has words. With a key
@@ -140,20 +141,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </div>
         )}
 
-        {/* The three books, each with its headline figures in view and a way
-            into the whole book. Order follows what he runs, but all are shown
-            — he told us he uses all three, and hiding one behind a tap is the
-            scattering we are undoing. Each carries its own colour so the eye
-            finds কাজ, মজুত and হিসাব by hue before it reads a word. */}
-        <div data-tour="books" style={{ marginTop: '1.2rem' }}>
-          <WorkSummary s={s} brief={brief} onGo={onGo} />
-          <StockSummary s={s} onGo={onGo} />
-          <MoneySummary s={s} onGo={onGo} />
-        </div>
-
-        {/* What to look at today, kept under the books rather than above them —
-            he asked for it here, and it reads better as a footnote to the
-            three summaries than as a banner over them. */}
+        {/* What to look at today, straight under the day's entry. */}
         {brief.alerts && brief.alerts.length > 0 && (
           <>
             <p className="sectionlabel">{t('নজর দেওয়ার মতো')}</p>
@@ -174,21 +162,49 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           </>
         )}
 
-        <button className="bigbtn allbtn" data-tour="all" onClick={() => onGo('all')} style={{ marginTop: '1.1rem' }}>
-          <Icon name="grid" size={28} stroke={1.7} />
-          <span style={{ flex: 1 }}>
-            <span className="t" style={{ display: 'block' }}>{t('সব কিছু')}</span>
-            <span className="s">{t('অ্যাপের সব কাজ এক জায়গায়')}</span>
-          </span>
-          <Icon name="fwd" size={22} />
-        </button>
+        {/* The three books, one plain line each; the detail is one tap inside. Each keeps its colour so
+            the eye finds কাজ, মজুত and হিসাব by hue before it reads a word. */}
+        <div data-tour="books" style={{ marginTop: '1.2rem' }}>
+          <WorkSummary s={s} onGo={onGo} />
+          <StockSummary s={s} onGo={onGo} />
+          <MoneySummary s={s} onGo={onGo} />
+        </div>
 
-        <SyncLine s={s} />
+        <div className="spread" style={{ marginTop: '1rem', gap: '.6rem' }}>
+          <button className="btn quiet" data-tour="all" style={{ flex: 1 }} onClick={() => onGo('all')}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}><Icon name="grid" size={20} />{t('সব কিছু')}</span>
+          </button>
+          <button className="btn quiet" style={{ flex: 1 }} onClick={() => setHelp(true)}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}><Icon name="phone" size={20} />{t('সাহায্য')}</span>
+          </button>
+        </div>
       </div>
 
       <StandingTotals s={s} onGo={onGo} />
       <UpdateModal />
+      {help && <HelpSheet s={s} onClose={() => setHelp(false)} />}
     </>
+  )
+}
+
+/* সাহায্য: the evening in three lines, how to chase money, and the person to ring. */
+function HelpSheet({ s, onClose }: { s: State; onClose: () => void }) {
+  const name = s.settings.helper_name.trim()
+  const tel = telHref(s.settings.helper_phone)
+  return (
+    <Sheet title="সাহায্য" onClose={onClose}>
+      <p className="sectionlabel" style={{ marginTop: 0 }}>{t('রোজ সন্ধেবেলা')}</p>
+      <div className="card">
+        <div className="todo"><span className="n num">{toBn(1)}</span><span>{t('‘আজকের হিসাব’-এ চাপুন।')}</span></div>
+        <div className="todo"><span className="n num">{toBn(2)}</span><span>{t('প্রশ্নগুলোর উত্তর দিন — কিছু না থাকলে ‘না’।')}</span></div>
+        <div className="todo"><span className="n num">{toBn(3)}</span><span>{t('শেষে ‘খাতায় তুলুন’ চাপুন।')}</span></div>
+      </div>
+      <p className="sectionlabel">{t('কেউ টাকা দেননি?')}</p>
+      <p>{t('নিচে ‘পাবেন’-এ চাপুন, তারপর নামের নিচে ‘তাগাদা পাঠান’।')}</p>
+      {tel
+        ? <a className="btn primary" href={tel} style={{ display: 'block', marginTop: '1rem', textAlign: 'center', textDecoration: 'none' }}>{tf('{0} কে ফোন করুন', name || t('সাহায্যকারী'))}</a>
+        : <p className="small muted" style={{ marginTop: '1rem' }}>{t('সেটিংস → নাম ও ফোন-এ যিনি সাহায্য করবেন তাঁর নম্বর দিন।')}</p>}
+    </Sheet>
   )
 }
 
@@ -210,37 +226,16 @@ function BookCard({ tone, icon, title, onOpen, children }: {
 
 /* ---------- কাজ ---------- */
 
-function WorkSummary({ s, brief, onGo }: { s: State; brief: Brief; onGo: (x: Screen) => void }) {
+function WorkSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const act = activeProjects(s)
-  const rows = brief.projects ?? []
-  const top = rows[0]
+  const topId = rankProjects(s.entries, act.map((p) => p.id))[0]
+  const top = act.find((p) => p.id === topId) || act[0]
+  const pct = top ? Math.round(projectTotals(top, s.entries, stages(s)).pct_done) : 0
   return (
     <BookCard tone="work" icon="chart" title="কাজ" onOpen={() => onGo('work')}>
-      {act.length === 0 ? (
-        <p className="booknote">{t('এখনও কোনো কাজ যোগ করা হয়নি। ভিতরে গিয়ে কাজ যোগ করুন।')}</p>
-      ) : top ? (
-        <>
-          <div className="spread">
-            <strong>{pick(top.name_bn, top.name_en)}</strong>
-            <span className={'badge ' + (top.status || 'ok')}>{statusWord(top.status)}</span>
-          </div>
-          {(top.note_bn || top.note_en) && <p className="jobnote">{pick(top.note_bn, top.note_en)}</p>}
-          <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
-            <span className="name small muted">{t('কাজ')}</span>
-            <span className="bartrack"><span className="barfill" style={{ width: `${Math.min(100, top.pct_done)}%` }} /></span>
-            <span className="pct num">{toBn(Math.round(top.pct_done))}%</span>
-          </div>
-          <div className="barrow" style={{ gridTemplateColumns: '3.4rem 1fr auto' }}>
-            <span className="name small muted">{t('খরচ')}</span>
-            <span className="bartrack"><span className={'barfill ' + (top.pct_spent > top.pct_done + 6 ? 'warn' : '')}
-              style={{ width: `${Math.min(100, top.pct_spent)}%` }} /></span>
-            <span className="pct num">{toBn(Math.round(top.pct_spent))}%</span>
-          </div>
-          {rows.length > 1 && <p className="booknote">{t('আরও')} {toBn(rows.length - 1)} {t('কাজ চলছে')}</p>}
-        </>
-      ) : (
-        <p className="booknote">{toBn(act.length)} {t('কাজ চলছে')} · {t('ভিতরে অগ্রগতি ও খরচ')}</p>
-      )}
+      <p className="booknote">{top
+        ? tf('{0} কাজ চলছে · {1} {2}%', toBn(act.length), top.name_bn, toBn(pct))
+        : t('এখনও কোনো কাজ যোগ করা হয়নি। ভিতরে গিয়ে কাজ যোগ করুন।')}</p>
     </BookCard>
   )
 }
@@ -251,26 +246,13 @@ function StockSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const levels = useMemo(() => shopStock(s.entries, allItems(s)), [s.entries, s.masters])
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const value = levels.reduce((a, l) => a + l.value, 0)
-  const low = levels.filter((l) => l.qty <= 0)
   return (
     <BookCard tone="stock" icon="shop" title="মজুত" onOpen={() => onGo('shop')}>
-      {levels.length === 0 ? (
-        <p className="booknote">{shopEverHandled(s.entries)
+      <p className="booknote">{levels.length === 0
+        ? (shopEverHandled(s.entries)
           ? t('দোকানের সব মাল শেষ। নতুন মাল তুললে ‘মাল এসেছে’ থেকে লিখুন।')
-          : t('এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।')}</p>
-      ) : (
-        <>
-          <div className="miniline">
-            <span><span className="k">{t('মজুতের দাম')}</span><span className="v num">{money(value)}</span></span>
-            <span><span className="k">{t('দোকানে বাকি')}</span>
-              <span className={'v num' + (dues.overdue > 0 ? ' crit' : dues.total > 0 ? ' warn' : '')}>{money(dues.total)}</span></span>
-          </div>
-          <p className="booknote">
-            {toBn(levels.length)} {t('রকম মাল')}
-            {low.length > 0 ? ` · ${toBn(low.length)} ${t('রকম শেষ')}` : ''}
-          </p>
-        </>
-      )}
+          : t('এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।'))
+        : tf('মজুত {0} · দোকানে বাকি {1}', money(value), money(dues.total))}</p>
     </BookCard>
   )
 }
@@ -279,31 +261,24 @@ function StockSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
 
 function MoneySummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-  const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const spend = useMemo(() => monthSpend(s.entries), [s.entries])
   const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
   return (
     <BookCard tone="money" icon="wallet" title="হিসাব" onOpen={() => onGo('money')}>
-      <div className="miniline">
-        <span><span className="k">{t('হাতে টাকা')}</span><span className={'v num' + (cash.computed < 0 ? ' crit' : '')}>{counted ? money(cash.computed) : '—'}</span></span>
-        <span><span className="k">{t('এ মাসের খরচ')}</span><span className="v num">{money(spend)}</span></span>
-      </div>
-      <p className="booknote">
-        {dues.total > 0 ? `${t('দোকানে বাকি')} ${money(dues.total)}` : t('কোনো বাকি নেই')}
-        {' · '}{t('ভিতরে টাকা দেওয়া-নেওয়া, নিজের খরচ')}
-      </p>
+      <p className="booknote">{tf('হাতে {0} · এ মাসের খরচ {1}', counted ? money(cash.computed) : '—', money(spend))}</p>
     </BookCard>
   )
 }
 
-function SyncLine({ s }: { s: State }) {
+/* Whether the book has reached the online ledger, and how many days were written this week. It lives in
+   Settings now: on the home screen it was one more line to read every evening. */
+export function SyncLine({ s }: { s: State }) {
   const pending = s.outbox.length
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const days = daysWritten(s.entries, 7)
   const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
   return (
     <>
-      <div className="divider" />
       <div className="statusline">
         <span className={'dotlive' + (!s.online ? ' off' : pending ? ' pending' : '')} />
         <span>

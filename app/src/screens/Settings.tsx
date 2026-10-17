@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SyncLine } from './Home'
 import { NewProjectSheet } from './NewJob'
 import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast, Toast, Empty } from '../ui/kit'
 import { PinSheet } from './Personal'
@@ -66,6 +67,7 @@ export function Settings({ onBack }: { onBack: () => void }) {
             ‘সব কিছু’, so a thing is changed where it is added, not in a separate
             settings drawer. What remains here is the app itself: how it looks,
             how it talks to the server, backups and the passcode. */}
+        <div style={{ marginTop: '.9rem' }}><SyncLine s={s} /></div>
         <p className="sectionlabel">{t("টাকা ও খাতা")}</p>
         <div className="rowlist">
           <Pick title="নাম ও ফোন" sub={[s.settings.owner_bn, s.settings.helper_name && tf('সাহায্য: {0}', s.settings.helper_name)].filter(Boolean).join(' · ') || t('দেওয়া নেই')}

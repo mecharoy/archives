@@ -199,6 +199,35 @@ const finishDay = async (page) => {
   await ctx.close()
 }
 
+/* ---- D7: a calm home screen, and a help button ---- */
+{
+  const { ctx, page } = await fresh()
+  await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ helper_name: 'অমল', helper_phone: '90000 11111' }))
+  await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+  await step('home: each book is one plain line, no bars', page, async () => {
+    if (await page.locator('.bookcard .barrow').count()) throw new Error('progress bars are still on the home screen')
+    const work = await page.locator('.bookcard', { hasText: 'কাজ' }).first().innerText()
+    if (!work.includes('১ কাজ চলছে') || !work.includes('রায়বাড়ি')) throw new Error('the কাজ line reads: ' + work.replace(/\n+/g, ' | '))
+  })
+  await step('home: the sync line has moved to Settings', page, async () => {
+    if (await page.getByText('শুধু ফোনে রাখা হচ্ছে').count()) throw new Error('the sync line is still on home')
+    await page.getByLabel('সেটিংস').click()
+    await page.getByText('শুধু ফোনে রাখা হচ্ছে').first().waitFor({ timeout: 3000 })
+    await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+  })
+  await step('home: সাহায্য offers a call to the helper', page, async () => {
+    await tap(page, 'সাহায্য', true)
+    await page.getByText('অমল কে ফোন করুন').first().waitFor({ timeout: 3000 })
+    const tel = await page.locator('.sheet a[href^="tel:"]').first().getAttribute('href')
+    if (tel !== 'tel:+919000011111') throw new Error('call link: ' + tel)
+  })
+  await step('home: every stop of the walk round still has its place', page, async () => {
+    await page.goto(ORIGIN); await page.locator('.headline').waitFor({ timeout: 5000 })
+    for (const tgt of ['today', 'brief', 'books', 'standing', 'all']) if (!(await page.locator(`[data-tour="${tgt}"]`).count())) throw new Error('no tour target ' + tgt)
+  })
+  await ctx.close()
+}
+
 /* ---- B1: the evening question, in cash ---- */
 {
   const { ctx, page } = await fresh()
