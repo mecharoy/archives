@@ -63,13 +63,16 @@
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
 html, body, #root { height: 100%; }
+/* The text-size setting scales the page's base size, so every rem — headings, buttons, chips — grows
+   with it, not only the body text. */
+html { font-size: calc(16px * var(--scale)); }
 
 body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
   font-family: 'Noto Sans Bengali', Inter, system-ui, sans-serif;
-  font-size: calc(17px * var(--scale));
+  font-size: 1.0625rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;

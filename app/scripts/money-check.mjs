@@ -76,6 +76,25 @@ const finishDay = async (page) => {
   await page.getByText('একবার দেখে নিন').waitFor({ timeout: 3000 })
 }
 
+/* ---- D1: text size that works ---- */
+{
+  const { ctx, page } = await fresh()
+  const titlePx = () => page.evaluate(() => parseFloat(getComputedStyle(document.querySelector('.topbar h1')).fontSize))
+  await step('text: a new install is large, and every size follows the setting', page, async () => {
+    const big = await titlePx()
+    if (Math.abs(big - 16 * 1.12 * 1.12) > 0.5) throw new Error('home title is ' + big + 'px, not about 20px')
+    await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ text_scale: 1.26 }))
+    await page.waitForTimeout(200)
+    const bigger = await titlePx()
+    if (!(bigger > big + 1)) throw new Error('আরও বড় did not grow the title: ' + bigger)
+  })
+  await step('text: the page can be pinched to zoom', page, async () => {
+    const vp = await page.evaluate(() => document.querySelector('meta[name=viewport]').getAttribute('content'))
+    if (/user-scalable\s*=\s*no|maximum-scale\s*=\s*1(?!\d)/.test(vp)) throw new Error('zoom is blocked: ' + vp)
+  })
+  await ctx.close()
+}
+
 /* ---- B1: the evening question, in cash ---- */
 {
   const { ctx, page } = await fresh()

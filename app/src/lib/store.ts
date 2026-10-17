@@ -58,7 +58,8 @@ export const DEFAULT_SETTINGS: Settings = {
   opening_cash: 0, opening_date: isoDate(), pin_hash: '',
   auto_sync: true, onboarded: false, toured: false, update_url: '', update_checked_at: '',
   chips_taken: 0, chips_expanded: 0,
-  theme: 'system', text_scale: 1,
+  // Large by default: he reads it at arm's length in the evening. Smaller is one tap away in সেটিংস.
+  theme: 'system', text_scale: 1.12,
   lang: 'bn', remind: 'day', owner_bn: '', owner_phone: '', helper_name: '', helper_phone: '', runs_shop: true, runs_sites: true, ai_key: '',
 }
 
