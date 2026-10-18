@@ -1,18 +1,18 @@
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
 import { Home } from './screens/Home'
 import { Work } from './screens/Work'
 import { Money } from './screens/Money'
-import { AllFeatures } from './screens/AllFeatures'
 import { DayWizard } from './screens/day/DayWizard'
 import { Shop } from './screens/Shop'
+import { StockCount } from './screens/StockCount'
 import { Personal } from './screens/Personal'
 import { Estimator } from './screens/Estimator'
 import { Settings, ProjectsPage, WorkersPage, ItemsPage, PartiesPage, StagesPage, CashPage } from './screens/Settings'
 import { History } from './screens/History'
-import { Payments } from './screens/Payments'
 import { Enquiries } from './screens/Enquiries'
 import { Onboarding } from './screens/Onboarding'
 import { Tour, type Stop } from './ui/Tour'
+import { TabCtx, type Tab } from './ui/TabBar'
 import { goBack } from './lib/back'
 import { useStore, activeProjects, allWorkers, saveSettings } from './lib/store'
 import { startSyncLoop } from './lib/sync'
@@ -23,50 +23,20 @@ import { isoDate, dayLabelBn } from './lib/bn'
 import { tf } from './lib/i18n'
 import type { Draft } from './lib/draft'
 
-/* Every place he can be. The home screen is the shelf; the three books
-   (work, shop, money) each open onto their own screen, and "all" is the
-   exploded view of every single thing the app can do — one tap from home. The
-   master-edit pages (projects, workers, items…) are reachable both from
-   inside the book they belong to and from that exploded view, so he never
-   goes to a different place to edit a thing than the place he adds it. */
+/* Four tabs along the bottom (ui/TabBar.tsx) and, over them, a stack of screens opened from a tab: today's
+   entry, Settings, an old day, the price of a new job. Back closes the top screen; with none open it goes
+   to আজ; from আজ it leaves the app. A sheet or a step inside a screen claims Back first (lib/back.ts). */
+export type { Tab }
 export type Screen =
-  | 'home' | 'day' | 'work' | 'money' | 'all'
-  | 'shop' | 'personal' | 'estimate' | 'settings' | 'history' | 'payments'
+  | 'day' | 'estimate' | 'settings' | 'history' | 'personal' | 'fullcount'
   | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'enquiries'
 
-/* Five stops, in the order he will use them. Kept short on purpose: a tour
-   he skips teaches nothing, and the app is meant to be obvious without one. */
+/* Three stops, one sentence each, in the order he will use them. A stop whose control is not on the screen
+   (nobody owes him yet) is skipped. */
 export const HOME_TOUR: Stop[] = [
-  {
-    target: 'today',
-    title: 'রোজ শুধু এইটুকু',
-    body: 'দিনের শেষে এখানে চাপুন। কে এসেছিল, কত মজুরি, কী মাল এল — কয়েকটা প্রশ্ন, তারপর শেষ। বাকি সব হিসাব এখান থেকেই নিজে থেকে তৈরি হয়।',
-    place: 'below',
-  },
-  {
-    target: 'brief',
-    title: 'রাতে হিসাব দেখে নেওয়া হয়',
-    body: 'আপনি ঘুমোলে রাতে সব হিসাব মিলিয়ে দেখা হয়, আর সকালে এখানে এক লাইনে লেখা থাকে কোনটায় আজ নজর দেওয়া দরকার। নিচে সেই কথাগুলোই বড় করে থাকে।',
-    place: 'below',
-  },
-  {
-    target: 'books',
-    title: 'তিনটে খাতা এক পাতায়',
-    body: 'কাজ, মজুত আর হিসাব — তিনটেরই মূল কথা এই পাতাতেই দেখা যায়। বিশদ দেখতে বা কিছু বদলাতে চাইলে ‘দেখুন’-এ চাপুন, ভিতরে সব একসাথে পাবেন।',
-    place: 'above',
-  },
-  {
-    target: 'standing',
-    title: 'নিচে সব সময় তিনটে সংখ্যা',
-    body: 'হাতে কত আছে, কত পাবেন, কত দেবেন — যে পাতাতেই থাকুন, নিচে এই তিনটে দেখা যাবে। চাপলে কে কত, তার তালিকা খুলবে।',
-    place: 'above',
-  },
-  {
-    target: 'all',
-    title: 'সব কিছু এক জায়গায়',
-    body: 'অ্যাপের প্রতিটা কাজ — মাল, লোক, দোকান, দর, ব্যাকআপ, ভাষা — এই একটা বোতামের ভিতরে সাজানো আছে। যা খুঁজছেন, এখানে চাপলেই পাবেন।',
-    place: 'above',
-  },
+  { target: 'today', title: 'রোজ শুধু এইটুকু', body: 'রোজ সন্ধেবেলা এখানে চাপুন।', place: 'below' },
+  { target: 'tabs', title: 'চারটে ঘর', body: 'নিচে চারটে ঘর: আজ, কাজ, দোকান, টাকা।', place: 'above' },
+  { target: 'owed', title: 'টাকা পাবেন', body: 'কে কত টাকা দেবে, এখানে। ফোন এক চাপে।', place: 'above' },
 ]
 
 export function App() {
@@ -75,22 +45,19 @@ export function App() {
   const settings = state.settings
   const needsSetup = ready && !settings.onboarded && activeProjects(state).length === 0 && allWorkers(state).length === 0
 
-  /* A small stack instead of a single screen, so going into লোকজন from কাজ
-     and pressing back lands on কাজ, not all the way home. The top of the
-     stack is what is drawn; home is always the floor. */
-  const [stack, setStack] = useState<Screen[]>(['home'])
+  const tabs: Tab[] = ['today', ...(settings.runs_sites ? ['work' as Tab] : []), ...(settings.runs_shop ? ['shop' as Tab] : []), 'money']
+  const [tabRaw, setTab] = useState<Tab>('today')
+  const tab = tabs.includes(tabRaw) ? tabRaw : 'today'
+  const [stack, setStack] = useState<Screen[]>([])
   const screen = stack[stack.length - 1]
   const push = useCallback((s: Screen) => setStack((v) => [...v, s]), [])
-  const pop = useCallback(() => setStack((v) => (v.length > 1 ? v.slice(0, -1) : v)), [])
-  const goHome = useCallback(() => { setStack(['home']); setDraft(null) }, [])
-
+  const pop = useCallback(() => setStack((v) => v.slice(0, -1)), [])
   const [draft, setDraft] = useState<Draft | null>(null)
+  const goTab = useCallback((t: Tab) => { setTab(t); setStack([]); setDraft(null) }, [])
   const toast = useToast()
 
-  /* The walk round runs once, the first time he lands on a set-up home
-     screen. It waits for the paint before it starts measuring, because a
-     spotlight drawn against a half-laid-out screen points at nothing.
-     showTour is also what Settings flips to run it again on demand. */
+  /* The walk round runs once, the first time he lands on a set-up home screen, after the paint. showTour is
+     also what Settings flips to run it again on demand. */
   const [showTour, setShowTour] = useState(false)
   useEffect(() => {
     if (!ready || needsSetup || settings.toured) return
@@ -98,16 +65,15 @@ export function App() {
     return () => clearTimeout(timer)
   }, [ready, needsSetup, settings.toured])
 
-  /* Settings asks for it again by clearing the flag; this picks that up and
-     sends him home, because every stop on the tour is on the home screen. */
+  /* Settings asks for it again by clearing the flag; every stop is on আজ, so it goes there. */
   useEffect(() => {
     if (settings.toured || !ready || needsSetup) return
-    if (screen !== 'home') goHome()
+    goTab('today')
   }, [settings.toured]) // eslint-disable-line
 
   useEffect(() => { startSyncLoop() }, [])
 
-  /* A reminder that names a screen opens it: the Monday "who owes you" note lands on পাবেন. */
+  /* A reminder that names a screen opens it: 8 am → আজ, 8 pm → today's entry, dues → টাকা. */
   useEffect(() => {
     let remove: (() => void) | undefined
     void (async () => {
@@ -115,20 +81,17 @@ export function App() {
         const { LocalNotifications } = await import('@capacitor/local-notifications')
         const h = await LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
           const to = a.notification.extra?.screen
-          if (to === 'payments') setStack(['home', 'money', 'payments'])
-          else if (to === 'day') { setDraft(null); setStack(['home', 'day']) }
-          else if (to === 'home') setStack(['home'])
+          if (to === 'payments') goTab('money')
+          else if (to === 'day') { setTab('today'); setDraft(null); setStack(['day']) }
+          else if (to === 'home') goTab('today')
         })
         remove = () => void h.remove()
       } catch { /* browser */ }
     })()
     return () => remove?.()
-  }, [])
+  }, [goTab])
 
-  /* Look for a newer build every time the app is opened, and again whenever it
-     comes back to the foreground — he asked for this rather than the quiet
-     twice-a-day check. The answer is parked in the store; the card on the home
-     screen renders it. Off a phone it finds nothing and shows nothing. */
+  /* Look for a newer build every time the app is opened, and again whenever it comes back to the front. */
   useEffect(() => {
     void refreshUpdate()
     let remove: (() => void) | undefined
@@ -142,18 +105,15 @@ export function App() {
     return () => remove?.()
   }, [])
 
-  /* Reminders are rebuilt whenever the ledger changes — a bill paid this
-     evening must not nag him tomorrow morning. Cheap: it cancels ours and
-     schedules what the current dues say. */
+  /* Reminders are rebuilt whenever the ledger, the switches or the brief change — a bill paid this evening
+     must not nag him tomorrow, and the 8 am note carries the latest lines. Cheap: cancel ours, plan afresh. */
   const entryCount = state.entries.length
-  // Not skipped when payment reminders are off: the 8 pm "today is not written" nudge is planned here too.
   useEffect(() => {
     if (!ready || needsSetup) return
     void reschedule()
-  }, [ready, needsSetup, entryCount, settings.remind, settings.onboarded, settings.notify_morning, settings.notify_evening, settings.notify_monday, state.brief?.generated_at]) // the 8 am note carries the latest brief
+  }, [ready, needsSetup, entryCount, settings.remind, settings.onboarded, settings.notify_morning, settings.notify_evening, settings.notify_monday, state.brief?.generated_at])
 
-  /* theme and text size follow the settings, and the Android status bar
-     follows the theme so the top of the screen never looks borrowed. */
+  /* theme and text size follow the settings, and the Android status bar follows the theme. */
   useEffect(() => {
     const root = document.documentElement
     if (settings.theme === 'system') root.removeAttribute('data-theme')
@@ -171,73 +131,75 @@ export function App() {
 
   const openDay = useCallback((d: Draft | null) => { setDraft(d); push('day') }, [push])
 
-  /* Android's back button must behave like the back arrow, not like a way to
-     lose half an entry. */
+  /* Back, innermost first: a sheet or a step claims it; then the top screen closes; then any tab but আজ goes
+     to আজ; only from আজ does it leave the app. Kept in a ref so the phone's listener always reads it fresh. */
+  const shellBack = useRef<() => boolean>(() => false)
+  shellBack.current = () => {
+    if (goBack()) return true
+    if (stack.length) { if (screen === 'day') setDraft(null); pop(); return true }
+    if (tab !== 'today') { setTab('today'); return true }
+    return false
+  }
   useEffect(() => {
     let remove: (() => void) | undefined
     void (async () => {
       try {
         const { App: CapApp } = await import('@capacitor/app')
-        const h = await CapApp.addListener('backButton', () => {
-          /* Innermost first: a sheet, a wizard step, a settings sub-page.
-             Only when nothing claims the press does it mean "go back one
-             screen", and only from home does it mean "leave the app". */
-          if (goBack()) return
-          if (stack.length > 1) { setDraft(null); pop() }
-          else void CapApp.exitApp()
-        })
+        const h = await CapApp.addListener('backButton', () => { if (!shellBack.current()) void CapApp.exitApp() })
         remove = () => void h.remove()
       } catch { /* browser */ }
     })()
+    // The screen checks press the same Back the phone's button does.
+    if (import.meta.env.DEV) (window as unknown as { __shellBack: () => boolean }).__shellBack = () => shellBack.current()
     return () => remove?.()
-  }, [stack.length, pop])
+  }, [])
 
   if (!ready) return <div className="app" />
 
   if (needsSetup) {
     return (
       <div className="app" data-screen="setup">
-        <Onboarding onDone={() => toast.show('শুরু হল — এবার আজকের হিসাব লিখুন')} />
+        <Onboarding onDone={() => toast.show('সব তৈরি — সন্ধেবেলা আজকের হিসাব লিখবেন')} />
         {toast.msg && <Toast text={toast.msg} />}
       </div>
     )
   }
 
-  const back = () => { setDraft(null); pop() }
+  const back = () => { if (screen === 'day') setDraft(null); pop() }
 
   return (
-    <div className="app" data-screen="main">
-      {screen === 'home' && (
-        <Home
-          onDay={() => openDay(null)}
-          onGo={push}
-        />
-      )}
-      {screen === 'work' && <Work onBack={back} onGo={push} />}
-      {screen === 'money' && <Money onBack={back} onGo={push} />}
-      {screen === 'all' && <AllFeatures onBack={back} onGo={push} />}
-      {screen === 'day' && (
-        <DayWizard start={draft} onExit={(saved, date) => { goHome(); if (saved) toast.show(!date || date === isoDate() ? 'আজকের হিসাব লেখা হল' : tf('{0}-এর হিসাব লেখা হল', dayLabelBn(date))) }} />
-      )}
-      {screen === 'shop' && <Shop onBack={back} onGo={push} />}
-      {screen === 'personal' && <Personal onBack={back} />}
-      {screen === 'estimate' && <Estimator onBack={back} />}
-      {screen === 'settings' && <Settings onBack={back} />}
-      {screen === 'history' && <History onBack={back} onEnterDate={(d) => openDay(d)} />}
-      {screen === 'payments' && <Payments onBack={back} />}
-      {screen === 'projects' && <ProjectsPage s={state} onBack={back} />}
-      {screen === 'workers' && <WorkersPage s={state} onBack={back} />}
-      {screen === 'items' && <ItemsPage s={state} onBack={back} />}
-      {screen === 'parties' && <PartiesPage s={state} onBack={back} />}
-      {screen === 'stages' && <StagesPage s={state} onBack={back} />}
-      {screen === 'cash' && <CashPage s={state} onBack={back} />}
-      {screen === 'enquiries' && <Enquiries onBack={back} />}
-      {/* Only once, only on the home screen, and only after setup — a tour
-          that opens over a half-finished form is worse than none. */}
-      {screen === 'home' && showTour && (
-        <Tour stops={HOME_TOUR} onDone={() => { setShowTour(false); void saveSettings({ toured: true }) }} />
-      )}
-      {toast.msg && <Toast text={toast.msg} />}
-    </div>
+    <TabCtx.Provider value={{ tab, tabs, go: goTab }}>
+      <div className="app" data-screen="main">
+        {!screen && tab === 'today' && <Home onDay={() => openDay(null)} onGo={push} onTab={goTab} />}
+        {!screen && tab === 'work' && <Work onGo={push} />}
+        {!screen && tab === 'shop' && <Shop onGo={push} />}
+        {!screen && tab === 'money' && <Money onGo={push} />}
+
+        {screen === 'day' && (
+          <DayWizard start={draft} onExit={(saved, date) => {
+            setDraft(null); setStack([]); setTab('today')
+            if (saved) toast.show(!date || date === isoDate() ? 'আজকের হিসাব লেখা হল' : tf('{0}-এর হিসাব লেখা হল', dayLabelBn(date)))
+          }} />
+        )}
+        {screen === 'fullcount' && <StockCount s={state} onDone={(msg) => { pop(); if (msg) toast.show(msg) }} />}
+        {screen === 'personal' && <Personal onBack={back} />}
+        {screen === 'estimate' && <Estimator onBack={back} />}
+        {screen === 'settings' && <Settings onBack={back} />}
+        {screen === 'history' && <History onBack={back} onEnterDate={(d) => openDay(d)} />}
+        {screen === 'projects' && <ProjectsPage s={state} onBack={back} />}
+        {screen === 'workers' && <WorkersPage s={state} onBack={back} />}
+        {screen === 'items' && <ItemsPage s={state} onBack={back} />}
+        {screen === 'parties' && <PartiesPage s={state} onBack={back} />}
+        {screen === 'stages' && <StagesPage s={state} onBack={back} />}
+        {screen === 'cash' && <CashPage s={state} onBack={back} />}
+        {screen === 'enquiries' && <Enquiries onBack={back} />}
+
+        {/* Only once, only on আজ, and only after setup — a tour over a half-finished form is worse than none. */}
+        {!screen && tab === 'today' && showTour && (
+          <Tour stops={HOME_TOUR} onDone={() => { setShowTour(false); void saveSettings({ toured: true }) }} />
+        )}
+        {toast.msg && <Toast text={toast.msg} />}
+      </div>
+    </TabCtx.Provider>
   )
 }

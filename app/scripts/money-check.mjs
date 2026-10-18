@@ -48,6 +48,7 @@ async function fresh(extra = {}) {
 }
 
 const tap = (page, text, exact = false) => page.getByText(text, { exact }).first().click()
+const tabBtn = (page, name) => page.locator('.tabbar button', { hasText: name })
 const pad = async (page, digits) => { for (const d of digits) await page.locator('.pad button', { hasText: d }).first().click() }
 /** Figures straight from the phone's own book. */
 const book = (page) => page.evaluate(async () => {
@@ -256,15 +257,15 @@ const quietJob = async (page) => {
 {
   const { ctx, page } = await fresh({ shop: true })
   await step('sheet: an empty sheet closes on a tap outside it', page, async () => {
-    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
-    await tap(page, 'পুরোনো বাকি', true)
+    await tabBtn(page, 'টাকা').click()
+    await tap(page, 'কাগজের খাতার পুরোনো বাকি', true)
     await page.locator('.sheet').waitFor({ timeout: 3000 })
     await page.mouse.click(12, 12)
     await page.waitForTimeout(300)
     if (await page.locator('.sheet').count()) throw new Error('the empty sheet stayed open')
   })
   await step('sheet: a sheet with a name typed in stays open on a stray tap', page, async () => {
-    await tap(page, 'পুরোনো বাকি', true)
+    await tap(page, 'কাগজের খাতার পুরোনো বাকি', true)
     await tap(page, '+ নতুন', true)
     await page.locator('.sheet input.input').first().fill('নাম লেখা হয়েছে')
     await page.mouse.click(12, 12)
@@ -290,31 +291,68 @@ const quietJob = async (page) => {
   await ctx.close()
 }
 
-/* ---- D7: a calm home screen, and a help button ---- */
+/* ---- four tabs along the bottom, and a quiet home with who owes him ---- */
 {
-  const { ctx, page } = await fresh()
-  await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ helper_name: 'অমল', helper_phone: '90000 11111' }))
+  const { ctx, page } = await fresh({ shop: true })
+  await page.evaluate(async () => {
+    const m = await import('/src/lib/store.ts'); const db = await import('/src/lib/db.ts')
+    const now = new Date().toISOString()
+    await m.saveMaster({ id: 'c2', kind: 'party', name_bn: 'দত্তবাবু', ptype: 'client', terms_days: 0, phone: '98300 12345', updated_at: now })
+    await m.saveMaster({ id: 'c3', kind: 'party', name_bn: 'পাল মশাই', ptype: 'client', terms_days: 0, phone: '', updated_at: now })
+    await m.saveMaster({ id: 'c4', kind: 'party', name_bn: 'বসু', ptype: 'client', terms_days: 0, phone: '', updated_at: now })
+    const row = (id, party, amount) => ({ id, kind: 'stock', batch: db.uid(), date: '2026-09-20', project_id: '', created_at: now, item_id: '', dir: 'opening_get', qty: 0, rate: 0, amount, party_id: party, due_date: '', paid: false, photo_id: '' })
+    await m.saveEntries([row('o1', 'c1', 500), row('o2', 'c2', 12000), row('o3', 'c3', 3500), row('o4', 'c4', 800)])
+    await m.saveSettings({ helper_name: 'অমল', helper_phone: '90000 11111' })
+  })
   await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
-  await step('home: each book is one plain line, no bars', page, async () => {
-    if (await page.locator('.bookcard .barrow').count()) throw new Error('progress bars are still on the home screen')
-    const work = await page.locator('.bookcard', { hasText: 'কাজ' }).first().innerText()
-    if (!work.includes('১ কাজ চলছে') || !work.includes('রায়বাড়ি')) throw new Error('the কাজ line reads: ' + work.replace(/\n+/g, ' | '))
+  const tabNames = async () => (await page.locator('.tabbar button').allInnerTexts()).map((x) => x.trim()).join(' ')
+  await step('tabs: four along the bottom', page, async () => {
+    const names = await tabNames()
+    if (names !== 'আজ কাজ দোকান টাকা') throw new Error('the tabs read: ' + names)
+    if (!(await page.locator('.tabbar button.on', { hasText: 'আজ' }).count())) throw new Error('আজ is not the tab shown first')
   })
-  await step('home: the sync line has moved to Settings', page, async () => {
-    if (await page.getByText('শুধু ফোনে রাখা হচ্ছে').count()) throw new Error('the sync line is still on home')
-    await page.getByLabel('সেটিংস').click()
-    await page.getByText('শুধু ফোনে রাখা হচ্ছে').first().waitFor({ timeout: 3000 })
-    await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
+  await step('tabs: Back from কাজ lands on আজ', page, async () => {
+    await tabBtn(page, 'কাজ').click()
+    await page.locator('.tabbar button.on', { hasText: 'কাজ' }).waitFor({ timeout: 3000 })
+    await page.evaluate(() => window.__shellBack())
+    await page.locator('.tabbar button.on', { hasText: 'আজ' }).waitFor({ timeout: 3000 })
   })
-  await step('home: সাহায্য offers a call to the helper', page, async () => {
-    await tap(page, 'সাহায্য', true)
-    await page.getByText('অমল কে ফোন করুন').first().waitFor({ timeout: 3000 })
-    const tel = await page.locator('.sheet a[href^="tel:"]').first().getAttribute('href')
-    if (tel !== 'tel:+919000011111') throw new Error('call link: ' + tel)
+  await step('home: the three largest who owe him, each with a call where there is a number', page, async () => {
+    const rows = await page.locator('[data-tour="owed"] .owedrow').allInnerTexts()
+    const names = rows.map((r) => r.split('\n')[0].trim()).join(',')
+    if (names !== 'দত্তবাবু,পাল মশাই,বসু') throw new Error('the owed list reads: ' + names)
+    const tel = await page.locator('[data-tour="owed"] a[href^="tel:"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
+    if (tel.join() !== 'tel:+919830012345') throw new Error('call links: ' + tel.join(' '))
   })
-  await step('home: every stop of the walk round still has its place', page, async () => {
-    await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
-    for (const tgt of ['today', 'brief', 'books', 'standing', 'all']) if (!(await page.locator(`[data-tour="${tgt}"]`).count())) throw new Error('no tour target ' + tgt)
+  await step('home: সবাইকে দেখুন opens the টাকা tab', page, async () => {
+    await tap(page, 'সবাইকে দেখুন')
+    await page.locator('.tabbar button.on', { hasText: 'টাকা' }).waitFor({ timeout: 3000 })
+    await tabBtn(page, 'আজ').click()
+  })
+  await step('home: the help line calls the helper', page, async () => {
+    const help = page.locator('a[href="tel:+919000011111"]')
+    if (!(await help.count())) throw new Error('no call link to the helper')
+    if (!(await help.first().innerText()).includes('অমল')) throw new Error('the help line does not name the helper')
+  })
+  await step('home: the old blocks are gone', page, async () => {
+    for (const sel of ['.bookcard', '.footbar']) if (await page.locator(sel).count()) throw new Error(sel + ' is still on home')
+    for (const w of ['সব কিছু', 'নজর দেওয়ার মতো', 'কালকের মতোই']) if (await page.getByText(w, { exact: true }).count()) throw new Error(w + ' is still on home')
+  })
+  await step('home: the first-count card goes away for a week on পরে', page, async () => {
+    await page.getByText('দোকানের মাল একবার গুনে লিখুন').waitFor({ timeout: 3000 })
+    await tap(page, 'পরে', true)
+    await page.waitForTimeout(300)
+    if (await page.getByText('দোকানের মাল একবার গুনে লিখুন').count()) throw new Error('the card is still there')
+    await page.reload(); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
+    if (await page.getByText('দোকানের মাল একবার গুনে লিখুন').count()) throw new Error('the card came back after a reload')
+    const until = await page.evaluate(async () => { const m = await import('/src/lib/store.ts'); const bn = await import('/src/lib/bn.ts'); return m.getState().settings.count_later_until === bn.addDays(bn.isoDate(), 7) })
+    if (!until) throw new Error('it should come back in a week')
+  })
+  await step('tabs: with no shop there are three', page, async () => {
+    await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ runs_shop: false }))
+    await page.reload(); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
+    const names = await tabNames()
+    if (names !== 'আজ কাজ টাকা') throw new Error('the tabs read: ' + names)
   })
   await ctx.close()
 }
@@ -380,8 +418,8 @@ const quietJob = async (page) => {
 {
   const { ctx, page } = await fresh({ shop: true })
   const openCount = async () => {
-    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
-    await tap(page, 'পুরো মজুত একবারে')
+    await tabBtn(page, 'দোকান').click()
+    await tap(page, 'পুরো দোকান গোনা')
     await page.locator('input.input').first().waitFor({ timeout: 3000 })
   }
   const addRow = async (search, name, qty, rate) => {
@@ -418,6 +456,12 @@ const quietJob = async (page) => {
     if (r.counts !== 2) throw new Error(r.counts + ' count rows, not 2')
     if (!r.pipe || r.pipe.qty !== 50 || r.pipe.value !== 20000) throw new Error('pipe: ' + JSON.stringify(r.pipe))
     if (!r.pvc || r.pvc.qty !== 20) throw new Error('catalogue pipe: ' + JSON.stringify(r.pvc))
+  })
+  await step('count: once the shop is counted, home stops asking for it', page, async () => {
+    const at = await page.evaluate(async () => (await import('/src/lib/store.ts')).getState().settings.full_count_at)
+    if (!at) throw new Error('the full count was not marked done')
+    await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
+    if (await page.getByText('দোকানের মাল একবার গুনে লিখুন').count()) throw new Error('home still asks for the first count')
   })
   await ctx.close()
 }
@@ -514,7 +558,7 @@ const quietJob = async (page) => {
 {
   const { ctx, page } = await fresh()
   await step('হিসাব: "টাকা পেলাম" by UPI counts for the job, not in the cash box', page, async () => {
-    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
+    await tabBtn(page, 'টাকা').click()
     await tap(page, 'টাকা পেলাম')
     await page.getByText('কোন কাজের টাকা?').waitFor({ timeout: 3000 })
     await pad(page, ['২', '০', '০', '০'])
@@ -544,16 +588,16 @@ const toWho = async (page, tile, qty, rate) => {
 {
   const { ctx, page } = await fresh({ shop: true })
   await step('shop: a customer can be given credit days, like a supplier', page, async () => {
-    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
-    await toWho(page, 'মাল ধরে বিক্রি', ['২'], ['১', '০', '০'])
+    await tabBtn(page, 'দোকান').click()
+    await toWho(page, 'মাল বিক্রি', ['২'], ['১', '০', '০'])
     await tap(page, '+ নতুন', true)
     await page.getByText('কত দিনে টাকা দেয় (না জানলে ০)').waitFor({ timeout: 3000 })
     await page.locator('.sheet .iconbtn, .sheet [aria-label="বন্ধ করুন"]').first().click().catch(() => page.keyboard.press('Escape'))
   })
   await step('shop: a credit sale to a customer with no agreed days falls due in a week', page, async () => {
     await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
-    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
-    await toWho(page, 'মাল ধরে বিক্রি', ['২'], ['১', '০', '০'])
+    await tabBtn(page, 'দোকান').click()
+    await toWho(page, 'মাল বিক্রি', ['২'], ['১', '০', '০'])
     await tap(page, 'হালদার', true)
     await tap(page, 'না, বাকি')
     await page.getByText('কবে দেবে?').waitFor({ timeout: 3000 })
@@ -563,7 +607,7 @@ const toWho = async (page, tile, qty, rate) => {
     if (r.due !== r.in7) throw new Error('due ' + r.due + ', not ' + r.in7)
   })
   await step('shop: a credit purchase cannot be saved without a supplier', page, async () => {
-    await toWho(page, 'মাল এসেছে', ['৫'], ['৮', '০'])
+    await toWho(page, 'মাল এল', ['৫'], ['৮', '০'])
     await tap(page, 'না, বাকি')
     if (await page.locator('.actionbar .btn.primary').isEnabled()) throw new Error('a credit purchase with no supplier could be saved')
   })
@@ -589,13 +633,13 @@ const listText = (page) => page.locator('.scroll').first().innerText()
 {
   const { ctx, page } = await fresh({ shop: true })
   await step('shop: the two ways of selling say what they do', page, async () => {
-    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
-    await page.getByText('মাল ধরে বিক্রি').first().waitFor({ timeout: 3000 })
-    await page.getByText('শুধু টাকার হিসাব — বাকিতে দিলাম').first().waitFor({ timeout: 3000 })
+    await tabBtn(page, 'দোকান').click()
+    await page.getByText('মাল বিক্রি').first().waitFor({ timeout: 3000 })
+    await page.getByText('বাকিতে দিলাম').first().waitFor({ timeout: 3000 })
   })
   await step('shop: "বাকিতে দিলাম" ₹800 to a customer, due in a fortnight, moves no stock', page, async () => {
     const before = await page.evaluate(async () => { const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts'); const s = m.getState(); return JSON.stringify(c.shopStock(s.entries, m.items(s))) })
-    await tap(page, 'শুধু টাকার হিসাব — বাকিতে দিলাম')
+    await tap(page, 'বাকিতে দিলাম')
     if (await page.locator('.actionbar .btn.primary').isEnabled()) throw new Error('could be saved with no customer and no amount')
     await tap(page, 'হালদার', true)
     await pad(page, ['৮', '০', '০'])
@@ -607,8 +651,7 @@ const listText = (page) => page.locator('.scroll').first().innerText()
     const after = await page.evaluate(async () => { const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts'); const s = m.getState(); return JSON.stringify(c.shopStock(s.entries, m.items(s))) })
     if (after !== before) throw new Error('the shelf changed: ' + before + ' → ' + after)
     await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
-    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
-    await tap(page, 'টাকা দেওয়া-নেওয়া')
+    await tabBtn(page, 'টাকা').click()
     const txt = await listText(page)
     if (!txt.includes('হালদার') || !txt.includes('৮০০')) throw new Error('পাবেন does not show ₹800 from হালদার')
   })
@@ -627,8 +670,7 @@ const listText = (page) => page.locator('.scroll').first().innerText()
       const row = (id, party, amount) => ({ id, kind: 'stock', batch: db.uid(), date: '2026-09-01', project_id: '', created_at: now, item_id: '', dir: 'opening_get', qty: 0, rate: 0, amount, party_id: party, due_date: '2026-09-15', paid: false, photo_id: '' })
       await m.saveEntries([row('o1', 'c2', 12500), row('o2', 'c1', 800)])
     })
-    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
-    await tap(page, 'টাকা দেওয়া-নেওয়া')
+    await tabBtn(page, 'টাকা').click()
     const tel = await page.locator('a[href^="tel:"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
     if (!tel.includes('tel:+919830012345')) throw new Error('no call link: ' + tel.join(' '))
     const wa = await page.locator('a[href^="https://wa.me/"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
@@ -688,9 +730,8 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   const { ctx, page } = await fresh()
   await step('new job: contract, stage now and received so far are all written', page, async () => {
     await page.evaluate(async () => { await (await import('/src/lib/seed.ts')).seedHouse([]) })
-    await page.locator('.bookcard', { hasText: 'কাজ' }).first().click()
-    await tap(page, 'কাজ যোগ করা, বদলানো')
-    await page.getByLabel('নতুন').click()
+    await tabBtn(page, 'কাজ').click()
+    await tap(page, '+ নতুন কাজ')
     await page.locator('.sheet .field', { hasText: 'কাজের নাম' }).locator('input').fill('নতুন সাইট')
     await pad(page, ['১', '০', '০', '০', '০', '০', '০'])
     await tap(page, 'প্লিন্থ ঢালাই', true)
@@ -722,7 +763,7 @@ const listText = (page) => page.locator('.scroll').first().innerText()
       await m.saveEntries([{ id: db.uid(), kind: 'money', batch: db.uid(), date: (await import('/src/lib/bn.ts')).isoDate(), project_id: 'p1', created_at: new Date().toISOString(), head_bn: 'ঠিকা কাজ', dir: 'paid', amount: 50000, party_id: '', mode: 'নগদ', note: '', personal: false, photo_id: '' }])
       return !!(await import('/src/lib/brief.ts')).localBrief().series?.scurve
     })
-    await page.locator('.bookcard', { hasText: 'কাজ' }).first().click()
+    await tabBtn(page, 'কাজ').click()
     await page.getByText('হাতে থাকল').first().waitFor({ timeout: 3000 })
     const card = await page.locator('.jobcard').first().innerText()
     for (const w of ['চুক্তি', '১০,০০,০০০', 'পেয়েছেন', '২,০০,০০০', 'খরচ', '৫০,০০০', 'হাতে থাকল', '১,৫০,০০০', 'প্লিন্থ ঢালাই']) {
@@ -773,8 +814,8 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   }
   const partyOf = (dir) => page.evaluate(async (dir) => (await import('/src/lib/store.ts')).getState().entries.filter((e) => e.kind === 'stock' && e.dir === dir).pop()?.party_id, dir)
   await step('people: "বাকিতে দিলাম" can reach the tenth customer', page, async () => {
-    await page.locator('.bookcard', { hasText: 'মজুত' }).first().click()
-    await tap(page, 'শুধু টাকার হিসাব — বাকিতে দিলাম')
+    await tabBtn(page, 'দোকান').click()
+    await tap(page, 'বাকিতে দিলাম')
     await pickTenth()
     await pad(page, ['৫', '০', '০'])
     await page.locator('.actionbar .btn.primary').click()
@@ -782,7 +823,7 @@ const listText = (page) => page.locator('.scroll').first().innerText()
     if ((await partyOf('sale')) !== 'cc10') throw new Error('sold to ' + (await partyOf('sale')))
   })
   await step('people: a sale of goods can reach the tenth customer', page, async () => {
-    await toWho(page, 'মাল ধরে বিক্রি', ['১'], ['১', '০', '০'])
+    await toWho(page, 'মাল বিক্রি', ['১'], ['১', '০', '০'])
     await pickTenth()
     await tap(page, 'হ্যাঁ', true)
     await page.locator('.actionbar .btn.primary').click()
@@ -791,8 +832,8 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   })
   await step('people: an old balance can reach the tenth customer', page, async () => {
     await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
-    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
-    await tap(page, 'পুরোনো বাকি', true)
+    await tabBtn(page, 'টাকা').click()
+    await tap(page, 'কাগজের খাতার পুরোনো বাকি', true)
     await tap(page, 'উনি আমাকে দেবেন')
     await pickTenth()
     await pad(page, ['৯', '০', '০'])
@@ -807,9 +848,8 @@ const listText = (page) => page.locator('.scroll').first().innerText()
 {
   const { ctx, page } = await fresh({ shop: true })
   await step('old dues: "উনি আমাকে দেবেন" ₹5,000 from a new person, since two months', page, async () => {
-    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
-    await tap(page, 'টাকা দেওয়া-নেওয়া')
-    await tap(page, '+ পুরোনো বাকি')
+    await tabBtn(page, 'টাকা').click()
+    await tap(page, 'কাগজের খাতার পুরোনো বাকি', true)
     await tap(page, 'উনি আমাকে দেবেন')
     await tap(page, '+ নতুন', true)
     await page.locator('.sheet input.input').first().fill('পুরোনো খদ্দের')
@@ -835,7 +875,7 @@ const listText = (page) => page.locator('.scroll').first().innerText()
     if (!txt.includes('৩,০০০')) throw new Error('not ₹3,000 left: ' + txt.slice(0, 200))
   })
   await step('old dues: "আমি ওনাকে দেব" ₹1,200 to a shop shows in দেবেন', page, async () => {
-    await tap(page, '+ পুরোনো বাকি')
+    await tap(page, 'কাগজের খাতার পুরোনো বাকি', true)
     await tap(page, 'আমি ওনাকে দেব')
     await tap(page, 'শর্মা', true)
     await pad(page, ['১', '২', '০', '০'])
@@ -844,12 +884,12 @@ const listText = (page) => page.locator('.scroll').first().innerText()
     const r = await lastRow(page, 'opening_owe')
     if (!r || r.amount !== 1200 || r.party_id !== 's1' || r.due_date !== r.in15) throw new Error('row: ' + JSON.stringify(r))
     const txt = await listText(page)
-    if (!txt.includes('যাদের দিতে হবে') || !txt.includes('১,২০০')) throw new Error('দেবেন does not show ₹1,200')
+    if (!txt.includes('টাকা দেবেন') || !txt.includes('১,২০০')) throw new Error('দেবেন does not show ₹1,200')
   })
   await step("old dues: they are not this month's spending", page, async () => {
     await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
-    await page.locator('.bookcard', { hasText: 'হিসাব' }).first().click()
-    const spend = await page.locator('.stat', { hasText: 'এ মাসের খরচ' }).innerText()
+    await tabBtn(page, 'টাকা').click()
+    const spend = await page.locator('.topbar .sub').innerText()
     if (!spend.includes('₹০')) throw new Error('month spend: ' + spend)
     const txt = await listText(page)
     if (!txt.includes('পুরোনো বাকি')) throw new Error('the dues list does not name the old balance')

@@ -612,3 +612,78 @@ textarea.input { min-height: 5rem; resize: none; }
 .todo { display: flex; gap: .7rem; align-items: baseline; padding: .55rem 0; border-bottom: 1px solid var(--line-soft); line-height: 1.45; }
 .todo:last-child { border-bottom: 0; }
 .todo .n { font-weight: 700; color: var(--accent); min-width: 1rem; }
+
+/* ---------- the four tabs (build 27) ----------
+   Along the bottom, like WhatsApp's: a mark and a word each, the open one in the accent with a soft pill
+   behind its mark. Fixed height and thumb-sized, clear of the phone's own gesture bar. */
+.tabbar {
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  background: var(--surface); border-top: 1px solid var(--line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.tabbar button {
+  background: none; border: 0; color: var(--muted); min-height: 3.9rem;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: .15rem;
+  font-size: .82rem; font-weight: 600; padding: .35rem 0 .45rem;
+}
+.tabbar button .ti { display: grid; place-items: center; width: 3.6rem; height: 1.9rem; border-radius: 999px; }
+.tabbar button.on { color: var(--accent); }
+.tabbar button.on .ti { background: var(--accent-bg); }
+.tabbar button:active .ti { background: var(--sunk); }
+
+/* আজ: the day's few lines, set as the first thing to read. */
+.say { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .9rem 1rem; margin: 1rem 0 .9rem; }
+.say .saylabel { display: block; font-size: .8rem; font-weight: 600; color: var(--muted); letter-spacing: .02em; }
+.say .headline { font-size: 1.18rem; font-weight: 600; line-height: 1.45; margin: .25rem 0 0; }
+
+/* Who owes him: name and since when, the amount, and a round call button. */
+.owedrow {
+  display: flex; align-items: center; gap: .7rem; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--radius); padding: .65rem .8rem; min-height: var(--tap);
+}
+.owedrow + .owedrow { margin-top: .5rem; }
+.owedrow .who { flex: 1; min-width: 0; }
+.owedrow .who .t { display: block; font-weight: 600; font-size: 1.04rem; }
+.owedrow .who .s { display: block; font-size: .8rem; color: var(--muted); }
+.owedrow .v { font-weight: 650; white-space: nowrap; }
+.owedrow .call {
+  width: 2.7rem; height: 2.7rem; border-radius: 50%; display: grid; place-items: center; flex: none;
+  background: var(--accent-bg); color: var(--accent);
+}
+.owedrow .call.none { background: none; }
+
+/* A soft card: something worth doing, never an alarm — the first count, website enquiries, missed days. */
+.softcard {
+  width: 100%; text-align: left; display: flex; flex-direction: column; gap: .25rem;
+  background: var(--accent-bg); color: var(--ink); border: 0; border-radius: var(--radius);
+  padding: .85rem 1rem; margin-top: .9rem;
+}
+.softcard strong { font-size: 1rem; font-weight: 600; }
+.softcard > span { font-size: .86rem; color: var(--ink-2); }
+.softcard .pair { display: flex; gap: .5rem; margin-top: .45rem; }
+.softcard .pair .btn { flex: 0 0 auto; }
+
+.helpline {
+  display: flex; align-items: center; justify-content: center; gap: .45rem; margin: 1.4rem 0 .6rem;
+  color: var(--accent); font-weight: 600; font-size: .92rem; text-decoration: none;
+}
+
+/* টাকা: the three figures he carries in his head. */
+.figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-top: 1rem; }
+.figures > div {
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: .6rem .7rem; min-width: 0; container-type: inline-size;
+}
+.figures .k { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); }
+.figures .v { display: block; font-size: 1.04rem; font-weight: 650; white-space: nowrap; }
+@supports (font-size: 1cqw) { .figures .v { font-size: min(1.04rem, 15cqw); } }
+.figures .v.get { color: var(--warn); }
+.figures .v.owe { color: var(--crit); }
+
+/* কাজ: a job card is one big button, and says what kind of work it is. */
+button.jobcard { width: 100%; text-align: left; display: block; color: var(--ink); margin-top: .9rem; }
+.tag {
+  font-size: .76rem; font-weight: 600; padding: .1rem .55rem; border-radius: 999px; white-space: nowrap;
+  background: var(--c-work-bg); color: var(--c-work);
+}
+.tile.wide { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: flex-start; min-height: 4.2rem; }

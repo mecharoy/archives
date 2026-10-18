@@ -1,53 +1,37 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Icon, Sheet } from '../ui/kit'
+import { useEffect, useMemo } from 'react'
+import { Icon } from '../ui/kit'
+import { TabBar, type Tab } from '../ui/TabBar'
 import { telHref } from '../lib/phone'
-import { useStore, activeProjects, stages, type State, type Brief } from '../lib/store'
-import { money, toBn, isoDate, agoBn, dayLabelBn, addDays } from '../lib/bn'
-import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
+import { useStore, nameOf, parties, saveSettings, type State } from '../lib/store'
+import { money, toBn, isoDate, dateBn, dayLabelBn, addDays } from '../lib/bn'
+import { currentBrief, fetchBrief } from '../lib/brief'
 import { maybeMakeBrief } from '../lib/aiBrief'
-import { cashState, projectTotals, daysWritten, lastEntryDate, shopStock, shopEverHandled, duesSplit, receivablesSplit } from '../lib/calc'
-import { rankProjects } from '../lib/suggest'
-import { allItems } from '../lib/store'
-import { flush } from '../lib/sync'
+import { cashState, daysWritten, lastEntryDate, owedByPerson } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { fetchEnquiries } from '../lib/enquiries'
 import { UpdateCard, UpdateModal } from '../ui/UpdateCard'
 import type { Screen } from '../App'
 
-/* The home screen is one calm page, not a set of tabs. The thing he does
-   every evening — today's entry — sits at the top. Under it, the night's
-   headline and anything worth his attention. Then the three books —
-   কাজ (sites), মজুত (shop), হিসাব (money) — each showing its own headline
-   figures right here, with a ‘দেখুন’ that opens the whole book, where he both
-   reads the detail and adds or changes things. Nothing is hidden behind a tab
-   he has to remember to press; the summaries of all three are always in view.
-   At the very bottom, one button opens every single thing the app can do. */
+/* আজ — the first tab, and the calmest page in the app. Four things, in the order he needs them: the day's few
+   lines (Google's, written in the background, or the phone's own), the one big button for today's entry, who
+   owes him money with a call button beside each, and a card only when something needs him — the first count
+   of the shop, people who wrote on the website, a newer build, days left unwritten. At the foot, the helper's
+   number. Everything else lives in its own tab. */
 
-export function Home({ onDay, onGo }: {
-  onDay: () => void
-  onGo: (screen: Screen) => void
-}) {
+export function Home({ onDay, onGo, onTab }: { onDay: () => void; onGo: (screen: Screen) => void; onTab: (t: Tab) => void }) {
   const s = useStore((x) => x)
-  const [refreshing, setRefreshing] = useState(false)
-  const [help, setHelp] = useState(false)
-
-  // The server's brief (written by the PC job) is always looked at; it only
-  // replaces what the phone holds when it is newer and has words. With a key
-  // in Settings the phone also writes its own once a day (see aiBrief.ts) and
-  // checks again whenever the app comes back to the front. Typing a key in
-  // Settings starts it at once, because this effect depends on the key.
   const hasKey = !!s.settings.ai_key.trim()
 
-  /* Questions from the public website. Looked for whenever the app is opened
-     or comes back to the front; there is no push, so this is how he finds out. */
+  /* Questions from the public website, looked for whenever the app is opened or comes back to the front. */
   useEffect(() => {
     void fetchEnquiries()
     const onShow = () => { if (!document.hidden) void fetchEnquiries() }
     document.addEventListener('visibilitychange', onShow)
     return () => document.removeEventListener('visibilitychange', onShow)
   }, [])
-  const newEnquiries = s.enquiries.filter((e) => !s.enquiries_seen.includes(e.id)).length
 
+  /* The day's lines: the server's brief is looked at; with a Google key the phone writes its own once a day
+     (aiBrief.ts), again whenever the app comes back to the front. Nothing to press. */
   useEffect(() => {
     if (s.settings.briefUrl || s.settings.endpoint) void fetchBrief()
     if (!hasKey) return
@@ -57,73 +41,62 @@ export function Home({ onDay, onGo }: {
     return () => document.removeEventListener('visibilitychange', onShow)
   }, [hasKey]) // eslint-disable-line
 
-  const stale = briefIsStale(s.brief)
-  /* A day saved after the brief was written makes the brief out of date: on the first evening it would
-     still say the book is new. Then the phone's own sums speak until the next brief. Only a saved day
-     counts — a sale at the counter in the morning should not hide last night's words all day. */
-  const lastDayAt = useMemo(() => s.entries.reduce((m, e) => (e.kind === 'day' && e.created_at > m ? e.created_at : m), ''), [s.entries])
-  const outdated = !!s.brief && lastDayAt > s.brief.generated_at
-  const brief: Brief = useMemo(() => (s.brief && !stale && !outdated ? s.brief : localBrief()), [s.brief, stale, outdated, s.entries, s.masters])
-
+  const brief = useMemo(() => currentBrief(), [s.brief, s.entries, s.masters]) // eslint-disable-line
   const doneToday = useMemo(() => s.entries.some((e) => e.date === isoDate() && e.kind === 'day'), [s.entries])
+  const owed = useMemo(() => owedByPerson(s.entries).slice(0, 3), [s.entries])
   const last = lastEntryDate(s.entries)
-  const gap = last && last < addDays(isoDate(), -1)
-
-  const refresh = async () => {
-    setRefreshing(true)
-    await Promise.all([fetchBrief(true), fetchEnquiries(), hasKey ? maybeMakeBrief() : Promise.resolve(), flush(true)])
-    setRefreshing(false)
-  }
-
-  const hour = new Date().getHours()
-  const partOfDay = hour < 12 ? 'সকাল' : hour < 17 ? 'দুপুর' : 'সন্ধে'
-  const who = s.settings.owner_bn.trim()
+  const gap = !!last && last < addDays(isoDate(), -1)
+  const newEnquiries = s.enquiries.filter((e) => !s.enquiries_seen.includes(e.id)).length
+  const askCount = s.settings.runs_shop && !s.settings.full_count_at && isoDate() >= (s.settings.count_later_until || '')
+  const helper = s.settings.helper_name.trim()
+  const helperTel = telHref(s.settings.helper_phone)
 
   return (
     <>
       <div className="topbar">
-        <h1>{t('সাইট খাতা')}<span className="sub">{dayLabelBn(isoDate())}, {t(partOfDay)}</span></h1>
-        <button className="iconbtn" onClick={refresh} aria-label={t('নতুন করে আনুন')}
-          style={{ opacity: refreshing ? .5 : 1 }}><Icon name="refresh" /></button>
+        <h1>{t('সাইট খাতা')}<span className="sub">{dateBn(isoDate())}</span></h1>
         <button className="iconbtn" onClick={() => onGo('settings')} aria-label={t('সেটিংস')}><Icon name="gear" /></button>
       </div>
 
       <div className="scroll">
-        <div className="hero" data-tour="brief">
-          <p className="greet">
-            {who ? `${who} · ` : ''}
-            {t('আজ পর্যন্ত')}
-          </p>
+        <div className="say" data-tour="brief">
+          <span className="saylabel">{t('আজকের কথা')}</span>
           <p className="headline">{pick(brief.headline_bn, brief.headline_en)}</p>
         </div>
 
-        {stale && s.brief && (
-          <div className="alert warn" style={{ marginBottom: '.8rem' }}>
-            <span className="dot" />
-            <span>{t('পুরোনো হিসাব')} — {agoBn(s.brief.generated_at)}। {t('নিচের সংখ্যাগুলো ফোনের নিজের হিসাব।')}</span>
-          </div>
-        )}
-
         <button className="bigbtn" data-tour="today" onClick={onDay}>
-          <Icon name="book" size={30} stroke={1.6} />
+          <Icon name="edit" size={28} stroke={1.7} />
           <span style={{ flex: 1 }}>
-            <span className="t" style={{ display: 'block' }}>{t('আজকের হিসাব')}</span>
-            <span className="s">{doneToday ? t('আজকের হিসাব লেখা হয়েছে — আরও যোগ করতে পারেন') : t('কয়েকটা প্রশ্ন, তারপর শেষ')}</span>
+            <span className="t" style={{ display: 'block' }}>{doneToday ? t('আজকের হিসাব লেখা হয়েছে') : t('আজকের হিসাব লিখুন')}</span>
+            {doneToday && <span className="s">{t('কিছু বাদ গেলে যোগ করুন')}</span>}
           </span>
           <Icon name="fwd" size={22} />
         </button>
 
+        {owed.length > 0 && (
+          <div data-tour="owed">
+            <p className="sectionlabel">{t('টাকা পাবেন')}</p>
+            <div className="rowlist">
+              {owed.map((o) => <OwedRow key={o.party_id || 'none'} s={s} party={o.party_id} amount={o.amount} since={o.since} />)}
+            </div>
+            <button className="btn quiet small" style={{ marginTop: '.5rem' }} onClick={() => onTab('money')}>{t('সবাইকে দেখুন')}</button>
+          </div>
+        )}
 
-        {/* Only drawn when someone has written from the website and he has not
-            looked yet — a customer waiting for a call is worth a line here. */}
-        {newEnquiries > 0 && (
-          <button className="bigbtn" style={{ marginTop: '.6rem' }} onClick={() => onGo('enquiries')}>
-            <Icon name="phone" size={26} stroke={1.7} />
-            <span style={{ flex: 1 }}>
-              <span className="t" style={{ display: 'block' }}>{tf('ওয়েবসাইটে {0} জন লিখেছেন', toBn(newEnquiries))}</span>
-              <span className="s">{t('ফোন নম্বর সহ — ফোন করুন')}</span>
+        {askCount && (
+          <div className="softcard">
+            <strong>{t('দোকানের মাল একবার গুনে লিখুন')}</strong>
+            <span>{t('তাহলে দোকানে কী আছে, ঠিক দেখাবে।')}</span>
+            <span className="pair">
+              <button className="btn primary small" onClick={() => onGo('fullcount')}>{t('শুরু করি')}</button>
+              <button className="btn ghost small" onClick={() => void saveSettings({ count_later_until: addDays(isoDate(), 7) })}>{t('পরে')}</button>
             </span>
-            <Icon name="fwd" size={22} />
+          </div>
+        )}
+
+        {newEnquiries > 0 && (
+          <button className="softcard enq" onClick={() => onGo('enquiries')}>
+            <strong>{tf('ওয়েবসাইটে {0} জন খোঁজ নিয়েছেন', toBn(newEnquiries))}</strong>
           </button>
         )}
 
@@ -131,143 +104,42 @@ export function Home({ onDay, onGo }: {
         <UpdateCard />
 
         {gap && (
-          <div className="alert warn" style={{ marginTop: '.8rem' }}>
-            <span className="dot" />
-            <span>{t('শেষ হিসাব')} {dayLabelBn(last!)}। {t('মাঝের দিনগুলো লিখতে চাইলে ‘পুরোনো হিসাব’ থেকে তারিখ বেছে নিন।')}</span>
-          </div>
-        )}
-
-        {/* What to look at today, straight under the day's entry. */}
-        {brief.alerts && brief.alerts.length > 0 && (
-          <>
-            <p className="sectionlabel">{t('নজর দেওয়ার মতো')}</p>
-            {brief.alerts.slice(0, 4).map((a, k) => (
-              <div className={'alert ' + a.severity} key={k}><span className="dot" /><span>{pick(a.text_bn, a.text_en)}</span></div>
-            ))}
-          </>
-        )}
-
-        {brief.todo_bn && brief.todo_bn.length > 0 && (
-          <>
-            <p className="sectionlabel">{t('আজ যা করবেন')}</p>
-            <div className="card">
-              {brief.todo_bn.slice(0, 4).map((x, k) => (
-                <div key={k} className="todo"><span className="n num">{toBn(k + 1)}</span><span>{pick(x, brief.todo_en?.[k])}</span></div>
-              ))}
-            </div>
-          </>
-        )}
-
-        {/* The three books, one plain line each; the detail is one tap inside. Each keeps its colour so
-            the eye finds কাজ, মজুত and হিসাব by hue before it reads a word. */}
-        <div data-tour="books" style={{ marginTop: '1.2rem' }}>
-          <WorkSummary s={s} onGo={onGo} />
-          <StockSummary s={s} onGo={onGo} />
-          <MoneySummary s={s} onGo={onGo} />
-        </div>
-
-        <div className="spread" style={{ marginTop: '1rem', gap: '.6rem' }}>
-          <button className="btn quiet" data-tour="all" style={{ flex: 1 }} onClick={() => onGo('all')}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}><Icon name="grid" size={20} />{t('সব কিছু')}</span>
+          <button className="softcard" onClick={() => onGo('history')}>
+            <strong>{tf('শেষ হিসাব {0}। বাদ পড়া দিন লিখুন', dayLabelBn(last!))}</strong>
           </button>
-          <button className="btn quiet" style={{ flex: 1 }} onClick={() => setHelp(true)}>
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}><Icon name="phone" size={20} />{t('সাহায্য')}</span>
-          </button>
-        </div>
+        )}
+
+        {helperTel && (
+          <a className="helpline" href={helperTel}>
+            <Icon name="phone" size={18} />{tf('সাহায্য লাগলে — {0}কে ফোন করুন', helper || t('সাহায্যকারী'))}
+          </a>
+        )}
       </div>
 
-      <StandingTotals s={s} onGo={onGo} />
+      <TabBar />
       <UpdateModal />
-      {help && <HelpSheet s={s} onClose={() => setHelp(false)} />}
     </>
   )
 }
 
-/* সাহায্য: the evening in three lines, how to chase money, and the person to ring. */
-function HelpSheet({ s, onClose }: { s: State; onClose: () => void }) {
-  const name = s.settings.helper_name.trim()
-  const tel = telHref(s.settings.helper_phone)
+/* One person who owes him: the name, since when, how much, and a call button when there is a number. */
+function OwedRow({ s, party, amount, since }: { s: State; party: string; amount: number; since: string }) {
+  const p = parties(s).find((x) => x.id === party)
+  const tel = p ? telHref(p.phone) : ''
   return (
-    <Sheet title="সাহায্য" onClose={onClose}>
-      <p className="sectionlabel" style={{ marginTop: 0 }}>{t('রোজ সন্ধেবেলা')}</p>
-      <div className="card">
-        <div className="todo"><span className="n num">{toBn(1)}</span><span>{t('‘আজকের হিসাব’-এ চাপুন।')}</span></div>
-        <div className="todo"><span className="n num">{toBn(2)}</span><span>{t('প্রশ্নগুলোর উত্তর দিন — কিছু না থাকলে ‘না’।')}</span></div>
-        <div className="todo"><span className="n num">{toBn(3)}</span><span>{t('শেষে ‘খাতায় তুলুন’ চাপুন।')}</span></div>
-      </div>
-      <p className="sectionlabel">{t('কেউ টাকা দেননি?')}</p>
-      <p>{t('নিচে ‘পাবেন’-এ চাপুন, তারপর নামের নিচে ‘তাগাদা পাঠান’।')}</p>
-      {tel
-        ? <a className="btn primary" href={tel} style={{ display: 'block', marginTop: '1rem', textAlign: 'center', textDecoration: 'none' }}>{tf('{0} কে ফোন করুন', name || t('সাহায্যকারী'))}</a>
-        : <p className="small muted" style={{ marginTop: '1rem' }}>{t('সেটিংস → নাম ও ফোন-এ যিনি সাহায্য করবেন তাঁর নম্বর দিন।')}</p>}
-    </Sheet>
-  )
-}
-
-/* A book on the shelf: its name, a ‘দেখুন’ into the whole thing, and its
-   headline figures underneath. Tapping anywhere on it opens the book. */
-function BookCard({ tone, icon, title, onOpen, children }: {
-  tone: 'work' | 'stock' | 'money'; icon: string; title: string; onOpen: () => void; children: ReactNode
-}) {
-  return (
-    <div className={'bookcard ' + tone}>
-      <button className="bookhead" onClick={onOpen}>
-        <span className="name"><span className="bookicon"><Icon name={icon} size={20} stroke={1.7} /></span>{t(title)}</span>
-        <span className="see">{t('দেখুন')} <Icon name="fwd" size={16} /></span>
-      </button>
-      <button className="bookbody" onClick={onOpen}>{children}</button>
+    <div className="owedrow">
+      <span className="who">
+        <span className="t">{party ? nameOf(s, party) : t('খুচরো খদ্দের')}</span>
+        <span className="s">{tf('{0} থেকে', dateBn(since, false))}</span>
+      </span>
+      <span className="v num">{money(amount)}</span>
+      {tel ? <a className="call" href={tel} aria-label={t('ফোন')}><Icon name="phone" size={18} /></a> : <span className="call none" />}
     </div>
   )
 }
 
-/* ---------- কাজ ---------- */
-
-function WorkSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
-  const act = activeProjects(s)
-  const topId = rankProjects(s.entries, act.map((p) => p.id))[0]
-  const top = act.find((p) => p.id === topId) || act[0]
-  const pct = top ? Math.round(projectTotals(top, s.entries, stages(s)).pct_done) : 0
-  return (
-    <BookCard tone="work" icon="chart" title="কাজ" onOpen={() => onGo('work')}>
-      <p className="booknote">{top
-        ? tf('{0} কাজ চলছে · {1} {2}%', toBn(act.length), top.name_bn, toBn(pct))
-        : t('এখনও কোনো কাজ যোগ করা হয়নি। ভিতরে গিয়ে কাজ যোগ করুন।')}</p>
-    </BookCard>
-  )
-}
-
-/* ---------- মজুত ---------- */
-
-function StockSummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
-  const levels = useMemo(() => shopStock(s.entries, allItems(s)), [s.entries, s.masters])
-  const dues = useMemo(() => duesSplit(s.entries), [s.entries])
-  const value = levels.reduce((a, l) => a + l.value, 0)
-  return (
-    <BookCard tone="stock" icon="shop" title="মজুত" onOpen={() => onGo('shop')}>
-      <p className="booknote">{levels.length === 0
-        ? (shopEverHandled(s.entries)
-          ? t('দোকানের সব মাল শেষ। নতুন মাল তুললে ‘মাল এসেছে’ থেকে লিখুন।')
-          : t('এখনও কোনো মাল ঢোকেনি। ভিতরে গিয়ে ‘মাল এসেছে’ থেকে শুরু করুন।'))
-        : tf('মজুত {0} · দোকানে বাকি {1}', money(value), money(dues.total))}</p>
-    </BookCard>
-  )
-}
-
-/* ---------- হিসাব ---------- */
-
-function MoneySummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
-  const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-  const spend = useMemo(() => monthSpend(s.entries), [s.entries])
-  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
-  return (
-    <BookCard tone="money" icon="wallet" title="হিসাব" onOpen={() => onGo('money')}>
-      <p className="booknote">{tf('হাতে {0} · এ মাসের খরচ {1}', counted ? money(cash.computed) : '—', money(spend))}</p>
-    </BookCard>
-  )
-}
-
-/* Whether the book has reached the online ledger, and how many days were written this week. It lives in
-   Settings now: on the home screen it was one more line to read every evening. */
+/* Whether the book has reached the online ledger, and how many days were written this week. Shown in
+   Settings: on the home screen it was one more line to read every evening. */
 export function SyncLine({ s }: { s: State }) {
   const pending = s.outbox.length
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
@@ -291,34 +163,4 @@ export function SyncLine({ s }: { s: State }) {
       </p>
     </>
   )
-}
-
-/* The three numbers he actually carries in his head, kept on screen wherever
-   he is: what is in the tin, what is owed to him, what he owes. Tapping the
-   second or third opens the screen that settles it. */
-function StandingTotals({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
-  const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-  const get = useMemo(() => receivablesSplit(s.entries), [s.entries])
-  const owe = useMemo(() => duesSplit(s.entries), [s.entries])
-  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
-  return (
-    <div className="footbar" data-tour="standing">
-      <div className="foot">
-        <span className="k">{t('হাতে')}</span>
-        <span className="v num">{counted ? money(cash.computed) : '—'}</span>
-      </div>
-      <button className="foot" onClick={() => onGo('payments')}>
-        <span className="k">{t('পাবেন')}</span>
-        <span className={'v num' + (get.overdue > 0 ? ' warn' : '')}>{money(get.total)}</span>
-      </button>
-      <button className="foot" onClick={() => onGo('payments')}>
-        <span className="k">{t('দেবেন')}</span>
-        <span className={'v num' + (owe.overdue > 0 ? ' crit' : '')}>{money(owe.total)}</span>
-      </button>
-    </div>
-  )
-}
-
-export function projectLines(s: State) {
-  return activeProjects(s).map((p) => projectTotals(p, s.entries, stages(s)))
 }

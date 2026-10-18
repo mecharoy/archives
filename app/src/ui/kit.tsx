@@ -41,6 +41,9 @@ const paths: Record<string, string> = {
   contactbook: 'M6.5 3H18a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6.5A1.5 1.5 0 0 1 5 19.5v-15A1.5 1.5 0 0 1 6.5 3z M3 8h2M3 12h2M3 16h2 M12 11.6a2 2 0 1 0 0-4 2 2 0 0 0 0 4z M9 16.6a3 3 0 0 1 6 0',
   /* Four tiles — "everything, laid out." Reads as an app grid at any size. */
   grid: 'M4 4h6v6H4z M14 4h6v6h-6z M4 14h6v6H4z M14 14h6v6h-6z',
+  /* The four tabs' own marks: a day on the calendar (আজ), a hard hat (কাজ); দোকান and টাকা use shop and wallet. */
+  calendar: 'M5.5 5.5h13a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1h-13a1 1 0 0 1-1-1V6.5a1 1 0 0 1 1-1z M4.5 10h15 M8.5 3.5v4 M15.5 3.5v4',
+  helmet: 'M3 18h18 M5 18a7 7 0 0 1 14 0 M12 11V6.5 M9.5 7h5',
   /* A handset, for a number he can ring. */
   phone: 'M20.5 16.4v2.8a1.9 1.9 0 0 1-2.1 1.9 18.8 18.8 0 0 1-8.2-2.9 18.5 18.5 0 0 1-5.7-5.7A18.8 18.8 0 0 1 1.6 4.3 1.9 1.9 0 0 1 3.5 2.2h2.8a1.9 1.9 0 0 1 1.9 1.6c.1 1 .4 1.9.7 2.7a1.9 1.9 0 0 1-.4 2L7.2 9.7a15.2 15.2 0 0 0 5.7 5.7l1.2-1.3a1.9 1.9 0 0 1 2-.4c.9.3 1.8.6 2.7.7a1.9 1.9 0 0 1 1.7 2z',
 }

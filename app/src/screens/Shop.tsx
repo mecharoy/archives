@@ -1,11 +1,11 @@
 import { useMemo, useState } from 'react'
 import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, useToast, Toast, Empty } from '../ui/kit'
 import { NewItemSheet, NewPartySheet } from './day/NewSheets'
-import { useStore, items, parties, activeProjects, saveEntries, saveMaster, nameOf, noteChip, type State } from '../lib/store'
+import { useStore, items, parties, activeProjects, saveEntries, saveMaster, saveSettings, nameOf, noteChip, type State } from '../lib/store'
 import { uid } from '../lib/db'
-import { money, toBn, num, isoDate, addDays, dateBn } from '../lib/bn'
+import { money, num, isoDate, addDays, dateBn } from '../lib/bn'
 import type { Item, StockEntry, ID } from '../lib/model'
-import { shopStock, shopEverHandled, duesSplit, isLate, dueLabel } from '../lib/calc'
+import { shopStock, shopEverHandled } from '../lib/calc'
 import { rankItems, rankParties, lastPurchase, qtyChips } from '../lib/suggest'
 import { scheduleSync } from '../lib/sync'
 import { capture } from '../lib/photo'
@@ -15,71 +15,65 @@ import { useOnce } from '../lib/once'
 import { defaultDueDays, dueFrom } from '../lib/dues'
 import { DueChips } from '../ui/DueChips'
 import { PartyPicker } from '../ui/PartyPicker'
-import { StockCount } from './StockCount'
+import { TabBar } from '../ui/TabBar'
+import type { Screen } from '../App'
 
-type Flow = null | 'in' | 'sale' | 'count' | 'transfer' | 'credit' | 'fullcount'
+type Flow = null | 'in' | 'sale' | 'count' | 'transfer' | 'credit'
 
-export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' | 'parties') => void }) {
+/* দোকান — the shop. Three things he does, in plain words: gave goods on credit (who, how much), sold goods,
+   goods came in. Two rarer ones as small buttons. What is on the shelf now, and under আরও the lists and the
+   full count. Until the shop has been counted once, a soft card asks for that first count; পরে puts it off a
+   week. What the shop owes its suppliers is on the টাকা tab, with every other due. */
+export function Shop({ onGo }: { onGo: (s: Screen) => void }) {
   const s = useStore((x) => x)
   const [flow, setFlow] = useState<Flow>(null)
   const toast = useToast()
   const levels = useMemo(() => shopStock(s.entries, items(s)), [s.entries, s.masters])
-  const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const value = levels.reduce((a, l) => a + l.value, 0)
+  const askCount = !s.settings.full_count_at && isoDate() >= (s.settings.count_later_until || '')
 
-  if (flow === 'fullcount') return <StockCount s={s} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
   if (flow === 'credit') return <QuickCredit s={s} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
   if (flow) return <StockFlow s={s} flow={flow} onDone={(msg) => { setFlow(null); if (msg) toast.show(msg) }} />
 
   return (
     <>
-      <TopBar title="দোকানের মজুত" sub={tf('{0} রকম মাল · {1}', toBn(levels.length), money(value))} onBack={onBack} />
+      <div className="topbar">
+        <h1>{t('দোকান')}<span className="sub">{tf('মজুত {0}', money(value))}</span></h1>
+      </div>
       <div className="scroll">
+        {askCount && (
+          <div className="softcard" style={{ marginTop: '1rem' }}>
+            <strong>{t('দোকানের মাল একবার গুনে লিখুন')}</strong>
+            <span>{t('তাহলে দোকানে কী আছে, ঠিক দেখাবে।')}</span>
+            <span className="pair">
+              <button className="btn primary small" onClick={() => onGo('fullcount')}>{t('শুরু করি')}</button>
+              <button className="btn ghost small" onClick={() => void saveSettings({ count_later_until: addDays(isoDate(), 7) })}>{t('পরে')}</button>
+            </span>
+          </div>
+        )}
         <div className="tilegrid" style={{ marginTop: '1rem' }}>
-          <button className="tile" onClick={() => setFlow('in')}>
-            <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("মাল এসেছে")}</span><span className="s">{t("দোকানে ঢুকল")}</span></span>
+          <button className="tile stock" onClick={() => setFlow('credit')}>
+            <Icon name="wallet" size={24} stroke={1.6} />
+            <span><span className="t" style={{ display: 'block' }}>{t('বাকিতে দিলাম')}</span><span className="s">{t('কে নিলেন, কত টাকা')}</span></span>
           </button>
-          <button className="tile" onClick={() => setFlow('sale')}>
-            <Icon name="shop" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("মাল ধরে বিক্রি")}</span><span className="s">{t("মজুত কমবে")}</span></span>
+          <button className="tile stock" onClick={() => setFlow('sale')}>
+            <Icon name="shop" size={24} stroke={1.6} />
+            <span><span className="t" style={{ display: 'block' }}>{t('মাল বিক্রি')}</span><span className="s">{t('কোন মাল, কতটা')}</span></span>
           </button>
-          {/* The same sale, written by its total alone — for the evening he cannot remember every fitting.
-              Stock stays as it is; the next count puts the shelf right. */}
-          <button className="tile" onClick={() => setFlow('credit')}>
-            <Icon name="wallet" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("শুধু টাকার হিসাব — বাকিতে দিলাম")}</span><span className="s">{t("মজুত বদলাবে না")}</span></span>
-          </button>
-          <button className="tile" onClick={() => setFlow('transfer')}>
-            <Icon name="fwd" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("কাজে পাঠানো")}</span><span className="s">{t("দামে নয়, খরচে")}</span></span>
-          </button>
-          <button className="tile" onClick={() => setFlow('count')}>
-            <Icon name="check" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("মাল গোনা")}</span><span className="s">{t("যা আছে মিলিয়ে নিন")}</span></span>
-          </button>
-          <button className="tile" onClick={() => setFlow('fullcount')}>
-            <Icon name="grid" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("পুরো মজুত একবারে")}</span><span className="s">{t("সব মাল একবারে গুনে লিখুন")}</span></span>
+          <button className="tile stock wide" onClick={() => setFlow('in')}>
+            <Icon name="plus" size={24} stroke={1.6} />
+            <span><span className="t" style={{ display: 'block' }}>{t('মাল এল')}</span><span className="s">{t('দোকানে নতুন মাল')}</span></span>
           </button>
         </div>
+        <div className="chips" style={{ marginTop: '.8rem' }}>
+          <Chip onClick={() => setFlow('count')}>{t('মাল গুনে মেলান')}</Chip>
+          <Chip onClick={() => setFlow('transfer')}>{t('কাজে মাল পাঠালাম')}</Chip>
+        </div>
 
-        {dues.total > 0 && (
-          <>
-            <p className="sectionlabel">{t("দোকানে বাকি")}</p>
-            <div className="card">
-              {dues.all.slice(0, 8).map((d) => (
-                <div className="review-row" key={d.entry_id}>
-                  <span>
-                    <span className="t">{d.party_id ? nameOf(s, d.party_id) : t('নাম লেখা নেই')}</span>
-                    <span className="k">{dueLabel(d, (id) => nameOf(s, id))} · {isLate(d) ? t('সময় পেরিয়েছে') : d.due_date ? tf('{0} তারিখে', dateBn(d.due_date, false)) : t('তারিখ ঠিক করা নেই')}</span>
-                  </span>
-                  <span className="v num" style={{ color: isLate(d) ? 'var(--crit)' : undefined }}>{money(d.amount)}</span>
-                </div>
-              ))}
-              <div className="total"><span className="k">{t("মোট বাকি")}</span><span className="v num">{money(dues.total)}</span></div>
-            </div>
-          </>
-        )}
-
-        <p className="sectionlabel">{t("এখন যা আছে")}</p>
+        <p className="sectionlabel">{t('দোকানে এখন আছে')}</p>
         {levels.length === 0 && (shopEverHandled(s.entries)
-          ? <Empty>{t("দোকানের সব মাল শেষ।")}<br />{t("নতুন মাল তুললে ‘মাল এসেছে’ থেকে লিখুন।")}</Empty>
-          : <Empty>{t("এখনও কোনো মাল ঢোকেনি।")}<br />{t("‘মাল এসেছে’ থেকে শুরু করুন।")}</Empty>)}
+          ? <Empty>{t('দোকানের সব মাল শেষ।')}<br />{t('নতুন মাল এলে ‘মাল এল’ থেকে লিখুন।')}</Empty>
+          : <Empty>{t('এখনও কোনো মাল লেখা হয়নি।')}<br />{t('‘মাল এল’ থেকে শুরু করুন।')}</Empty>)}
         {levels.length > 0 && (
           <div className="card">
             {levels.map((l) => (
@@ -93,24 +87,18 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
                 </span>
               </div>
             ))}
-            <div className="total"><span className="k">{t("মজুতের দাম")}</span><span className="v num">{money(value)}</span></div>
+            <div className="total"><span className="k">{t('মজুতের দাম')}</span><span className="v num">{money(value)}</span></div>
           </div>
         )}
 
-        {onGo && (
-          <>
-            <p className="sectionlabel">{t("এই খাতার কাজ")}</p>
-            <div className="tilegrid">
-              <button className="tile" onClick={() => onGo('items')}>
-                <Icon name="book" size={24} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("মালের তালিকা")}</span><span className="s">{t("নাম, একক, শেষ দর")}</span></span>
-              </button>
-              <button className="tile" onClick={() => onGo('parties')}>
-                <Icon name="contactbook" size={24} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("দোকান ও খদ্দের")}</span><span className="s">{t("সরবরাহকারী, খদ্দের")}</span></span>
-              </button>
-            </div>
-          </>
-        )}
+        <p className="sectionlabel">{t('আরও')}</p>
+        <div className="rowlist">
+          <Pick title="মালের তালিকা" right={<Icon name="fwd" size={18} />} onClick={() => onGo('items')} />
+          <Pick title="দোকান ও খদ্দেরের নাম" right={<Icon name="fwd" size={18} />} onClick={() => onGo('parties')} />
+          <Pick title="পুরো দোকান গোনা" right={<Icon name="fwd" size={18} />} onClick={() => onGo('fullcount')} />
+        </div>
       </div>
+      <TabBar />
       {toast.msg && <Toast text={toast.msg} />}
     </>
   )
@@ -125,8 +113,8 @@ function padChips<T extends { id: ID }>(ranked: T[], all: T[], n: number): T[] {
   return out
 }
 
-const TITLES: Record<Exclude<Flow, null | 'credit' | 'fullcount'>, string> = {
-  in: 'মাল এসেছে', sale: 'মাল ধরে বিক্রি', transfer: 'কাজে পাঠানো', count: 'মাল গোনা',
+const TITLES: Record<Exclude<Flow, null | 'credit'>, string> = {
+  in: 'মাল এল', sale: 'মাল বিক্রি', transfer: 'কাজে মাল পাঠালাম', count: 'মাল গুনে মেলান',
 }
 
 /* বাকিতে দিলাম: a customer took goods on credit and he writes only what they came to. One unpaid sale

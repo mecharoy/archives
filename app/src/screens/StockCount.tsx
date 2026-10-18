@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { TopBar, Pick, Chip, Sheet, MoneyPad, Field, NumField, Empty } from '../ui/kit'
-import { items, saveEntries, saveMaster, type State } from '../lib/store'
+import { items, saveEntries, saveMaster, saveSettings, getState, type State } from '../lib/store'
 import { uid, kvGet, kvSet, kvDel } from '../lib/db'
 import { isoDate, money, num, toBn } from '../lib/bn'
 import { searchCatalog, CATS } from '../lib/catalog'
@@ -68,6 +68,8 @@ export function StockCount({ s, onDone }: { s: State; onDone: (msg?: string) => 
     }
     await saveEntries(out)
     await kvDel(DRAFT)
+    // The shop has been counted once: আজ and দোকান stop asking for the first count.
+    if (!getState().settings.full_count_at) await saveSettings({ full_count_at: new Date().toISOString() })
     scheduleSync(300)
     onDone(tf('{0} রকম মাল গোনা হল', toBn(out.length)))
   })
@@ -78,7 +80,7 @@ export function StockCount({ s, onDone }: { s: State; onDone: (msg?: string) => 
 
   return (
     <>
-      <TopBar title="পুরো মজুত একবারে" sub={tf('{0} রকম · {1}', toBn(counted.length), money(value))} onBack={() => onDone()} />
+      <TopBar title="পুরো দোকান গোনা" sub={tf('{0} রকম · {1}', toBn(counted.length), money(value))} onBack={() => onDone()} />
       <div className="scroll">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('মালের নাম লিখে খুঁজুন')} />
         <div className="chips" style={{ marginTop: '.5rem' }}>

@@ -93,11 +93,12 @@ await step('onboarding: cash in hand', async () => {
 await step('the tour opens by itself, first time', async () => {
   await page.locator('.tour').waitFor({ timeout: 5000 })
   const step1 = await page.locator('.tour-step').innerText()
-  if (!/1 \/ 5/.test(step1)) throw new Error('expected 5 stops, got ' + step1)
+  // Three stops; the third (who owes him) is skipped while nobody owes him anything.
+  if (!/1 \/ 2/.test(step1)) throw new Error('expected 2 stops on a new book, got ' + step1)
 })
 
 await step('the spotlight sits over the thing it names', async () => {
-  const wanted = ['today', 'brief', 'books', 'standing', 'all']
+  const wanted = ['today', 'tabs']
   for (let i = 0; i < wanted.length; i++) {
     const hole = await page.locator('.tour-hole').boundingBox()
     const el = await page.locator('[data-tour="' + wanted[i] + '"]').boundingBox()
@@ -218,10 +219,13 @@ await step('save the day', async () => {
   await page.getByText('খাতায় তুলুন').click()
   await page.getByText('আজকের হিসাব লেখা হল').waitFor({ timeout: 5000 })
 })
-await step('dashboard reflects the entry', async () => {
+await step('home says the day is written, and the কাজ tab shows the job', async () => {
   await page.waitForTimeout(500)
+  await page.getByText('আজকের হিসাব লেখা হয়েছে').waitFor({ timeout: 3000 })
+  await page.locator('.tabbar button', { hasText: 'কাজ' }).click()
   const body = await page.locator('.scroll').first().innerText()
-  if (!body.includes('রামপুর বাড়ি')) throw new Error('no project summary on home')
+  if (!body.includes('রামপুর বাড়ি')) throw new Error('no job card on the কাজ tab')
+  await page.locator('.tabbar button', { hasText: 'আজ' }).click()
 })
 await step('the next evening the men are ticked as last time', async () => {
   await page.evaluate(() => new Promise((res) => {
@@ -271,8 +275,8 @@ const home = async () => { await page.goto('http://localhost:5199/'); await page
 
 await step('shop flow: goods in', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'মজুত' }).click()
-  await tap('মাল এসেছে')
+  await page.locator('.tabbar button', { hasText: 'দোকান' }).click()
+  await tap('মাল এল')
   await pickItem('সিমেন্ট')
   for (const d of ['২', '০']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('এগিয়ে যান')
@@ -283,12 +287,12 @@ await step('shop flow: goods in', async () => {
   await tap('খাতায় তুলুন')
   await page.waitForTimeout(600)
   const body = await page.locator('.scroll').first().innerText()
-  if (!body.includes('এখন যা আছে')) throw new Error('stock list missing')
+  if (!body.includes('দোকানে এখন আছে')) throw new Error('stock list missing')
 })
 await step('estimator: size, floors and foundation', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'কাজ' }).click()
-  await page.locator('.tile', { hasText: 'নতুন কাজের হিসাব' }).click()
+  await page.locator('.tabbar button', { hasText: 'কাজ' }).click()
+  await page.locator('.tile', { hasText: 'নতুন কাজের দর' }).click()
   await page.locator('.chip').first().click()
   await page.getByText('এক তলার মাপ কত বর্গফুট?').waitFor({ timeout: 3000 })
   for (const d of ['১', '০', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
@@ -337,8 +341,8 @@ await step('estimator: the quote a customer sees shows the price, not his margin
 })
 await step('history lists days and can reverse', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
-  await page.locator('.tile', { hasText: 'পুরোনো হিসাব' }).click()
+  await page.locator('.tabbar button', { hasText: 'টাকা' }).click()
+  await page.getByText('পুরোনো দিনের হিসাব').first().click()
   await page.locator('.pick').first().click()
   await page.locator('.sheet .iconbtn').first().click()
   await page.getByText('বাতিল করুন').click()
@@ -346,8 +350,8 @@ await step('history lists days and can reverse', async () => {
 })
 await step('a day added from History keeps the one job, says which day it is, and leaves today alone', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
-  await page.locator('.tile', { hasText: 'পুরোনো হিসাব' }).click()
+  await page.locator('.tabbar button', { hasText: 'টাকা' }).click()
+  await page.getByText('পুরোনো দিনের হিসাব').first().click()
   await page.locator('.topbar .iconbtn').last().click()
   await page.locator('.sheet .pick', { hasText: 'পরশু' }).first().click()
   await page.getByText('আজ কোন কাজের হিসাব লিখবেন?').waitFor({ timeout: 4000 })
@@ -368,7 +372,7 @@ await step('a day added from History keeps the one job, says which day it is, an
 })
 await step('personal book with pin', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
+  await page.locator('.tabbar button', { hasText: 'টাকা' }).click()
   await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
   await page.getByText('খরচ লিখুন').waitFor({ timeout: 3000 })
   await tap('খরচ লিখুন')
@@ -382,7 +386,7 @@ await step('personal book with pin', async () => {
    money lands in his own book without him typing it a second time. */
 await step('a date he sets for himself', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
+  await page.locator('.tabbar button', { hasText: 'টাকা' }).click()
   await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
   await page.getByText('দিতে হবে').first().waitFor({ timeout: 3000 })
   await page.locator('.chip', { hasText: 'নতুন তারিখ' }).click()
@@ -426,8 +430,8 @@ const pressBack = () => page.evaluate(() => import('/src/lib/back.ts').then((m) 
 
 await step('back closes a sheet, not the screen under it', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'মজুত' }).click()          // the মজুত book → Shop
-  await page.locator('.tile', { hasText: 'দোকান ও খদ্দের' }).click()     // the names page
+  await page.locator('.tabbar button', { hasText: 'দোকান' }).click()          // the মজুত book → Shop
+  await page.getByText('দোকান ও খদ্দেরের নাম').first().click()     // the names page
   await page.locator('.topbar .iconbtn').last().click()                 // the + for a new name
   await page.locator('.sheet').waitFor({ timeout: 3000 })
   const claimed = await pressBack()
@@ -440,7 +444,7 @@ await step('back closes a sheet, not the screen under it', async () => {
 
 await step('back leaves a settings page for settings, not for home', async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()          // gear → Settings
+  await page.locator('.topbar .iconbtn').last().click()          // gear → Settings
   await page.locator('.pick', { hasText: 'ভাষা' }).click()        // into a settings sub-page
   await page.waitForTimeout(300)
   const claimed = await pressBack()
@@ -458,7 +462,7 @@ await step('and from settings itself nothing claims it', async () => {
 /* The list of household heads can never be complete. */
 await step('personal spending takes a name of his own', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
+  await page.locator('.tabbar button', { hasText: 'টাকা' }).click()
   await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
   await page.getByText('খরচ লিখুন').waitFor({ timeout: 3000 })
   await tap('খরচ লিখুন')
@@ -487,8 +491,8 @@ await step('which then offers itself as a chip', async () => {
 
 await step('a credit sale becomes a receivable', async () => {
   await home()
-  await page.locator('.bookhead', { hasText: 'মজুত' }).click()
-  await tap('মাল ধরে বিক্রি')
+  await page.locator('.tabbar button', { hasText: 'দোকান' }).click()
+  await tap('মাল বিক্রি')
   await pickItem('সিমেন্ট')
   for (const d of ['৫']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('এগিয়ে যান')
@@ -502,13 +506,12 @@ await step('a credit sale becomes a receivable', async () => {
   await tap('খাতায় তুলুন')
   await page.waitForTimeout(700)
   await home()
-  const foot = await page.locator('.footbar').innerText()
-  if (!foot.includes('২,৫০০')) throw new Error('the ₹2,500 credit sale should show as receivable: ' + foot)
+  const owed = await page.locator('[data-tour="owed"]').innerText()
+  if (!owed.includes('হালদার বাবু') || !owed.includes('২,৫০০')) throw new Error('the ₹2,500 credit sale should show on home as owed: ' + owed)
 })
 await step('settling it clears the balance', async () => {
-  await page.locator('.bookhead', { hasText: 'হিসাব' }).click()
-  await page.locator('.tile', { hasText: 'টাকা দেওয়া-নেওয়া' }).click()
-  await page.getByText('যাদের কাছে পাওনা').waitFor({ timeout: 3000 })
+  await page.locator('.tabbar button', { hasText: 'টাকা' }).click()
+  await page.getByText('টাকা পাবেন').first().waitFor({ timeout: 3000 })
   await page.getByText('হালদার বাবু').first().click()
   // The sheet opens with the whole balance filled in. The first key he presses REPLACES it (typing 650 over
   // a prefilled 600 used to give 6,00,650); after that, keys add as usual.
@@ -525,12 +528,11 @@ await step('settling it clears the balance', async () => {
   await page.locator('.sheet .btn.primary').click()
   await page.waitForTimeout(700)
   await home()
-  const foot = await page.locator('.footbar').innerText()
-  if (foot.includes('২,৫০০')) throw new Error('the receivable should be settled: ' + foot)
+  if (await page.locator('[data-tour="owed"]').count()) throw new Error('home still shows money owed: ' + (await page.locator('[data-tour="owed"]').innerText()))
 })
 await step('reset refuses a wrong code', async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.topbar .iconbtn').last().click()
   await tap('সব মুছে নতুন করে শুরু')
   await page.locator('input.input').first().fill('1234')
   await tap('মুছে ফেলুন')
@@ -549,7 +551,7 @@ await step('reset refuses a wrong code', async () => {
 })
 await step('english switch flips the whole screen', async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.topbar .iconbtn').last().click()
   await tap('ভাষা')
   await page.getByText('কোন ভাষায়|Language|ভাষা').first().waitFor({ timeout: 3000 }).catch(() => {})
   await page.locator('.pick').nth(1).click()
@@ -573,7 +575,7 @@ await step('english is only skin deep — the ledger stays Bengali', async () =>
   if (/[a-zA-Z]{3,}/.test(heads)) throw new Error('English words reached the stored rows: ' + heads.slice(0, 120))
 })
 await step('back to Bengali', async () => {
-  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.topbar .iconbtn').last().click()
   await page.getByText('Language').first().click()
   await page.locator('.pick').first().click()
   await page.waitForTimeout(300)
@@ -618,8 +620,8 @@ await step('and it goes on to a question he can answer', async () => {
 await step('putting one man back brings the question back', async () => {
   await page.locator('.wizhead .iconbtn').last().click()   // close the wizard
   await page.waitForTimeout(500)
-  await page.locator('.bookhead', { hasText: 'কাজ' }).click()          // the কাজ book
-  await page.locator('.tile', { hasText: 'লোকজন' }).click()             // its men page
+  await page.locator('.tabbar button', { hasText: 'কাজ' }).click()          // the কাজ book
+  await page.getByText('লোকজন ও মজুরি').first().click()             // its men page
   await page.locator('.topbar .iconbtn').last().click()
   await page.locator('.sheet input.input').first().fill('নতুন মিস্ত্রি')
   await page.locator('.sheet input.num').first().fill('600')
@@ -644,7 +646,7 @@ await step('and a man can be added without leaving the question', async () => {
 
 await step('the update page says so in a browser', async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.topbar .iconbtn').last().click()
   await page.locator('.pick', { hasText: 'অ্যাপ আপডেট' }).click()
   await page.getByText('এখন আছে').waitFor({ timeout: 4000 })
   await page.waitForTimeout(1200)
@@ -666,7 +668,7 @@ await step('and it names where it looks', async () => {
 
 await step('backup writes a file', async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.topbar .iconbtn').last().click()
   await tap('ব্যাকআপ')
   await page.waitForTimeout(200)
 })
@@ -700,14 +702,14 @@ page.on('request', (r) => {
 
 const openAiPage = async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.topbar .iconbtn').last().click()
   await page.locator('.pick', { hasText: 'এআই কী' }).click()
   await page.locator('input.input').waitFor({ timeout: 4000 })
 }
 
 await step('ai key: the page is in settings and says none is entered', async () => {
   await home()
-  await page.locator('.topbar .iconbtn').nth(1).click()
+  await page.locator('.topbar .iconbtn').last().click()
   const row = await page.locator('.pick', { hasText: 'এআই কী' }).innerText()
   if (!/বসানো নেই/.test(row)) throw new Error('the row did not say no key is entered: ' + row)
   await page.locator('.pick', { hasText: 'এআই কী' }).click()
@@ -791,13 +793,13 @@ await step('enquiries: the phone is pointed at the server', async () => {
 })
 
 await step('enquiries: home says two people wrote', async () => {
-  await page.getByText(/ওয়েবসাইটে .* জন লিখেছেন/).first().waitFor({ timeout: 5000 })
-  const text = await page.locator('.bigbtn', { hasText: 'ওয়েবসাইটে' }).innerText()
+  await page.getByText(/ওয়েবসাইটে .* জন খোঁজ নিয়েছেন/).first().waitFor({ timeout: 5000 })
+  const text = await page.locator('.softcard', { hasText: 'ওয়েবসাইটে' }).innerText()
   if (!/২|2/.test(text)) throw new Error('the count is not two: ' + text)
 })
 
 await step('enquiries: the screen shows them with numbers to ring', async () => {
-  await page.locator('.bigbtn', { hasText: 'ওয়েবসাইটে' }).click()
+  await page.locator('.softcard', { hasText: 'ওয়েবসাইটে' }).click()
   await page.getByText('Mitali Das').waitFor({ timeout: 5000 })
   const hrefs = await page.locator('a[href^="tel:"]').evaluateAll((as) => as.map((a) => a.getAttribute('href')))
   if (!hrefs.includes('tel:+918794255183')) throw new Error('a ten-digit number did not get +91: ' + hrefs.join(' '))
@@ -816,22 +818,22 @@ await step('enquiries: what a stranger typed is shown as text, never run', async
 })
 
 await step('enquiries: once seen, home stops announcing them', async () => {
-  await pressBack()
+  await page.evaluate(() => window.__shellBack())
   await page.waitForTimeout(500)
-  if (await page.locator('.bigbtn', { hasText: 'ওয়েবসাইটে' }).count()) throw new Error('the card is still there after he looked')
+  if (await page.locator('.softcard', { hasText: 'ওয়েবসাইটে' }).count()) throw new Error('the card is still there after he looked')
 })
 
-await step('enquiries: the all-features screen can reach them again', async () => {
+await step('enquiries: the কাজ tab can reach them again', async () => {
   await home()
-  await tap('সব কিছু')
-  await tap('ওয়েবসাইটের অনুসন্ধান')
+  await page.locator('.tabbar button', { hasText: 'কাজ' }).click()
+  await tap('ওয়েবসাইটে খোঁজ')
   await page.getByText('Mitali Das').waitFor({ timeout: 4000 })
   if ((await page.locator('.badge', { hasText: 'নতুন' }).count()) !== 0) throw new Error('they are still marked new')
 })
 
 await step('website: an item can be kept off the site, and the choice goes up', async () => {
   await home()
-  await tap('সব কিছু')
+  await page.locator('.tabbar button', { hasText: 'দোকান' }).click()
   await tap('মালের তালিকা')
   await page.locator('.rowlist .pick', { hasText: 'সিমেন্ট' }).first().click()
   await page.getByText('ওয়েবসাইটে দেখাবে?').waitFor({ timeout: 4000 })

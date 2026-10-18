@@ -1,17 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useOnce } from '../lib/once'
-import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, Field, useToast, Toast, Empty } from '../ui/kit'
-import { useStore, saveEntries, saveMaster, nameOf, parties, type State } from '../lib/store'
-import { telHref } from '../lib/phone'
-import { reminderText, reminderHref } from '../lib/dues'
-import { ContactPicker } from './Settings'
+import { Icon, Chip, Sheet, MoneyPad, Field } from '../ui/kit'
+import { saveEntries, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
-import { money, isoDate, dateBn, addDays } from '../lib/bn'
+import { money, isoDate, addDays } from '../lib/bn'
 import { PAY_MODES, type ID, type MoneyEntry } from '../lib/model'
-import { openDues, openReceivables, SETTLE_HEAD, modeLabel } from '../lib/calc'
+import { SETTLE_HEAD, modeLabel } from '../lib/calc'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
-import { OldDueSheet } from './OldDue'
 
 /* Paying off a bill, and collecting one.
 
@@ -24,108 +20,27 @@ import { OldDueSheet } from './OldDue'
    arrived — so it carries SETTLE_HEAD, which every cost total skips while the
    cash still moves. */
 
-export function Payments({ onBack }: { onBack: () => void }) {
-  const s = useStore((x) => x)
-  const toast = useToast()
-  const [pay, setPay] = useState<{ party_id: ID; dir: 'paid' | 'received'; owed: number } | null>(null)
-  const [old, setOld] = useState(false)
-  const [bookFor, setBookFor] = useState<ID | null>(null)
-
-  const owe = useMemo(() => byParty(openDues(s.entries)), [s.entries])
-  const get = useMemo(() => byParty(openReceivables(s.entries)), [s.entries])
-  const oweTotal = owe.reduce((a, x) => a + x.amount, 0)
-  const getTotal = get.reduce((a, x) => a + x.amount, 0)
-
-  return (
-    <>
-      <TopBar title="টাকা দেওয়া-নেওয়া" sub={tf('দেবেন {0} · পাবেন {1}', money(oweTotal), money(getTotal))} onBack={onBack} />
-      <div className="scroll">
-        <button className="btn quiet small" style={{ marginTop: '.6rem' }} onClick={() => setOld(true)}>{t('+ পুরোনো বাকি')}</button>
-        {owe.length === 0 && get.length === 0 && (
-          <Empty>{t('কারও কাছে বাকি নেই, কারও কাছে পাওনাও নেই।')}</Empty>
-        )}
-
-        {owe.length > 0 && (
-          <>
-            <p className="sectionlabel">{t('যাদের দিতে হবে')}</p>
-            <div className="rowlist">
-              {owe.map((x) => (
-                <Pick key={'o' + x.party_id} title={x.party_id ? nameOf(s, x.party_id) : t('নাম লেখা নেই')}
-                  sub={!x.oldest ? t('তারিখ ঠিক করা নেই') : x.oldest < isoDate() ? tf('{0} থেকে বাকি — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে দিতে হবে', dateBn(x.oldest, false))}
-                  right={<span className="num" style={{ color: x.oldest && x.oldest < isoDate() ? 'var(--crit)' : undefined }}>{money(x.amount)}</span>}
-                  onClick={() => setPay({ party_id: x.party_id, dir: 'paid', owed: x.amount })} />
-              ))}
-            </div>
-          </>
-        )}
-
-        {get.length > 0 && (
-          <>
-            <p className="sectionlabel">{t('যাদের কাছে পাওনা')}</p>
-            <div className="rowlist">
-              {get.map((x) => {
-                const p = parties(s).find((pp) => pp.id === x.party_id)
-                return (
-                  <div key={'g' + x.party_id}>
-                    <Pick title={x.party_id ? nameOf(s, x.party_id) : t('খুচরো খদ্দের')}
-                      sub={!x.oldest ? t('তারিখ ঠিক করা নেই') : x.oldest < isoDate() ? tf('{0} থেকে পাওনা — সময় পেরিয়েছে', dateBn(x.oldest, false)) : tf('{0} তারিখে পাওয়ার কথা', dateBn(x.oldest, false))}
-                      right={<span className="num">{money(x.amount)}</span>}
-                      onClick={() => setPay({ party_id: x.party_id, dir: 'received', owed: x.amount })} />
-                    {/* Collecting is the point of the list: ring him, or send the reminder already written. */}
-                    {p && (
-                      <div className="spread" style={{ gap: '.5rem', margin: '.35rem 0 .8rem' }}>
-                        {p.phone ? (
-                          <>
-                            <a className="btn ghost small" href={telHref(p.phone)} style={{ flex: 1, textDecoration: 'none', textAlign: 'center' }}>{t('ফোন')}</a>
-                            <a className="btn primary small" target="_blank" rel="noopener noreferrer" style={{ flex: 2, textDecoration: 'none', textAlign: 'center' }}
-                              href={reminderHref(p.phone, reminderText(p.name_bn, x.since, x.amount, s.settings.owner_bn))}>{t('তাগাদা পাঠান')}</a>
-                          </>
-                        ) : (
-                          <button className="btn ghost small" style={{ flex: 1 }} onClick={() => setBookFor(p.id)}>{t('নম্বর নেই — ফোনবুক থেকে নিন')}</button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          </>
-        )}
-      </div>
-
-      {pay && (
-        <SettleSheet s={s} {...pay} onClose={() => setPay(null)}
-          onDone={(msg) => { setPay(null); toast.show(msg) }} />
-      )}
-      {bookFor && (
-        <ContactPicker onClose={() => setBookFor(null)} onPicked={async (c) => {
-          const p = parties(s).find((pp) => pp.id === bookFor)
-          if (p) await saveMaster({ ...p, phone: c.phone, updated_at: new Date().toISOString() })
-          setBookFor(null)
-        }} />
-      )}
-      {old && <OldDueSheet s={s} onClose={() => setOld(false)} onDone={(msg) => { setOld(false); toast.show(msg) }} />}
-      {toast.msg && <Toast text={toast.msg} />}
-    </>
-  )
-}
-
-function byParty(rows: { party_id: ID; amount: number; due_date: string; date: string }[]) {
+/** Open dues or receivables, one line per person: the total, the oldest date, since when, and whether it is all
+    an old balance from the paper khata. */
+export function byParty(rows: { party_id: ID; amount: number; due_date: string; date: string; dir?: string }[]) {
   // since: the day the oldest still-open row was written — what the reminder says the money is owed from.
-  const map = new Map<ID, { party_id: ID; amount: number; oldest: string; since: string }>()
+  const map = new Map<ID, { party_id: ID; amount: number; oldest: string; since: string; old: boolean }>()
   for (const r of rows) {
     const cur = map.get(r.party_id)
+    const fromPaper = !!r.dir && r.dir.startsWith('opening_')
     // oldest is '' when none of the party's bills has a date; those go last.
     if (cur) {
       cur.amount += r.amount
       if (r.due_date && (!cur.oldest || r.due_date < cur.oldest)) cur.oldest = r.due_date
       if (r.date < cur.since) cur.since = r.date
-    } else map.set(r.party_id, { party_id: r.party_id, amount: r.amount, oldest: r.due_date, since: r.date })
+      cur.old = cur.old && fromPaper
+    } else map.set(r.party_id, { party_id: r.party_id, amount: r.amount, oldest: r.due_date, since: r.date, old: fromPaper })
   }
   return [...map.values()].sort((a, b) => ((a.oldest || '9999') < (b.oldest || '9999') ? -1 : (a.oldest || '9999') > (b.oldest || '9999') ? 1 : 0))
 }
 
-function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
+/** টাকা দিলাম / টাকা পেলাম against one person's balance. */
+export function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
   s: State; party_id: ID; dir: 'paid' | 'received'; owed: number
   onClose: () => void; onDone: (msg: string) => void
 }) {

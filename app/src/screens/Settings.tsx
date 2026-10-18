@@ -480,8 +480,7 @@ export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [edit, setEdit] = useState<Project | null>(null)
   // A new job asks its contract, stage and money so far (NewProjectSheet); an existing one opens the full editor.
   const [adding, setAdding] = useState(false)
-  const [delConfirm, setDelConfirm] = useState(false)
-  const open = (p: Project | null) => { setDelConfirm(false); setEdit(p) }
+  const open = (p: Project | null) => setEdit(p)
   const list = allProjects(s)
   return (
     <>
@@ -496,45 +495,53 @@ export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
         </div>
       </div>
       {adding && <NewProjectSheet onClose={() => setAdding(false)} onCreated={() => setAdding(false)} />}
-      {edit && (
-        <Sheet title={edit.name_bn || 'নতুন কাজ'} onClose={() => { setEdit(null); setDelConfirm(false) }}>
-          <Field label="কাজের নাম"><input className="input" value={edit.name_bn} onChange={(e) => setEdit({ ...edit, name_bn: e.target.value })} placeholder="যেমন — রামপুর বাড়ি" /></Field>
-          <Field label="খদ্দের"><input className="input" value={edit.client_bn} onChange={(e) => setEdit({ ...edit, client_bn: e.target.value })} /></Field>
-          <Field label="ধরন">
-            <div className="chips">
-              {[...new Set([...KINDS.map((k) => k.key), ...stages(s).map((x) => x.project_type)])].map((k) => (
-                <Chip key={k} on={edit.ptype === k} onClick={() => setEdit({ ...edit, ptype: k })}>{t(kindLabel(k))}</Chip>
-              ))}
-            </div>
-          </Field>
-          <Field label="মাপ (বর্গফুট)"><NumField value={edit.area_sqft} onChange={(v) => setEdit({ ...edit, area_sqft: v })} /></Field>
-          <Field label="চুক্তির টাকা"><NumField value={edit.budget} onChange={(v) => setEdit({ ...edit, budget: v != null && v < 0 ? null : v })} /></Field>
-          <Field label="কত দিনে শেষ করার কথা"><NumField value={edit.plan_days} onChange={(v) => setEdit({ ...edit, plan_days: v })} /></Field>
-          <Field label="অবস্থা">
-            <div className="chips">
-              <Chip on={edit.status === 'active'} onClick={() => setEdit({ ...edit, status: 'active' })}>{t("চলছে")}</Chip>
-              <Chip on={edit.status === 'done'} onClick={() => setEdit({ ...edit, status: 'done' })}>{t("শেষ")}</Chip>
-            </div>
-          </Field>
-          <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
-            onClick={async () => { await saveMaster(edit); setEdit(null) }}>{t("খাতায় তুলুন")}</button>
-          {/* Delete only shows once a job actually exists. Two taps, because it
-              takes the job off every list — its already-written rows stay in the
-              ledger (nothing there can be un-happened), but the job stops
-              appearing and stops counting on the dashboard. */}
-          {list.some((p) => p.id === edit.id) && (
-            <button className="btn ghost" style={{ marginTop: '.6rem', width: '100%', color: 'var(--crit)', borderColor: 'var(--crit)' }}
-              onClick={async () => {
-                if (!delConfirm) { setDelConfirm(true); return }
-                await saveMaster({ ...edit, deleted: true })
-                setEdit(null); setDelConfirm(false)
-              }}>
-              {delConfirm ? t('হ্যাঁ, কাজটা মুছে ফেলুন') : t('কাজটা মুছে ফেলুন')}
-            </button>
-          )}
-        </Sheet>
-      )}
+      {edit && <ProjectEditSheet s={s} project={edit} onClose={() => setEdit(null)} />}
     </>
+  )
+}
+
+/** A job's details, to change: its name, client, kind, size, contract, plan and whether it is running. Opened
+    from the job's card on the কাজ tab and from the list of all jobs. */
+export function ProjectEditSheet({ s, project, onClose }: { s: State; project: Project; onClose: () => void }) {
+  const [edit, setEdit] = useState<Project>(project)
+  const [delConfirm, setDelConfirm] = useState(false)
+  return (
+    <Sheet title={edit.name_bn || 'নতুন কাজ'} onClose={onClose}>
+      <Field label="কাজের নাম"><input className="input" value={edit.name_bn} onChange={(e) => setEdit({ ...edit, name_bn: e.target.value })} placeholder="যেমন — রামপুর বাড়ি" /></Field>
+      <Field label="খদ্দের"><input className="input" value={edit.client_bn} onChange={(e) => setEdit({ ...edit, client_bn: e.target.value })} /></Field>
+      <Field label="ধরন">
+        <div className="chips">
+          {[...new Set([...KINDS.map((k) => k.key), ...stages(s).map((x) => x.project_type)])].map((k) => (
+            <Chip key={k} on={edit.ptype === k} onClick={() => setEdit({ ...edit, ptype: k })}>{t(kindLabel(k))}</Chip>
+          ))}
+        </div>
+      </Field>
+      <Field label="মাপ (বর্গফুট)"><NumField value={edit.area_sqft} onChange={(v) => setEdit({ ...edit, area_sqft: v })} /></Field>
+      <Field label="চুক্তির টাকা"><NumField value={edit.budget} onChange={(v) => setEdit({ ...edit, budget: v != null && v < 0 ? null : v })} /></Field>
+      <Field label="কত দিনে শেষ করার কথা"><NumField value={edit.plan_days} onChange={(v) => setEdit({ ...edit, plan_days: v })} /></Field>
+      <Field label="অবস্থা">
+        <div className="chips">
+          <Chip on={edit.status === 'active'} onClick={() => setEdit({ ...edit, status: 'active' })}>{t("চলছে")}</Chip>
+          <Chip on={edit.status === 'done'} onClick={() => setEdit({ ...edit, status: 'done' })}>{t("শেষ")}</Chip>
+        </div>
+      </Field>
+      <button className="btn primary" disabled={!edit.name_bn.trim()} style={{ marginTop: '.5rem' }}
+        onClick={async () => { await saveMaster(edit); onClose() }}>{t("খাতায় তুলুন")}</button>
+      {/* Delete only shows once a job actually exists. Two taps, because it
+          takes the job off every list — its already-written rows stay in the
+          ledger (nothing there can be un-happened), but the job stops
+          appearing and stops counting on the dashboard. */}
+      {allProjects(s).some((p) => p.id === edit.id) && (
+        <button className="btn ghost" style={{ marginTop: '.6rem', width: '100%', color: 'var(--crit)', borderColor: 'var(--crit)' }}
+          onClick={async () => {
+            if (!delConfirm) { setDelConfirm(true); return }
+            await saveMaster({ ...edit, deleted: true })
+            onClose()
+          }}>
+          {delConfirm ? t('হ্যাঁ, কাজটা মুছে ফেলুন') : t('কাজটা মুছে ফেলুন')}
+        </button>
+      )}
+    </Sheet>
   )
 }
 
