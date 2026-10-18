@@ -403,3 +403,24 @@ Location: scratchpad/shot-design.mjs (screenshot of the redesign page)
 Action: taking one screenshot of a local HTML file.
 Cause: Node resolves packages from the script's own folder, and the scratchpad has no node_modules.
 Fix: load it through the app's folder: createRequire('…/archives-app/app/package.json')('playwright').
+
+2026-10-19
+Problem: a Python patch run from a bash heredoc died on print() with UnicodeEncodeError (cp1252 cannot encode Bengali).
+Location: an inline python script editing scripts/money-check.mjs
+Action: printing which Bengali strings had been replaced.
+Cause: the Windows console's code page is cp1252, and Python writes stdout in it.
+Fix: run such scripts with PYTHONIOENCODING=utf-8 (nothing was written before the crash, so the file was untouched).
+
+2026-10-19
+Problem: a patch to scripts/handover-check.mjs failed with "substring not found" on a search string holding \n.
+Location: an inline python script in a bash heredoc
+Action: replacing the handover scenarios.
+Cause: the old lesson again: the heredoc mangles backslashes, so the search text no longer matched the file.
+Fix: the patch went into a .py file written with the Write tool and was run from there.
+
+2026-10-19
+Problem: a one-off node script failed with "missing ) after argument list" on a regex.
+Location: scratchpad/jsxtext.mjs, written through a bash heredoc
+Action: scanning the screens for Bengali text between tags that has no English.
+Cause: the same heredoc lesson a third time: a double backslash in the regex lost one backslash on the way in, even with a quoted delimiter.
+Fix: wrote the script with the Write tool. Rule from now on: any script holding a backslash goes through the Write tool, never a heredoc.

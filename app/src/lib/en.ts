@@ -559,14 +559,14 @@ export const EN: Record<string, string> = {
   '{0} লাইন পাঠানো হল': '{0} rows sent',
   'হিসাব প্রথমে ফোনে লেখা হয়, তারপর নেট পেলে নিজে থেকেই অনলাইনে চলে যায়। ঠিকানা না দিলেও অ্যাপ পুরোপুরি চলে — তখন খাতাটা শুধু এই ফোনেই থাকে।':
     'Entries are written to the phone first and go online by themselves when there is a network. With no address the app still works fully — the ledger simply stays on this phone.',
-  'এই টোকেন দিয়ে শুধু এই খাতায় লেখা আর পড়া যায় — আর কারও হিসাব নয়, আর মুছে ফেলাও যায় না।':
-    'This token can only read and append to this one ledger — no one else’s, and it can delete nothing.',
+  'এই চাবি দিয়ে শুধু এই খাতায় লেখা আর পড়া যায় — আর কারও হিসাব নয়, আর মুছে ফেলাও যায় না।':
+    'This key can only read and append to this one ledger — no one else’s, and it can delete nothing.',
   'এখন আনুন': 'Fetch now',
   'আনছি…': 'Fetching…',
   'এখনও আসেনি': 'not arrived yet',
   'নতুন ফোনে': 'On a new phone',
-  'ফোন হারালে বা বদলালে — নতুন ফোনে এই একই ঠিকানা আর টোকেন বসিয়ে নিচের বোতামটা টিপুন। যা যা অনলাইনে গিয়েছিল, সব ফিরে আসবে। এই ফোনে যা আছে তা মুছবে না।':
-    'If the phone is lost or replaced, put the same address and token into the new one and press the button below. Everything that reached the server comes back. Nothing on this phone is erased.',
+  'ফোন হারালে বা বদলালে — নতুন ফোনে এই একই ঠিকানা আর চাবি বসিয়ে নিচের বোতামটা টিপুন। যা যা অনলাইনে গিয়েছিল, সব ফিরে আসবে। এই ফোনে যা আছে তা মুছবে না।':
+    'If the phone is lost or replaced, put the same address and key into the new one and press the button below. Everything that reached the server comes back. Nothing on this phone is erased.',
   'অনলাইন থেকে ফিরিয়ে আনুন': 'Restore from the server',
   'অনলাইন থেকে ফিরিয়ে আনবেন?': 'Restore from the server?',
   'যা যা অনলাইনে আছে সব এই ফোনে যোগ হবে। এই ফোনের কোনো লেখা মুছবে না।': 'Everything on the server is added to this phone. Nothing here is erased.',
@@ -813,8 +813,8 @@ export const EN: Record<string, string> = {
     'The size stays part of the name, so 1-inch and 2-inch pipe are counted as separate stock.',
 
   /* ---- the estimator ---- */
-  'ধাপে ধাপে জিজ্ঞেস করা হবে — মাপ, ভিত, মাল, মজুরি, তারপর লাভ।':
-    'It asks step by step — size, foundation, material, labour, then margin.',
+  'ধাপে ধাপে জিজ্ঞেস করা হবে — মাপ, মাল, মজুরি, তারপর লাভ।':
+    'One question at a time — size, material, labour, then profit.',
   'এক তলার মাপ কত বর্গফুট?': 'How many square feet is one floor?',
   'একটা তলার বিল্ট-আপ মাপ। তলার সংখ্যা নিচে বসালে মোট মাপ নিজে থেকেই বেরোবে।':
     'The built-up area of a single floor. Put the number of floors below and the total works itself out.',
@@ -843,14 +843,15 @@ export const EN: Record<string, string> = {
   'কারা কাজ করবে': 'Who will work',
   'এটা এই কাজের আন্দাজ — আপনার এখনকার লোকের তালিকার সঙ্গে এর কোনো সম্পর্ক নেই।':
     'This is a guess for this job — it has nothing to do with your current list of men.',
-  'কী কাজ — যেমন রাজমিস্ত্রি': 'What trade — mason, say',
+  'কী কাজ — যেমন মিস্ত্রি':
+    'What trade — mistri, say',
   'কতজন': 'How many',
   '+ কাজের লোক যোগ করুন': '+ Add a trade',
   'কত দিন কাজ চলবে': 'How many days the work runs',
   'দিনের সংখ্যা না বসালে মজুরি শূন্য থেকে যাবে।': 'Without a number of days the labour stays at zero.',
   '{0} জন × {1} দিন × {2} = {3}': '{0} men × {1} days × {2} = {3}',
-  'গাড়ি ভাড়া, মেশিন, জল-বিদ্যুৎ, প্ল্যান পাশ — যা যা আলাদা লাগবে। যেগুলো লাগবে না, ছেড়ে দিন।':
-    'Transport, machines, water and power, plan sanction — whatever else is needed. Leave out what is not.',
+  'গাড়ি ভাড়া, মেশিন, জল-বিদ্যুৎ — যা যা আলাদা লাগবে। যেগুলো লাগবে না, ছেড়ে দিন।':
+    'Transport, machines, water and power — whatever else is needed. Leave out what is not.',
   '+ খরচ যোগ করুন': '+ Add a cost',
   'কীসের খরচ': 'What for',
   'প্ল্যান পাশ': 'Plan sanction',
@@ -1210,4 +1211,47 @@ export const EN: Record<string, string> = {
   'অন্য কাজের টাকা': 'Money for other jobs',
   'দোকানের মাল': 'Goods for the shop',
   'আজ কিছু লেখা হয়নি। তুললে লেখা থাকবে ‘আজ কাজ হয়নি’।': "Nothing written today. Saving will record 'no work today'.",
+
+  /* ---- setup, the new-job sheet, and pricing any kind of job ---- */
+  'নমস্কার!': 'Namaskar!',
+  'এখানে রোজের কাজ, দোকান আর টাকার হিসাব থাকবে।': 'Your daily work, the shop and the money are all kept here.',
+  'আপনার নাম কী?': 'What is your name?',
+  'আপনি কী কী করেন?': 'What work do you do?',
+  'ঠিকাদারির কাজ': 'Contract work',
+  'বাড়ি, রং, স্যানিটারি, মেরামত': 'Houses, painting, sanitary, repairs',
+  'মাল কেনা-বেচা': 'Buying and selling goods',
+  'এখন কোন কোন কাজ চলছে?': 'Which jobs are running now?',
+  '{0} চলছে': '{0} under way',
+  '+ কাজ যোগ করুন': '+ Add a job',
+  'কাদের মজুরি দেন?': 'Whom do you pay a daily wage?',
+  'নাম আর এক দিনের মজুরি। বাকিরা পরে।': "A name and one day's wage. The rest later.",
+  'মজুরি না দিলে হিসাব ভুল হবে।': 'Without a wage, the accounts will come out wrong.',
+  'এখন হাতে কত টাকা আছে?': 'How much cash do you have now?',
+  'না জানলে ছেড়ে দিন।': "If you don't know, leave it.",
+  'ফোনে মনে করিয়ে দেওয়া চালু করবেন?': 'Turn on reminders on this phone?',
+  'সকাল ৮টা': '8 in the morning',
+  'রাত ৮টা': '8 at night',
+  'হিসাব লেখা না হলে': "if the day isn't written",
+  'সোমবার সকাল': 'Monday morning',
+  'কে কত টাকা দেবে': 'who owes you what',
+  'একটা অন্তত বেছে নিন।': 'Pick at least one.',
+  'বাকির তারিখে': 'On due dates',
+  'কাকে দিতে হবে, কে দেবে': 'whom to pay, who will pay',
+  'এখন না': 'Not now',
+  'হ্যাঁ, চালু করুন': 'Yes, turn on',
+  'যেমন — রামপুরের বাড়ির রং': 'e.g. — painting the Rampur house',
+  'কী কাজ?': 'What kind of job?',
+  'চুক্তি কত টাকার? (জানা থাকলে)': 'Contract amount? (if known)',
+  'এ পর্যন্ত কত পেয়েছেন? (জানা থাকলে)': 'Received so far? (if known)',
+  'কাজটা যোগ করুন': 'Add the job',
+  'মোট কত বর্গফুট?': 'How many square feet in all?',
+  'কী কী মাল লাগবে, আন্দাজে কত টাকার — লিখে দিন।': 'Write the material it needs, and roughly what each costs.',
+  'কী মাল': 'What material',
+  '+ মাল যোগ করুন': '+ Add material',
+  'কাজ: {0} · মোট {1} বর্গফুট': 'Job: {0} · {1} sqft in all',
+  'কাজ: {0}': 'Job: {0}',
+  'অনলাইনে আগের খাতা পাওয়া গেছে': 'An earlier ledger was found online',
+  'এই ফোনে আবার সব নাম লিখতে হবে না।': 'No need to type all the names again on this phone.',
+  'আগের খাতা ফিরিয়ে আনুন': 'Bring back the earlier ledger',
+  'এই ফোনে লেখা কাজ বা লোকের নাম থাকলে দু’বার দেখাবে।': 'Any jobs or names already typed on this phone will show twice.',
 }

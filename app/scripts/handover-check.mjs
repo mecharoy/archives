@@ -1,5 +1,6 @@
-/* Handover checks: the device key is pasted on the phone, never built in.
-   A pretend Worker accepts one key; each scenario gets a fresh browser profile. */
+/* Handover checks: the device key is pasted on the phone, never built in — and never asked for at setup. The
+   helper pastes it in Settings → সাহায্যকারীর জন্য → অনলাইন খাতা. A pretend Worker accepts one key; each scenario
+   gets a fresh browser profile. */
 import { chromium } from 'playwright'
 import { createServer } from 'vite'
 
@@ -35,8 +36,15 @@ async function fresh() {
     return j(404, { ok: false, error: 'not found' })
   })
   await page.goto(ORIGIN)
-  await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 8000 })
+  await page.locator('.app[data-screen="setup"]').waitFor({ timeout: 8000 })
   return { ctx, page }
+}
+/* A phone already set up, opened on Settings → অনলাইন খাতা. */
+async function syncPage(page) {
+  await page.evaluate(async () => (await import('/src/lib/store.ts')).saveSettings({ onboarded: true, toured: true }))
+  await page.goto(ORIGIN)
+  await page.getByLabel('সেটিংস').click()
+  await page.getByText('অনলাইন খাতা').first().click()
 }
 
 const step = async (name, fn) => {
@@ -77,11 +85,9 @@ const store = (page, fn, arg) => page.evaluate(async ([src, a]) => {
 {
   const { ctx, page } = await fresh()
   await step('settings: the key box hides what is typed', async () => {
-    await store(page, async (m) => { await m.saveSettings({ onboarded: true, toured: true, endpoint: 'https://worker.test', token: 'handover-good-token' }) })
-    await page.goto(ORIGIN)
-    await page.getByLabel('সেটিংস').click()
-    await page.getByText('অনলাইন খাতা').first().click()
-    const box = page.locator('.field', { hasText: 'গোপন টোকেন' }).locator('input')
+    await store(page, async (m) => { await m.saveSettings({ endpoint: 'https://worker.test', token: 'handover-good-token' }) })
+    await syncPage(page)
+    const box = page.locator('.field', { hasText: 'চাবি' }).last().locator('input')
     if ((await box.getAttribute('type')) !== 'password') throw new Error('the key is shown in plain text')
     await page.getByRole('button', { name: 'দেখান' }).click()
     if ((await box.getAttribute('type')) !== 'text') throw new Error('দেখান did not show it')
@@ -89,45 +95,55 @@ const store = (page, fn, arg) => page.evaluate(async ([src, a]) => {
   await ctx.close()
 }
 
-/* ---- 3. paste on the first screen; it survives a key-less build ---- */
+/* ---- 3. setup never asks for the key ---- */
 {
   const { ctx, page } = await fresh()
-  await step('first screen: a pasted key (with spaces) finds the old book', async () => {
-    await page.getByText('অনলাইন খাতার চাবি আছে?').click()
+  await step('first screen: no key is asked for', async () => {
+    await page.getByText('নমস্কার!').waitFor({ timeout: 5000 })
+    if (await page.getByText('অনলাইন খাতার চাবি আছে?').count()) throw new Error('the first screen still offers the key')
+    if (await page.locator('input[type=password]').count()) throw new Error('a key box on the first screen')
+  })
+  await ctx.close()
+}
+
+/* ---- 4. pasted in Settings, it finds the old book and is kept trimmed ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('settings: a pasted key (with spaces) finds the old book', async () => {
+    await syncPage(page)
     await page.locator('.field', { hasText: 'সার্ভারের ঠিকানা' }).locator('input').fill('https://worker.test')
     await page.locator('.field', { hasText: 'চাবি' }).last().locator('input').fill('  handover-good-token\n')
-    await page.getByRole('button', { name: 'চাবি বসান' }).click()
-    await page.getByText('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে').waitFor({ timeout: 5000 })
+    await page.locator('.actionbar .btn.primary', { hasText: 'খাতায় তুলুন' }).click()
+    await page.getByText('অনলাইনে আগের খাতা পাওয়া গেছে').waitFor({ timeout: 5000 })
   })
-  await step('first screen: the key is saved trimmed and outlives a reload of a key-less build', async () => {
+  await step('settings: the key is saved trimmed and outlives a reload of a key-less build', async () => {
     await page.reload()
-    await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 8000 })
+    await page.waitForTimeout(800)
     const tok = await store(page, async (m) => m.getState().settings.token)
     if (tok !== 'handover-good-token') throw new Error('saved key is ' + JSON.stringify(tok.length) + ' chars, not the trimmed key')
   })
   await ctx.close()
 }
 
-/* ---- 4. a wrong key is named, not hidden ---- */
+/* ---- 5. a wrong key is named, not hidden ---- */
 {
   const { ctx, page } = await fresh()
-  await step('first screen: a wrong key says so', async () => {
-    await page.getByText('অনলাইন খাতার চাবি আছে?').click()
+  await step('settings: a wrong key says so', async () => {
+    await syncPage(page)
     await page.locator('.field', { hasText: 'সার্ভারের ঠিকানা' }).locator('input').fill('https://worker.test')
     await page.locator('.field', { hasText: 'চাবি' }).last().locator('input').fill('wrong-key')
-    await page.getByRole('button', { name: 'চাবি বসান' }).click()
+    await page.locator('.actionbar .btn.primary', { hasText: 'খাতায় তুলুন' }).click()
     await page.getByText('চাবি মিলল না').waitFor({ timeout: 5000 })
-    if (await page.getByText('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে').count()) throw new Error('restore offered on a wrong key')
+    if (await page.getByText('অনলাইনে আগের খাতা পাওয়া গেছে').count()) throw new Error('restore offered on a wrong key')
   })
   await ctx.close()
 }
 
-/* ---- 5. offline build: no address, no key, nothing breaks ---- */
+/* ---- 6. offline build: no address, no key, nothing breaks ---- */
 {
   const { ctx, page } = await fresh()
-  await step('first screen: with no address or key there is no offer and no error', async () => {
+  await step('first screen: with no address or key, setup simply starts', async () => {
     await page.waitForTimeout(800)
-    if (await page.getByText('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে').count()) throw new Error('offer shown with no server')
     await page.getByRole('button', { name: 'শুরু করি' }).waitFor({ timeout: 3000 })
   })
   await ctx.close()

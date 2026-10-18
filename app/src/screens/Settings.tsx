@@ -15,7 +15,7 @@ import { flush, testEndpoint } from '../lib/sync'
 import { fetchBrief } from '../lib/brief'
 import { makePhoneBrief, setAiKey, testAiKey, explainAiError, aiStatus, type AiStatus } from '../lib/aiBrief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
-import { restoreFromServer } from '../lib/restore'
+import { restoreFromServer, probeServer } from '../lib/restore'
 import { seedHouse } from '../lib/seed'
 import { KINDS, kindLabel } from '../lib/kinds'
 import { chipMissRate } from '../lib/suggest'
@@ -377,12 +377,23 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
   const [showToken, setShowToken] = useState(false)
   const [busy, setBusy] = useState('')
   const [confirmRestore, setConfirmRestore] = useState(false)
+  // What the server said when the key was saved: rows of an old book (> 0), a wrong key (-1), or nothing yet.
+  const [found, setFound] = useState(0)
   const toast = useToast()
   const hasKey = !!s.settings.ai_key.trim()
+  /* Names typed at setup on this phone would sit beside the same names coming back from the old book. */
+  const setupNames = !s.entries.some((e) => e.kind === 'day') && s.masters.some((m) => m.kind === 'project' || m.kind === 'worker')
 
+  /* The key is pasted here, by the helper — setup never asks for it. Saving looks at once for a book already
+     online under it (a phone that was replaced, an app put back), and offers to bring it back. */
   const save = async () => {
+    setToken(token.trim())
     await saveSettings({ endpoint: endpoint.trim(), token: token.trim() })
-    toast.show('সেভ হয়েছে')
+    setBusy('probe')
+    const n = await probeServer()
+    setBusy('')
+    setFound(n)
+    if (n === 0) toast.show('সেভ হয়েছে')
   }
 
   return (
@@ -396,7 +407,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
           <input className="input" value={endpoint} onChange={(e) => setEndpoint(e.target.value)}
             placeholder="https://site-khata.___.workers.dev" inputMode="url" autoCapitalize="off" spellCheck={false} />
         </Field>
-        <Field label="গোপন টোকেন">
+        <Field label="চাবি">
           <input className="input" value={token} onChange={(e) => setToken(e.target.value)}
             type={showToken ? 'text' : 'password'} autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
         </Field>
@@ -408,8 +419,16 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
             setBusy('')
             toast.show(err || 'যোগাযোগ ঠিক আছে')
           }}>{busy === 'test' ? t('দেখছি…') : t('পরীক্ষা করুন')}</button>
-          <button className="btn primary" onClick={save}>{t("খাতায় তুলুন")}</button>
+          <button className="btn primary" disabled={!!busy} onClick={save}>{busy === 'probe' ? t('দেখছি…') : t("খাতায় তুলুন")}</button>
         </div>
+        {found === -1 && <p className="small" style={{ color: 'var(--crit)', marginTop: '-.4rem' }}>{t('চাবি মিলল না')}</p>}
+        {found > 0 && (
+          <div className="softcard" style={{ marginTop: '.2rem' }}>
+            <strong>{t('অনলাইনে আগের খাতা পাওয়া গেছে')}</strong>
+            <span>{t('এই ফোনে আবার সব নাম লিখতে হবে না।')}</span>
+            <span className="pair"><button className="btn primary small" onClick={() => setConfirmRestore(true)}>{t('আগের খাতা ফিরিয়ে আনুন')}</button></span>
+          </div>
+        )}
 
         <div className="divider" />
         <div className="card">
@@ -426,7 +445,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
 
         <div className="card">
           <div className="spread">
-            <span>{t("রাতের হিসাব")}</span>
+            <span>{t("আজকের কথা")}</span>
             <span className="small muted">{s.brief ? agoBn(s.brief.generated_at) : t('এখনও আসেনি')}</span>
           </div>
           {hasKey && <p className="small muted" style={{ marginTop: '.4rem' }}>{t('এই ফোনেই তৈরি হয় — রোজ সন্ধের পর একবার।')}</p>}
@@ -442,7 +461,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
         <p className="sectionlabel">{t("নতুন ফোনে")}</p>
         <div className="card">
           <p className="small muted">
-            {t("ফোন হারালে বা বদলালে — নতুন ফোনে এই একই ঠিকানা আর টোকেন বসিয়ে নিচের বোতামটা টিপুন। যা যা অনলাইনে গিয়েছিল, সব ফিরে আসবে। এই ফোনে যা আছে তা মুছবে না।")}
+            {t("ফোন হারালে বা বদলালে — নতুন ফোনে এই একই ঠিকানা আর চাবি বসিয়ে নিচের বোতামটা টিপুন। যা যা অনলাইনে গিয়েছিল, সব ফিরে আসবে। এই ফোনে যা আছে তা মুছবে না।")}
           </p>
           <button className="btn quiet small" style={{ marginTop: '.7rem' }} disabled={!!busy || !s.settings.endpoint}
             onClick={() => setConfirmRestore(true)}>
@@ -451,12 +470,13 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
         </div>
 
         <p className="small muted" style={{ marginTop: '1rem' }}>
-          {t("এই টোকেন দিয়ে শুধু এই খাতায় লেখা আর পড়া যায় — আর কারও হিসাব নয়, আর মুছে ফেলাও যায় না।")}
+          {t("এই চাবি দিয়ে শুধু এই খাতায় লেখা আর পড়া যায় — আর কারও হিসাব নয়, আর মুছে ফেলাও যায় না।")}
         </p>
       </div>
       {confirmRestore && (
         <Sheet title="অনলাইন থেকে ফিরিয়ে আনবেন?" onClose={() => setConfirmRestore(false)}>
           <p className="hint">{t("যা যা অনলাইনে আছে সব এই ফোনে যোগ হবে। এই ফোনের কোনো লেখা মুছবে না।")}</p>
+          {setupNames && <p className="small" style={{ color: 'var(--warn)' }}>{t('এই ফোনে লেখা কাজ বা লোকের নাম থাকলে দু’বার দেখাবে।')}</p>}
           <div className="actionbar" style={{ borderTop: 0, padding: '.6rem 0 0' }}>
             <button className="btn ghost" onClick={() => setConfirmRestore(false)}>{t("থাক")}</button>
             <button className="btn primary" onClick={async () => {

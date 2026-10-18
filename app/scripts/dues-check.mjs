@@ -105,16 +105,15 @@ ck('no key: never', due({ now: '2026-10-16T13:30:00Z', dayRowAt: '2026-10-16T13:
 /* A job set up mid-way: the stages before the one it is at are done, and what came in so far is the
    job's income without being today's cash. */
 const { jobstart } = app
-const st4 = [1, 2, 3, 4].map((seq) => ({ seq }))
-const rows = jobstart.jobStartRows('p9', st4, 3, 200000, '2026-10-17')
+const rows = jobstart.jobStartRows('p9', 30, 200000, '2026-10-17')
 const prog = rows.filter((e) => e.kind === 'progress')
-ck('a job at stage 3 has stages 1 and 2 done', prog.map((e) => e.stage_seq + e.state).join(), '1done,2done')
+ck('a job already 30% done has one slider row of 30', prog.map((e) => e.state + ':' + e.pct).join(), 'pct:30')
 ck('all on the job, in one batch', new Set(rows.map((e) => e.batch)).size + ':' + rows.every((e) => e.project_id === 'p9'), '1:true')
 const recv = rows.filter((e) => e.kind === 'money')
 ck('what came in so far is one received row for the job', recv.map((e) => [e.dir, e.amount, e.head_bn].join('/')).join(), 'received/200000/কাজের টাকা')
 ck('marked as received earlier, so it is not counted as cash', recv[0] && recv[0].mode, calc.EARLIER_MODE)
 ck('cash is untouched by it', calc.cashState(rows, 10000, '2026-10-01').computed, 10000)
-ck('at the first stage nothing is done', jobstart.jobStartRows('p9', st4, 1, 0, '2026-10-17').length, 0)
+ck('a new job with nothing done and nothing paid writes nothing', jobstart.jobStartRows('p9', 0, 0, '2026-10-17').length, 0)
 
 /* A number picked from the phone book that is already on a person is that person, however it is
    written: a second record splits one man's dues in two. */

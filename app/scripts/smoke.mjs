@@ -57,26 +57,35 @@ const pickItem = async (name) => {
 await page.goto('http://localhost:5199/')
 await page.waitForTimeout(700)
 
-await step('onboarding opens', async () => { await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 5000 }) })
-await step('onboarding: start', async () => { await tap('শুরু করি') })
-await step('onboarding: language', async () => {
-  await page.getByText('কোন ভাষায় দেখতে চান?').waitFor({ timeout: 4000 })
-  await page.locator('.pick').first().click()
-  await tap('এগিয়ে যান')
+await step('onboarding opens, with no key and no language question', async () => {
+  await page.getByText('নমস্কার!').waitFor({ timeout: 5000 })
+  if (await page.getByText('অনলাইন খাতার চাবি আছে?').count()) throw new Error('the first screen asks for the key')
+  if (!(await page.getByText('English', { exact: true }).count())) throw new Error('no small English button on the first screen')
 })
-await step('onboarding: about him', async () => {
-  await page.getByText('আপনার নাম?').waitFor({ timeout: 4000 })
+await step('onboarding: start', async () => { await tap('শুরু করি') })
+await step('onboarding: his name', async () => {
+  await page.getByText('আপনার নাম কী?').waitFor({ timeout: 4000 })
   await page.locator('input.input').first().fill('বিমল')
   await tap('এগিয়ে যান')
 })
-await step('onboarding: project', async () => {
-  await page.getByText('এখন কোন কাজটা চলছে?').waitFor({ timeout: 4000 })
-  await page.locator('input.input').first().fill('রামপুর বাড়ি')
-  await page.locator('input.input').nth(1).fill('2800000')
+await step('onboarding: what he does, both ticked', async () => {
+  await page.getByText('আপনি কী কী করেন?').waitFor({ timeout: 4000 })
+  if ((await page.locator('.pick.on').count()) !== 2) throw new Error('contracting and the shop should both start ticked')
   await tap('এগিয়ে যান')
 })
-await step('onboarding: workers', async () => {
-  await page.getByText('কারা কাজ করে?').waitFor({ timeout: 4000 })
+await step('onboarding: a running job, of a kind', async () => {
+  await page.getByText('এখন কোন কোন কাজ চলছে?').waitFor({ timeout: 4000 })
+  if (!(await page.getByText('এখন কোনো কাজ নেই').count())) throw new Error('with no job added the button should say so')
+  await tap('+ কাজ যোগ করুন')
+  await page.locator('.sheet .field', { hasText: 'কাজের নাম' }).locator('input').fill('রামপুর বাড়ি')
+  if (!(await page.locator('.sheet .chip.on', { hasText: 'নতুন বাড়ি' }).count())) throw new Error('a new job should start as a new house')
+  await page.locator('.sheet .field', { hasText: 'চুক্তি কত টাকার?' }).locator('input').fill('2800000')
+  await page.locator('.sheet .btn.primary', { hasText: 'কাজটা যোগ করুন' }).click()
+  await page.locator('.pick', { hasText: 'রামপুর বাড়ি' }).waitFor({ timeout: 3000 })
+  await tap('এগিয়ে যান')
+})
+await step('onboarding: the men and their wages', async () => {
+  await page.getByText('কাদের মজুরি দেন?').waitFor({ timeout: 4000 })
   await page.locator('input.input').nth(0).fill('রতন')
   await page.locator('input.input').nth(1).fill('600')
   await tap('+ আরও একজন')
@@ -84,10 +93,16 @@ await step('onboarding: workers', async () => {
   await page.locator('input.input').nth(3).fill('550')
   await tap('এগিয়ে যান')
 })
-await step('onboarding: cash in hand', async () => {
-  await page.getByText('এই মুহূর্তে হাতে কত টাকা আছে?').waitFor({ timeout: 4000 })
-  await tap('হয়ে গেল')
-  await page.getByText('আজকের হিসাব').first().waitFor({ timeout: 5000 })
+await step('onboarding: cash in hand, left blank', async () => {
+  await page.getByText('এখন হাতে কত টাকা আছে?').waitFor({ timeout: 4000 })
+  await tap('এগিয়ে যান')
+})
+await step('onboarding: reminders, and on to আজ', async () => {
+  await page.getByText('ফোনে মনে করিয়ে দেওয়া চালু করবেন?').waitFor({ timeout: 4000 })
+  await tap('এখন না')
+  await page.getByText('আজকের হিসাব লিখুন').first().waitFor({ timeout: 5000 })
+  const names = (await page.locator('.tabbar button').allInnerTexts()).map((x) => x.trim()).join(' ')
+  if (names !== 'আজ কাজ দোকান টাকা') throw new Error('after setup the tabs read: ' + names)
 })
 
 await step('the tour opens by itself, first time', async () => {
@@ -338,6 +353,42 @@ await step('estimator: the quote a customer sees shows the price, not his margin
   for (const w of ['অনিশ্চয়তা', 'ওভারহেড', 'লাভ']) if (quote.includes(w)) throw new Error('the quote shows ' + w)
   // The terms may say "মাল ও মজুরির দর"; what must not be there is a line of each with its amount.
   for (const w of ['মাল ও সরঞ্জাম', 'মজুরি']) if (new RegExp('^' + w + '\\s', 'm').test(quote)) throw new Error('the quote has a line for ' + w)
+})
+await step('estimator: a painting job asks no floors or foundation, takes typed material, and its quote says neither', async () => {
+  await home()
+  await page.locator('.tabbar button', { hasText: 'কাজ' }).click()
+  await page.locator('.tile', { hasText: 'নতুন কাজের দর' }).click()
+  await page.locator('.chip', { hasText: 'রঙের কাজ' }).click()
+  await page.getByText('মোট কত বর্গফুট?').waitFor({ timeout: 3000 })
+  if (await page.getByText('কতগুলো তলা').count()) throw new Error('a painting job is asked its floors')
+  if (await page.getByText('ভিত কী ধরনের?').count()) throw new Error('a painting job is asked its foundation')
+  for (const d of ['১', '২', '০', '০']) await page.locator('.pad button', { hasText: d }).first().click()
+  await tap('এগিয়ে যান')
+  await page.getByText('মালের হিসাব').waitFor({ timeout: 3000 })
+  await tap('+ মাল যোগ করুন')
+  await page.locator('.scroll input.input:not(.num)').last().fill('রং ও পুটি')
+  await page.locator('.scroll input.num').last().fill('18000')
+  await page.waitForTimeout(200)
+  const mat = await page.locator('.total .v').first().innerText()
+  if (!mat.includes('১৮,০০০')) throw new Error('typed material should make 18,000 — got ' + mat)
+  await tap('এগিয়ে যান')
+  await page.getByText('মজুরি কীভাবে ধরবেন?').waitFor({ timeout: 3000 })
+  await tap('এগিয়ে যান')
+  await page.getByText('অন্য খরচ').first().waitFor({ timeout: 3000 })
+  await tap('এগিয়ে যান')
+  await tap('দর তৈরি করুন')
+  await page.getByText('দরপত্র').first().waitFor({ timeout: 3000 })
+  const quote = await page.locator('.card').first().innerText()
+  if (!quote.includes('রঙের কাজ') || !quote.includes('১২০০')) throw new Error('the quote should name the job and its size: ' + quote.replace(/\n+/g, ' | '))
+  for (const w of ['তলা', 'ভিত']) if (quote.includes(w)) throw new Error('a painting quote says ' + w)
+})
+await step('estimator: a sanitary job can be priced without a size', async () => {
+  await home()
+  await page.locator('.tabbar button', { hasText: 'কাজ' }).click()
+  await page.locator('.tile', { hasText: 'নতুন কাজের দর' }).click()
+  await page.locator('.chip', { hasText: 'স্যানিটারি' }).click()
+  await page.getByText('মোট কত বর্গফুট?').waitFor({ timeout: 3000 })
+  if (!(await page.locator('.actionbar .btn.primary').isEnabled())) throw new Error('a job with no size cannot go on')
 })
 await step('history lists days and can reverse', async () => {
   await home()

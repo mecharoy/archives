@@ -147,6 +147,14 @@ ck('a word ending in a vowel takes -র', run(() => bn.ofBn('বালি')), '�
 ck('ং becomes ঙ before -ের', run(() => bn.ofBn('রং')), 'রঙের')
 ck('a name ending in a sign keeps a hyphen', run(() => bn.ofBn('পাইপ ৩/৪"')), 'পাইপ ৩/৪"-এর')
 
+/* ---------- a job set up half-way ---------- */
+
+const { jobstart } = app
+const js = run(() => jobstart.jobStartRows('p', 40, 30000, '2026-10-19'))
+ck('a job set up at 40% writes one slider row of 40', Array.isArray(js) && js.filter((e) => e.kind === 'progress').map((e) => e.state + ':' + e.pct).join(), 'pct:40')
+ck('…and what came in so far as one received row', Array.isArray(js) && js.filter((e) => e.kind === 'money').map((e) => e.dir + ':' + e.amount).join(), 'received:30000')
+ck('a new job with nothing done and nothing paid writes nothing', run(() => jobstart.jobStartRows('p', 0, 0, '2026-10-19').length), 0)
+
 /* ---------- kinds of work ---------- */
 
 const { kinds } = app

@@ -14,7 +14,7 @@ import { Onboarding } from './screens/Onboarding'
 import { Tour, type Stop } from './ui/Tour'
 import { TabCtx, type Tab } from './ui/TabBar'
 import { goBack } from './lib/back'
-import { useStore, activeProjects, allWorkers, saveSettings } from './lib/store'
+import { useStore, saveSettings } from './lib/store'
 import { startSyncLoop } from './lib/sync'
 import { refreshUpdate } from './lib/update'
 import { reschedule } from './lib/remind'
@@ -43,7 +43,9 @@ export function App() {
   const state = useStore((s) => s)
   const ready = state.ready
   const settings = state.settings
-  const needsSetup = ready && !settings.onboarded && activeProjects(state).length === 0 && allWorkers(state).length === 0
+  /* Setup until it is finished — jobs are added during it, so a job on the books does not end it. A phone that
+     has saved a day (an older install, or a restored book) is never sent back to it. */
+  const needsSetup = ready && !settings.onboarded && !state.entries.some((e) => e.kind === 'day')
 
   const tabs: Tab[] = ['today', ...(settings.runs_sites ? ['work' as Tab] : []), ...(settings.runs_shop ? ['shop' as Tab] : []), 'money']
   const [tabRaw, setTab] = useState<Tab>('today')

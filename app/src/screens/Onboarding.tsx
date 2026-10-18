@@ -1,243 +1,146 @@
-import { useEffect, useState } from 'react'
-import { Icon, Field, NumField, Chip, Pick } from '../ui/kit'
-import { saveMaster, saveSettings, saveEntries, useStore, allItems } from '../lib/store'
+import { useState } from 'react'
+import { Icon, Field, NumField, Chip, Pick, CheckPick } from '../ui/kit'
+import { saveMaster, saveSettings, useStore, allItems, activeProjects, stages } from '../lib/store'
 import { uid } from '../lib/db'
-import { isoDate, money } from '../lib/bn'
-import type { Project, Worker } from '../lib/model'
-import { seedHouse, HOUSE } from '../lib/seed'
-import { t, setLang, type Lang } from '../lib/i18n'
+import { isoDate } from '../lib/bn'
+import type { Worker } from '../lib/model'
+import { seedKinds } from '../lib/seed'
+import { kindLabel, kindStages } from '../lib/kinds'
+import { currentStage } from '../lib/calc'
+import { askNotify } from '../lib/remind'
+import { t, tf, setLang, type Lang } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
-import { probeServer, restoreFromServer } from '../lib/restore'
-import { JobStartFields } from './NewJob'
-import { HOUSE_STAGES } from '../lib/seed'
-import { jobStartRows } from '../lib/jobstart'
+import { NewProjectSheet } from './NewJob'
 
-/* First run.
+/* First run, with the helper beside him. One plain question a screen, nothing he has to know first:
+   his name; what he does (contracting, a shop, or both); the jobs running now, of any kind; the men he pays
+   a daily wage; the cash in hand; and whether the phone may remind him — asked here, with the reason, so
+   Android's own box makes sense when it comes. No key: the online book's key is pasted later, in Settings,
+   by the helper. Every answer can be changed in Settings. */
 
-   It opens by saying what the app is for and what it will never do, then asks
-   who he is and what he actually runs — a shop, sites, or both — because that
-   decides which of the three books he lands in every evening. Only after that
-   does it ask for anything to fill in, and every one of those is skippable:
-   a man with no contract this month must still be able to finish setup, and
-   an invented job name would quietly poison every per-job total afterwards.
-
-   Nothing here is permanent. All of it is editable in সেটিংস. */
-
-type Step = 'intro' | 'lang' | 'about' | 'work' | 'people' | 'cash'
+type Step = 'welcome' | 'name' | 'work' | 'jobs' | 'men' | 'cash' | 'notify'
 
 export function Onboarding({ onDone }: { onDone: () => void }) {
   const s = useStore((x) => x)
-  const [step, setStep] = useState<Step>('intro')
-  const [lang, setLangState] = useState<Lang>('bn')
+  const [step, setStep] = useState<Step>('welcome')
+  const [lang, setLangState] = useState<Lang>(s.settings.lang)
   const [owner, setOwner] = useState('')
-  const [runsShop, setRunsShop] = useState(true)
   const [runsSites, setRunsSites] = useState(true)
-  const [name, setName] = useState('')
-  const [budget, setBudget] = useState<number | null>(null)
-  const [stageSeq, setStageSeq] = useState<number | null>(HOUSE_STAGES[0].seq)
-  const [received, setReceived] = useState<number | null>(null)
+  const [runsShop, setRunsShop] = useState(true)
   const [men, setMen] = useState<{ name: string; rate: number | null }[]>([{ name: '', rate: null }])
   const [cash, setCash] = useState<number | null>(null)
+  const [adding, setAdding] = useState(false)
   const [busy, setBusy] = useState(false)
-  /* If the online ledger already holds his books (a reinstall, a new phone, the same token), offer to
-     bring them back BEFORE asking him to type the same names again — typing them twice made two of
-     every job and every man. */
-  const [found, setFound] = useState(0)
-  const [restoring, setRestoring] = useState(false)
-  const [restoreErr, setRestoreErr] = useState('')
-  useEffect(() => { void probeServer().then(setFound) }, [])
-  /* Public builds carry no device key: the helper pastes it here once, and the probe runs again. */
-  const [keyOpen, setKeyOpen] = useState(false)
-  const [endpointIn, setEndpointIn] = useState(s.settings.endpoint)
-  const [tokenIn, setTokenIn] = useState('')
-  const [keyBusy, setKeyBusy] = useState(false)
-  const applyKey = async () => {
-    setKeyBusy(true)
-    await saveSettings({ endpoint: endpointIn.trim(), token: tokenIn.trim() })
-    setFound(await probeServer())
-    setKeyBusy(false)
-  }
-  const restoreNow = async () => {
-    setRestoring(true); setRestoreErr('')
-    const r = await restoreFromServer()
-    if (r.error) { setRestoring(false); setRestoreErr(r.error); return }
-    await saveSettings({ onboarded: true, toured: false, lang, owner_bn: owner.trim() })
-    setRestoring(false)
-    onDone()
-  }
-  // The phone's Back key steps back through setup (and does not quit the app halfway through it).
-  const PREV: Record<Step, Step> = { intro: 'intro', lang: 'intro', about: 'lang', work: 'about', people: 'work', cash: runsSites ? 'people' : 'about' }
-  useBackHandler(() => setStep(PREV[step]), step !== 'intro')
 
-  // The language has to take effect the moment he picks it, not at the end —
-  // the rest of setup is the first proof that the switch does anything.
+  const PREV: Record<Step, Step> = { welcome: 'welcome', name: 'welcome', work: 'name', jobs: 'work', men: runsSites ? 'jobs' : 'work', cash: 'men', notify: 'cash' }
+  useBackHandler(() => setStep(PREV[step]), step !== 'welcome' && !adding)
+
+  // The language takes effect the moment it is chosen: the rest of setup is the first proof of the switch.
   const chooseLang = (l: Lang) => { setLangState(l); setLang(l); void saveSettings({ lang: l }) }
 
-  const finish = async () => {
+  const start = async () => {
+    // Every kind's steps, before a job is added: the new-job sheet names the step a job is at.
+    await seedKinds(allItems(s), stages(s), 'missing')
+    setStep('name')
+  }
+
+  const finish = async (remind: boolean) => {
     setBusy(true)
+    if (remind) await askNotify()
     const now = new Date().toISOString()
-    const jobId = uid()
-    if (name.trim()) {
-      await saveMaster({
-        id: jobId, kind: 'project', name_bn: name.trim(), client_bn: '', ptype: HOUSE,
-        area_sqft: null, budget, start_date: isoDate(), plan_days: null, status: 'active', updated_at: now,
-      } as Project)
-    }
     for (const m of men) {
-      // The people step will not go on while a named man has no wage, so every man here has one.
+      // The men step will not go on while a named man has no wage, so every man here has one.
       if (!m.name.trim()) continue
       await saveMaster({ id: uid(), kind: 'worker', name_bn: m.name.trim(), rate: m.rate ?? 0, phone: '', active: true, updated_at: now } as Worker)
     }
-    await seedHouse(allItems(s))
-    // A job already under way: the stages before the one it is at are done, and what came in so far is its income.
-    if (name.trim()) { const rows = jobStartRows(jobId, HOUSE_STAGES, stageSeq, received ?? 0); if (rows.length) await saveEntries(rows) }
-    // Without a starting figure the first day's closing cash comes out
-    // negative, which reads like an error on the very first screen he sees.
-    await saveSettings({
-      onboarded: true, opening_cash: cash ?? 0, opening_date: isoDate(),
-      lang, owner_bn: owner.trim(), runs_shop: runsShop, runs_sites: runsSites,
-    })
+    await seedKinds(allItems(s))
+    // Without a starting figure the first evening's cash comes out negative, which reads like an error.
+    await saveSettings({ onboarded: true, opening_cash: cash ?? 0, opening_date: isoDate(), lang, owner_bn: owner.trim(), runs_shop: runsShop, runs_sites: runsSites })
     setBusy(false)
     onDone()
   }
 
-  /* ---- 1. what this is ---- */
-  if (step === 'intro') {
+  const back = <button className="btn ghost" onClick={() => setStep(PREV[step])}>{t('ফিরে')}</button>
+
+  /* ---- 1. hello ---- */
+  if (step === 'welcome') {
     return (
       <>
         <div className="scroll">
-          <div style={{ padding: '3.5rem 0 1rem', color: 'var(--accent)' }}><Icon name="book" size={40} stroke={1.5} /></div>
-          <h2 className="question">{t('খাতাটা এবার ফোনে')}</h2>
-          <p className="hint">
-            {t('রোজ সন্ধেবেলা কয়েকটা প্রশ্নের উত্তর দিলেই দিনের হিসাব লেখা হয়ে যাবে। যত ব্যবহার করবেন, তত কম টিপতে হবে — অ্যাপ আপনার নিজের অভ্যাস দেখে আগেভাগে ভরে দেবে।')}
-          </p>
-          <div className="card">
-            <div className="review-row">
-              <span><span className="t">{t('কাজ')}</span><span className="k">{t('সাইটের লোক, মাল, খরচ আর অগ্রগতি')}</span></span>
-            </div>
-            <div className="review-row">
-              <span><span className="t">{t('মজুত')}</span><span className="k">{t('দোকানে কী ঢুকল, কী বিক্রি হল, কী পড়ে আছে')}</span></span>
-            </div>
-            <div className="review-row">
-              <span><span className="t">{t('হিসাব')}</span><span className="k">{t('হাতে কত, কাকে কত দিতে হবে, মাসে কত গেল')}</span></span>
-            </div>
-          </div>
-          <p className="small muted" style={{ marginTop: '.8rem' }}>
-            {t('নেট না থাকলেও পুরোটা চলে। কোনো নাম-পাসওয়ার্ড লাগে না। কোনো হিসাব মুছে যায় না — ভুল হলে উল্টো লাইন লেখা হয়।')}
-          </p>
-          {!keyOpen ? (
-            <button className="btn quiet small" style={{ marginTop: '.6rem' }} onClick={() => setKeyOpen(true)}>
-              {t('অনলাইন খাতার চাবি আছে?')}
-            </button>
-          ) : (
-            <div className="card" style={{ marginTop: '.8rem' }}>
-              <Field label="সার্ভারের ঠিকানা">
-                <input className="input" value={endpointIn} onChange={(e) => setEndpointIn(e.target.value)}
-                  inputMode="url" autoCapitalize="off" autoCorrect="off" spellCheck={false} />
-              </Field>
-              <Field label="চাবি">
-                <input className="input" value={tokenIn} onChange={(e) => setTokenIn(e.target.value)}
-                  type="password" autoCapitalize="off" autoCorrect="off" spellCheck={false} autoComplete="off" />
-              </Field>
-              <button className="btn primary" style={{ width: '100%' }} disabled={keyBusy || !tokenIn.trim() || !endpointIn.trim()} onClick={applyKey}>
-                {keyBusy ? t('দেখছি…') : t('চাবি বসান')}
-              </button>
-              {found === -1 && <p className="small" style={{ color: 'var(--crit)', marginTop: '.5rem' }}>{t('চাবি মিলল না')}</p>}
-            </div>
-          )}
+          <div style={{ padding: '3.5rem 0 1rem', color: 'var(--accent)' }}><Icon name="book" size={44} stroke={1.5} /></div>
+          <h2 className="question" style={{ fontSize: '2rem' }}>{t('নমস্কার!')}</h2>
+          <p className="hint" style={{ fontSize: '1.08rem', color: 'var(--ink-2)' }}>{t('এখানে রোজের কাজ, দোকান আর টাকার হিসাব থাকবে।')}</p>
+          <button className="btn quiet small" style={{ marginTop: '2rem' }} onClick={() => chooseLang(lang === 'bn' ? 'en' : 'bn')}>
+            {lang === 'bn' ? 'English' : 'বাংলা'}
+          </button>
         </div>
-        {found > 0 && (
-          <div className="scroll" style={{ flex: 'none', paddingTop: 0 }}>
-            <div className="card">
-              <strong>{t('অনলাইন খাতায় আগের হিসাব পাওয়া গেছে')}</strong>
-              <p className="small muted" style={{ margin: '.3rem 0 .7rem' }}>{t('এই ফোনে আবার সব নাম লিখতে হবে না — আগের হিসাব ফিরিয়ে আনা যায়।')}</p>
-              <button className="btn primary" style={{ width: '100%' }} disabled={restoring} onClick={restoreNow}>
-                {restoring ? t('আনছি…') : t('আগের হিসাব ফিরিয়ে আনুন')}
-              </button>
-              {restoreErr && <p className="small" style={{ color: 'var(--crit)', marginTop: '.5rem' }}>{restoreErr}</p>}
-            </div>
-          </div>
-        )}
-        <div className="actionbar"><button className="btn primary" onClick={() => setStep('lang')}>{found > 0 ? t('না, নতুন করে শুরু করি') : t('শুরু করি')}</button></div>
+        <div className="actionbar"><button className="btn primary" onClick={start}>{t('শুরু করি')}</button></div>
       </>
     )
   }
 
-  /* ---- 2. language ---- */
-  if (step === 'lang') {
+  /* ---- 2. his name ---- */
+  if (step === 'name') {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{t('কোন ভাষায় দেখতে চান?')}</h2>
-          <p className="hint">{t('পরে যখন খুশি বদলানো যাবে — সেটিংস থেকে।')}</p>
-          <div className="rowlist">
-            <Pick on={lang === 'bn'} title="বাংলা" sub="সংখ্যাও বাংলায় — ১,২৫০" onClick={() => chooseLang('bn')} />
-            <Pick on={lang === 'en'} title="English" sub="Same app, English words — 1,250" onClick={() => chooseLang('en')} />
-          </div>
-        </div>
-        <div className="actionbar">
-          <button className="btn ghost" onClick={() => setStep('intro')}>{t('ফিরে')}</button>
-          <button className="btn primary" onClick={() => setStep('about')}>{t('এগিয়ে যান')}</button>
-        </div>
-      </>
-    )
-  }
-
-  /* ---- 3. who he is, and what he runs ---- */
-  if (step === 'about') {
-    return (
-      <>
-        <div className="scroll">
-          <h2 className="question">{t('আপনার নাম?')}</h2>
-          <p className="hint">{t('শুধু ডাকার জন্য — খাতার উপরে দেখাবে।')}</p>
+          <h2 className="question">{t('আপনার নাম কী?')}</h2>
           <Field label="নাম"><input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} autoFocus /></Field>
-
-          <div className="divider" />
-          <h2 className="question" style={{ marginTop: 0 }}>{t('কী কী চালান?')}</h2>
-          <p className="hint">{t('যেটা চালান না, সেটাও থাকবে — শুধু পরে দেখাবে।')}</p>
-          <div className="rowlist">
-            <Pick on={runsSites} title="সাইটের কাজ" sub="ঠিকাদারি, বাড়ি তোলা" onClick={() => setRunsSites(!runsSites)} />
-            <Pick on={runsShop} title="দোকান" sub="মাল কেনা-বেচা, মজুত" onClick={() => setRunsShop(!runsShop)} />
-          </div>
         </div>
-        <div className="actionbar">
-          <button className="btn ghost" onClick={() => setStep('lang')}>{t('ফিরে')}</button>
-          <button className="btn primary" onClick={() => setStep(runsSites ? 'work' : 'cash')}>{t('এগিয়ে যান')}</button>
-        </div>
+        <div className="actionbar">{back}<button className="btn primary" onClick={() => setStep('work')}>{t('এগিয়ে যান')}</button></div>
       </>
     )
   }
 
-  /* ---- 4. a job, if there is one ---- */
+  /* ---- 3. what he does ---- */
   if (step === 'work') {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{t('এখন কোন কাজটা চলছে?')}</h2>
-          <p className="hint">{t('একটা নাম দিলেই হবে — যেমন ‘রামপুর বাড়ি’। এখন কোনো কাজ না থাকলে ছেড়ে দিন, পরে যোগ করা যাবে।')}</p>
-          <Field label="কাজের নাম"><input className="input" value={name} onChange={(e) => setName(e.target.value)} autoFocus /></Field>
-          <Field label="চুক্তির টাকা (জানা থাকলে)"><NumField value={budget} onChange={setBudget} /></Field>
-          {budget ? <p className="small muted">{money(budget)} — {t('এটা থাকলে খরচ আর কাজের তুলনা দেখানো যায়।')}</p> : null}
-          {name.trim() && <JobStartFields stageSeq={stageSeq} setStageSeq={setStageSeq} received={received} setReceived={setReceived} />}
+          <h2 className="question">{t('আপনি কী কী করেন?')}</h2>
+          <div className="rowlist">
+            <CheckPick on={runsSites} title="ঠিকাদারির কাজ" sub="বাড়ি, রং, স্যানিটারি, মেরামত" onClick={() => setRunsSites(!runsSites)} />
+            <CheckPick on={runsShop} title="দোকান" sub="মাল কেনা-বেচা" onClick={() => setRunsShop(!runsShop)} />
+          </div>
+          {/* With neither, the app would open on two empty tabs. */}
+          {!runsSites && !runsShop && <p className="small" style={{ marginTop: '.6rem', color: 'var(--warn)' }}>{t('একটা অন্তত বেছে নিন।')}</p>}
         </div>
-        <div className="actionbar">
-          <button className="btn ghost" onClick={() => setStep('about')}>{t('ফিরে')}</button>
-          <button className="btn primary" onClick={() => setStep('people')}>{name.trim() ? t('এগিয়ে যান') : t('এখন কোনো কাজ নেই')}</button>
+        <div className="actionbar">{back}<button className="btn primary" disabled={!runsSites && !runsShop} onClick={() => setStep(runsSites ? 'jobs' : 'men')}>{t('এগিয়ে যান')}</button></div>
+      </>
+    )
+  }
+
+  /* ---- 4. the jobs running now ---- */
+  if (step === 'jobs') {
+    const jobs = activeProjects(s)
+    return (
+      <>
+        <div className="scroll">
+          <h2 className="question">{t('এখন কোন কোন কাজ চলছে?')}</h2>
+          <div className="rowlist">
+            {jobs.map((p) => {
+              const st = currentStage(p, s.entries, stages(s)).current
+              const steps = kindStages(stages(s), p.ptype)
+              return <Pick key={p.id} title={p.name_bn} sub={t(kindLabel(p.ptype)) + (st && steps.length > 1 ? ' · ' + tf('{0} চলছে', t(st.name_bn)) : '')} />
+            })}
+            <Pick title="+ কাজ যোগ করুন" onClick={() => setAdding(true)} />
+          </div>
         </div>
+        <div className="actionbar">{back}<button className="btn primary" onClick={() => setStep('men')}>{jobs.length ? t('এগিয়ে যান') : t('এখন কোনো কাজ নেই')}</button></div>
+        {adding && <NewProjectSheet onClose={() => setAdding(false)} onCreated={() => setAdding(false)} />}
       </>
     )
   }
 
   /* ---- 5. the men ---- */
-  /* A man is written with his day's wage or not at all: a wage of 0 makes every day he works cost
-     nothing, and the job's labour figure quietly wrong from the first evening. */
+  /* A man is written with his day's wage or not at all: a wage of 0 makes every day he works cost nothing. */
   const menMissingWage = men.some((m) => m.name.trim() && !(m.rate && m.rate > 0))
-  if (step === 'people') {
+  if (step === 'men') {
     return (
       <>
         <div className="scroll">
-          <h2 className="question">{t('কারা কাজ করে?')}</h2>
-          <p className="hint">{t('নাম, আর একদিন কাজ করলে কত টাকা পায়। যতজন মনে আছে দিন, বাকিরা পরে যোগ হবে।')}</p>
+          <h2 className="question">{t('কাদের মজুরি দেন?')}</h2>
+          <p className="hint">{t('নাম আর এক দিনের মজুরি। বাকিরা পরে।')}</p>
           {men.map((m, k) => (
             <div key={k} style={{ display: 'flex', gap: '.5rem', marginBottom: '.6rem' }}>
               <input className="input" style={{ flex: 2 }} placeholder={t('নাম')} value={m.name}
@@ -247,31 +150,43 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
               </div>
             </div>
           ))}
-          <div className="chips">
-            <Chip onClick={() => setMen([...men, { name: '', rate: null }])}>+ আরও একজন</Chip>
-          </div>
-          {menMissingWage && <p className="small" style={{ marginTop: '.6rem', color: 'var(--warn)' }}>{t('নাম দিলে একদিনের মজুরিও দিন — নইলে মজুরির হিসাব ভুল হবে।')}</p>}
+          <div className="chips"><Chip onClick={() => setMen([...men, { name: '', rate: null }])}>+ আরও একজন</Chip></div>
+          {menMissingWage && <p className="small" style={{ marginTop: '.6rem', color: 'var(--warn)' }}>{t('মজুরি না দিলে হিসাব ভুল হবে।')}</p>}
         </div>
-        <div className="actionbar">
-          <button className="btn ghost" onClick={() => setStep('work')}>{t('ফিরে')}</button>
-          <button className="btn primary" disabled={menMissingWage} onClick={() => setStep('cash')}>{t('এগিয়ে যান')}</button>
-        </div>
+        <div className="actionbar">{back}<button className="btn primary" disabled={menMissingWage} onClick={() => setStep('cash')}>{t('এগিয়ে যান')}</button></div>
       </>
     )
   }
 
   /* ---- 6. cash in hand ---- */
+  if (step === 'cash') {
+    return (
+      <>
+        <div className="scroll">
+          <h2 className="question">{t('এখন হাতে কত টাকা আছে?')}</h2>
+          <p className="hint">{t('না জানলে ছেড়ে দিন।')}</p>
+          <Field label="হাতে টাকা"><NumField value={cash} onChange={setCash} /></Field>
+        </div>
+        <div className="actionbar">{back}<button className="btn primary" onClick={() => setStep('notify')}>{t('এগিয়ে যান')}</button></div>
+      </>
+    )
+  }
+
+  /* ---- 7. may the phone remind him ---- */
   return (
     <>
       <div className="scroll">
-        <h2 className="question">{t('এই মুহূর্তে হাতে কত টাকা আছে?')}</h2>
-        <p className="hint">{t('না জানলে ছেড়ে দিন — যেদিন গুনবেন, সেদিন থেকেই মিলতে শুরু করবে।')}</p>
-        <Field label="হাতে টাকা"><NumField value={cash} onChange={setCash} /></Field>
-        <p className="small muted">{t('এটা একবার বসালে রোজকার শেষে ‘হাতে কত’ নিজে থেকেই মিলে যাবে।')}</p>
+        <h2 className="question">{t('ফোনে মনে করিয়ে দেওয়া চালু করবেন?')}</h2>
+        <div className="card">
+          <div className="review-row"><span><span className="t">{t('সকাল ৮টা')}</span><span className="k">{t('আজকের কথা')}</span></span></div>
+          <div className="review-row"><span><span className="t">{t('রাত ৮টা')}</span><span className="k">{t('হিসাব লেখা না হলে')}</span></span></div>
+          <div className="review-row"><span><span className="t">{t('সোমবার সকাল')}</span><span className="k">{t('কে কত টাকা দেবে')}</span></span></div>
+          <div className="review-row"><span><span className="t">{t('বাকির তারিখে')}</span><span className="k">{t('কাকে দিতে হবে, কে দেবে')}</span></span></div>
+        </div>
       </div>
       <div className="actionbar">
-        <button className="btn ghost" onClick={() => setStep(runsSites ? 'people' : 'about')}>{t('ফিরে')}</button>
-        <button className="btn primary" disabled={busy} onClick={finish}>{busy ? t('তোলা হচ্ছে…') : t('হয়ে গেল')}</button>
+        <button className="btn ghost" disabled={busy} onClick={() => void finish(false)}>{t('এখন না')}</button>
+        <button className="btn primary" disabled={busy} onClick={() => void finish(true)}>{busy ? t('তোলা হচ্ছে…') : t('হ্যাঁ, চালু করুন')}</button>
       </div>
     </>
   )

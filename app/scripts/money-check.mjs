@@ -725,17 +725,20 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
-/* ---- C1: a new job asks its contract, the stage it is at, and what came in so far ---- */
+/* ---- C1: a new job asks its kind, contract, what came in so far, and how much is done ---- */
 {
   const { ctx, page } = await fresh()
-  await step('new job: contract, stage now and received so far are all written', page, async () => {
-    await page.evaluate(async () => { await (await import('/src/lib/seed.ts')).seedHouse([]) })
+  await step('new job: kind, contract, received so far and how much is done are all written', page, async () => {
+    await page.evaluate(async () => { await (await import('/src/lib/seed.ts')).seedKinds([]) })
     await tabBtn(page, 'কাজ').click()
     await tap(page, '+ নতুন কাজ')
     await page.locator('.sheet .field', { hasText: 'কাজের নাম' }).locator('input').fill('নতুন সাইট')
-    await pad(page, ['১', '০', '০', '০', '০', '০', '০'])
-    await tap(page, 'প্লিন্থ ঢালাই', true)
+    await page.locator('.sheet .chip', { hasText: 'রঙের কাজ' }).click()
+    await page.locator('.sheet .field', { hasText: 'চুক্তি কত টাকার?' }).locator('input').fill('1000000')
     await page.locator('.sheet .field', { hasText: 'এ পর্যন্ত কত পেয়েছেন?' }).locator('input').fill('200000')
+    await page.locator('.sheet input[type=range]').fill('30')
+    const said = await page.locator('.sheet .field', { hasText: 'কাজ কতটা হয়েছে?' }).innerText()
+    if (!said.includes('৩০%') || !said.includes('এখন চলছে: ঘষা ও পুটি')) throw new Error('the slider line reads: ' + said.replace(/\n+/g, ' | '))
     await page.locator('.sheet .btn.primary').last().click()
     await page.waitForTimeout(500)
     const r = await page.evaluate(async () => {
@@ -743,9 +746,9 @@ const listText = (page) => page.locator('.scroll').first().innerText()
       const s = m.getState(); const p = s.masters.find((x) => x.kind === 'project' && x.name_bn === 'নতুন সাইট')
       if (!p) return null
       const tt = c.projectTotals(p, s.entries, m.stages(s))
-      return { budget: p.budget, received: tt.received, pct: Math.round(tt.pct_done), cash: c.cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed }
+      return { budget: p.budget, kind: p.ptype, received: tt.received, pct: Math.round(tt.pct_done), cash: c.cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed }
     })
-    if (!r || r.budget !== 1000000 || r.received !== 200000 || r.pct !== 23 || r.cash !== 10000) throw new Error(JSON.stringify(r))
+    if (!r || r.budget !== 1000000 || r.kind !== 'রং' || r.received !== 200000 || r.pct !== 30 || r.cash !== 10000) throw new Error(JSON.stringify(r))
   })
   await ctx.close()
 }
@@ -759,7 +762,7 @@ const listText = (page) => page.locator('.scroll').first().innerText()
       await seed.seedHouse([])
       const p = m.getState().masters.find((x) => x.id === 'p1')
       await m.saveMaster({ ...p, ptype: seed.HOUSE, plan_days: 180, area_sqft: 1000 })
-      await m.saveEntries(js.jobStartRows('p1', seed.HOUSE_STAGES, 3, 200000))
+      await m.saveEntries(js.jobStartRows('p1', 23, 200000))
       await m.saveEntries([{ id: db.uid(), kind: 'money', batch: db.uid(), date: (await import('/src/lib/bn.ts')).isoDate(), project_id: 'p1', created_at: new Date().toISOString(), head_bn: 'ঠিকা কাজ', dir: 'paid', amount: 50000, party_id: '', mode: 'নগদ', note: '', personal: false, photo_id: '' }])
       return !!(await import('/src/lib/brief.ts')).localBrief().series?.scurve
     })
@@ -781,18 +784,26 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 } })
   const page = await ctx.newPage()
   await page.goto(ORIGIN)
-  await step('setup: a man named without a wage cannot be passed', page, async () => {
+  await step('setup: with neither contract work nor a shop ticked, setup holds', page, async () => {
     await page.locator('.app[data-screen="setup"]').waitFor({ timeout: 8000 })
     await tap(page, 'শুরু করি')
-    await page.getByText('কোন ভাষায় দেখতে চান?').waitFor({ timeout: 4000 })
-    await page.locator('.pick').first().click(); await tap(page, 'এগিয়ে যান')
-    await page.getByText('আপনার নাম?').waitFor({ timeout: 4000 })
+    await page.getByText('আপনার নাম কী?').waitFor({ timeout: 4000 })
     await page.locator('input.input').first().fill('বিমল'); await tap(page, 'এগিয়ে যান')
-    await page.getByText('এখন কোন কাজটা চলছে?').waitFor({ timeout: 4000 })
-    await page.locator('input.input').first().fill('রামপুর বাড়ি'); await tap(page, 'এগিয়ে যান')
-    await page.getByText('কারা কাজ করে?').waitFor({ timeout: 4000 })
+    await page.getByText('আপনি কী কী করেন?').waitFor({ timeout: 4000 })
+    const next = page.locator('.actionbar .btn.primary')
+    await tap(page, 'ঠিকাদারির কাজ'); await tap(page, 'মাল কেনা-বেচা')
+    if (await next.isEnabled()) throw new Error('setup goes on with nothing ticked')
+    await tap(page, 'ঠিকাদারির কাজ'); await tap(page, 'মাল কেনা-বেচা')
+    if (!(await next.isEnabled())) throw new Error('setup is held with both ticked again')
+  })
+
+  await step('setup: a man named without a wage cannot be passed', page, async () => {
+    await tap(page, 'এগিয়ে যান')
+    await page.getByText('এখন কোন কোন কাজ চলছে?').waitFor({ timeout: 4000 }); await tap(page, 'এখন কোনো কাজ নেই')
+    await page.getByText('কাদের মজুরি দেন?').waitFor({ timeout: 4000 })
     await page.locator('input.input').nth(0).fill('রতন')
     if (await page.locator('.actionbar .btn.primary').isEnabled()) throw new Error('a man with no wage could be passed')
+    if (!(await page.getByText('মজুরি না দিলে হিসাব ভুল হবে।').count())) throw new Error('no line saying why')
     await page.locator('input.input').nth(1).fill('600')
     if (!(await page.locator('.actionbar .btn.primary').isEnabled())) throw new Error('a man with a wage could not be passed')
   })

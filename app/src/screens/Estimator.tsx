@@ -7,7 +7,7 @@ import { projectTotals } from '../lib/calc'
 import { lastPurchase } from '../lib/suggest'
 import { t, tf } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
-import { kindLabel } from '../lib/kinds'
+import { kindLabel, KINDS, HOUSE } from '../lib/kinds'
 
 /* Quoting a job, one question at a time.
 
@@ -20,7 +20,11 @@ import { kindLabel } from '../lib/kinds'
 
    The one thing that is arithmetic rather than judgement: built-up area is
    the floor area times the number of floors. Everything else he can see and
-   change on its way to the total. */
+   change on its way to the total.
+
+   Not every job is a house. Floors and the foundation are asked only for a
+   new house; any other kind asks the total size (which may be left blank)
+   and, when it has no thumb rules, takes the material as typed lines. */
 
 type Step = 'type' | 'size' | 'material' | 'labour' | 'extras' | 'margin' | 'quote'
 type LabourMode = 'daily' | 'sqft'
@@ -29,7 +33,8 @@ interface Crew { id: string; name: string; men: number | null; rate: number | nu
 interface Extra { id: string; name: string; amount: number | null }
 
 interface Prefs {
-  labour_per_sqft: number | null
+  labour_per_sqft: number | null             // the house's figure, where it has always been kept
+  labour_sqft_kind?: Record<string, number | null>   // every other kind's own — a painter's rate is not a mason's
   overhead_pct: number
   profit_pct: number
   contingency_pct: number
@@ -57,6 +62,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   const [rateOverride, setRateOverride] = useState<Record<string, number>>({})
   const [crew, setCrew] = useState<Crew[]>([])
   const [extras, setExtras] = useState<Extra[]>([])
+  const [typed, setTyped] = useState<Extra[]>([])     // material written as lines, for a kind with no thumb rules
   const [client, setClient] = useState('')
   const toast = useToast()
 
@@ -68,12 +74,18 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   useEffect(() => { void kvGet<Prefs>('estimate_prefs', DEFAULT_PREFS).then((p) => setPrefs({ ...DEFAULT_PREFS, ...p })) }, [])
   const savePrefs = (p: Prefs) => { setPrefs(p); void kvSet('estimate_prefs', p) }
 
-  const types = useMemo(() => [...new Set(stages(s).map((x) => x.project_type))], [s.masters])
-  const historyLabour = useMemo(() => labourPerSqft(s), [s])
+  // The kinds in their usual order (the house first), then any he made up himself.
+  const types = useMemo(() => {
+    const have = [...new Set(stages(s).map((x) => x.project_type))]
+    const known = KINDS.map((k) => k.key).filter((k) => have.includes(k))
+    return [...known, ...have.filter((k) => !known.includes(k))]
+  }, [s.masters])
+  const historyLabour = useMemo(() => labourPerSqft(s, ptype), [s, ptype])
   const dayRate = useMemo(() => averageDayRate(s), [s.masters])
 
+  const house = ptype === HOUSE
   const perFloor = Number(area) || 0
-  const builtUp = perFloor * (floors || 1)
+  const builtUp = perFloor * (house ? floors || 1 : 1)
 
   /* ---- material ---- */
   const lines = useMemo(() => {
@@ -92,16 +104,23 @@ export function Estimator({ onBack }: { onBack: () => void }) {
     })
   }, [s, ptype, builtUp, rateOverride])
 
-  const material = lines.reduce((a, l) => a + l.amount, 0)
+  const material = lines.length ? lines.reduce((a, l) => a + l.amount, 0) : typed.reduce((a, l) => a + (l.amount || 0), 0)
   const missing = lines.filter((l) => !l.known)
 
   /* ---- labour ---- */
+  // By the square foot only when there is a size to multiply.
+  const mode: LabourMode = builtUp > 0 ? prefs.labour_mode : 'daily'
+  const perSqft = house ? prefs.labour_per_sqft : prefs.labour_sqft_kind?.[ptype] ?? null
+  const setPerSqft = (v: number | null) => savePrefs(house
+    ? { ...prefs, labour_per_sqft: v }
+    : { ...prefs, labour_sqft_kind: { ...prefs.labour_sqft_kind, [ptype]: v } })
   const crewCost = crew.reduce((a, c) => a + (c.men || 0) * (c.rate || 0), 0) * (days || 0)
-  const sqftCost = (prefs.labour_per_sqft ?? historyLabour ?? 0) * builtUp
-  const labour = prefs.labour_mode === 'daily' ? crewCost : sqftCost
+  const sqftCost = (perSqft ?? historyLabour ?? 0) * builtUp
+  const labour = mode === 'daily' ? crewCost : sqftCost
 
   /* ---- everything else ---- */
-  const extrasCost = extras.reduce((a, e) => a + (e.amount || 0), 0) + (foundationCost || 0)
+  // A foundation figure typed for a house and left behind when he switched kinds does not count.
+  const extrasCost = extras.reduce((a, e) => a + (e.amount || 0), 0) + (house ? foundationCost || 0 : 0)
   const direct = material + labour + extrasCost
   const contingency = (direct * prefs.contingency_pct) / 100
   const overhead = ((direct + contingency) * prefs.overhead_pct) / 100
@@ -110,6 +129,8 @@ export function Estimator({ onBack }: { onBack: () => void }) {
 
   const addCrew = () => setCrew([...crew, { id: String(Date.now()), name: '', men: null, rate: dayRate }])
   const addExtra = () => setExtras([...extras, { id: String(Date.now()), name: '', amount: null }])
+  const addTyped = () => setTyped([...typed, { id: String(Date.now()), name: '', amount: null }])
+  const sized = (kind: string) => (builtUp > 0 ? tf('{0} · {1} বর্গফুট', kind, toBn(Math.round(builtUp))) : kind)
 
   /* ---- 1. what kind of job ---- */
   if (step === 'type') {
@@ -118,7 +139,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
         <TopBar title="নতুন কাজের হিসাব" onBack={onBack} />
         <div className="scroll">
           <h2 className="question">{t("কী ধরনের কাজ?")}</h2>
-          <p className="hint">{t('ধাপে ধাপে জিজ্ঞেস করা হবে — মাপ, ভিত, মাল, মজুরি, তারপর লাভ।')}</p>
+          <p className="hint">{t('ধাপে ধাপে জিজ্ঞেস করা হবে — মাপ, মাল, মজুরি, তারপর লাভ।')}</p>
           {types.length === 0 && (
             <Empty>{t("এখনও কোনো ধরন ঠিক করা নেই।")}<br />{t("কাজ → কাজের ধাপ ও থাম্ব রুল থেকে একবার বসিয়ে নিলে এই হিসাব কাজ করবে।")}</Empty>
           )}
@@ -130,12 +151,19 @@ export function Estimator({ onBack }: { onBack: () => void }) {
     )
   }
 
-  /* ---- 2. size, floors, foundation, duration ---- */
+  /* ---- 2. size and duration; floors and foundation for a house only ---- */
   if (step === 'size') {
     return (
       <>
         <TopBar title={t(kindLabel(ptype))} onBack={() => setStep('type')} />
         <div className="scroll">
+          {!house ? (
+            <>
+              <h2 className="question">{t('মোট কত বর্গফুট?')}</h2>
+              <p className="hint">{t('না জানলে ছেড়ে দিন।')}</p>
+              <MoneyPad value={area} onChange={setArea} prefix="" />
+            </>
+          ) : (<>
           <h2 className="question">{t("এক তলার মাপ কত বর্গফুট?")}</h2>
           <p className="hint">{t('একটা তলার বিল্ট-আপ মাপ। তলার সংখ্যা নিচে বসালে মোট মাপ নিজে থেকেই বেরোবে।')}</p>
           <MoneyPad value={area} onChange={setArea} prefix="" />
@@ -164,13 +192,14 @@ export function Estimator({ onBack }: { onBack: () => void }) {
           <p className="small muted" style={{ marginTop: '-.5rem' }}>
             {t('মাটি কাটা, পাইলিং, ঢালাইয়ের ঠিকা — যেটা আলাদা দিতে হয়। না জানলে ছেড়ে দিন, নিচের মালের হিসাবে ভিতের মালও ধরা আছে।')}
           </p>
+          </>)}
 
           <Field label="কত দিনে শেষ করার কথা">
             <NumField value={days} onChange={setDays} />
           </Field>
         </div>
         <div className="actionbar">
-          <button className="btn primary" disabled={!builtUp} onClick={() => setStep('material')}>{t("এগিয়ে যান")}</button>
+          <button className="btn primary" disabled={house && !builtUp} onClick={() => setStep('material')}>{t("এগিয়ে যান")}</button>
         </div>
       </>
     )
@@ -180,8 +209,29 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   if (step === 'material') {
     return (
       <>
-        <TopBar title="মালের হিসাব" sub={tf('{0} · {1} বর্গফুট', t(kindLabel(ptype)), toBn(Math.round(builtUp)))} onBack={() => setStep('size')} />
+        <TopBar title="মালের হিসাব" sub={sized(t(kindLabel(ptype)))} onBack={() => setStep('size')} />
         <div className="scroll">
+          {lines.length === 0 ? (
+            <>
+              <p className="hint" style={{ marginTop: '.8rem' }}>{t('কী কী মাল লাগবে, আন্দাজে কত টাকার — লিখে দিন।')}</p>
+              {typed.map((x, k) => (
+                <div key={x.id} style={{ display: 'flex', gap: '.5rem', marginBottom: '.6rem' }}>
+                  <input className="input" style={{ flex: 2 }} placeholder={t('কী মাল')} value={x.name}
+                    onChange={(e) => setTyped(typed.map((y, j) => (j === k ? { ...y, name: e.target.value } : y)))} />
+                  <div style={{ flex: 1 }}>
+                    <NumField value={x.amount} onChange={(v) => setTyped(typed.map((y, j) => (j === k ? { ...y, amount: v } : y)))} />
+                  </div>
+                  <button className="iconbtn" aria-label={t('বাদ দিন')} onClick={() => setTyped(typed.filter((y) => y.id !== x.id))}>
+                    <Icon name="trash" size={18} />
+                  </button>
+                </div>
+              ))}
+              <div className="chips"><Chip onClick={addTyped}>+ মাল যোগ করুন</Chip></div>
+              <div className="card" style={{ marginTop: '1rem' }}>
+                <div className="total"><span className="k">{t("মাল")}</span><span className="v num">{money(material)}</span></div>
+              </div>
+            </>
+          ) : (<>
           <p className="hint" style={{ marginTop: '.8rem' }}>
             {t('পরিমাণ আসছে আপনার নিজের থাম্ব রুল থেকে, দর আসছে আপনি শেষবার যা দিয়েছেন তা থেকে। আজকের বাজারদর আলাদা হলে এখানেই বদলে দিন।')}
           </p>
@@ -202,7 +252,6 @@ export function Estimator({ onBack }: { onBack: () => void }) {
                 </div>
               </div>
             ))}
-            {lines.length === 0 && <p className="hint">{t("এই ধরনের জন্য কোনো থাম্ব রুল বসানো নেই।")}</p>}
             <div className="total"><span className="k">{t("মাল")}</span><span className="v num">{money(material)}</span></div>
           </div>
           {missing.length > 0 && (
@@ -211,6 +260,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
               <span>{tf('{0} — এই মালের দর একবারও লেখা হয়নি, তাই হিসাবে ধরা যায়নি।', missing.map((m) => t(m.name)).join(', '))}</span>
             </div>
           )}
+          </>)}
         </div>
         <div className="actionbar">
           <button className="btn ghost" onClick={() => setStep('size')}>{t("ফিরে")}</button>
@@ -228,15 +278,17 @@ export function Estimator({ onBack }: { onBack: () => void }) {
         <div className="scroll">
           <h2 className="question">{t('মজুরি কীভাবে ধরবেন?')}</h2>
           <div className="rowlist">
-            <Pick on={prefs.labour_mode === 'daily'} title="রোজের হিসাবে"
+            <Pick on={mode === 'daily'} title="রোজের হিসাবে"
               sub="কতজন মিস্ত্রি-জোগাড়ে, কতদিন, দিনে কত"
               onClick={() => savePrefs({ ...prefs, labour_mode: 'daily' })} />
-            <Pick on={prefs.labour_mode === 'sqft'} title="বর্গফুটের হিসাবে"
-              sub={historyLabour ? tf('আপনার আগের কাজে {0} প্রতি বর্গফুট', moneyExact(historyLabour)) : 'ঠিকা দরে কাজ দিলে'}
-              onClick={() => savePrefs({ ...prefs, labour_mode: 'sqft' })} />
+            {builtUp > 0 && (
+              <Pick on={mode === 'sqft'} title="বর্গফুটের হিসাবে"
+                sub={historyLabour ? tf('আপনার আগের কাজে {0} প্রতি বর্গফুট', moneyExact(historyLabour)) : 'ঠিকা দরে কাজ দিলে'}
+                onClick={() => savePrefs({ ...prefs, labour_mode: 'sqft' })} />
+            )}
           </div>
 
-          {prefs.labour_mode === 'daily' ? (
+          {mode === 'daily' ? (
             <>
               <p className="sectionlabel">{t('কারা কাজ করবে')}</p>
               <p className="small muted" style={{ marginBottom: '.6rem' }}>
@@ -244,7 +296,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
               </p>
               {crew.map((c, k) => (
                 <div key={c.id} className="card" style={{ marginBottom: '.6rem' }}>
-                  <input className="input" placeholder={t('কী কাজ — যেমন রাজমিস্ত্রি')} value={c.name}
+                  <input className="input" placeholder={t('কী কাজ — যেমন মিস্ত্রি')} value={c.name}
                     onChange={(e) => setCrew(crew.map((x, j) => (j === k ? { ...x, name: e.target.value } : x)))} />
                   <div style={{ display: 'flex', gap: '.5rem', marginTop: '.5rem' }}>
                     <div style={{ flex: 1 }}>
@@ -276,8 +328,8 @@ export function Estimator({ onBack }: { onBack: () => void }) {
             </>
           ) : (
             <Field label={t('মজুরি প্রতি বর্গফুট') + (historyLabour ? ' ' + tf('(আগের কাজে {0})', moneyExact(historyLabour)) : '')}>
-              <NumField value={prefs.labour_per_sqft ?? (historyLabour ? Math.round(historyLabour) : null)}
-                onChange={(v) => savePrefs({ ...prefs, labour_per_sqft: v })} decimal />
+              <NumField value={perSqft ?? (historyLabour ? Math.round(historyLabour) : null)}
+                onChange={setPerSqft} decimal />
             </Field>
           )}
 
@@ -300,9 +352,9 @@ export function Estimator({ onBack }: { onBack: () => void }) {
         <TopBar title="অন্য খরচ" onBack={() => setStep('labour')} />
         <div className="scroll">
           <p className="hint" style={{ marginTop: '.8rem' }}>
-            {t('গাড়ি ভাড়া, মেশিন, জল-বিদ্যুৎ, প্ল্যান পাশ — যা যা আলাদা লাগবে। যেগুলো লাগবে না, ছেড়ে দিন।')}
+            {t('গাড়ি ভাড়া, মেশিন, জল-বিদ্যুৎ — যা যা আলাদা লাগবে। যেগুলো লাগবে না, ছেড়ে দিন।')}
           </p>
-          {foundationCost ? (
+          {house && foundationCost ? (
             <div className="card">
               <div className="review-row">
                 <span><span className="t">{t('ভিত')}</span><span className="k">{t(foundation)}</span></span>
@@ -324,7 +376,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
           ))}
           <div className="chips">
             <Chip onClick={addExtra}>+ খরচ যোগ করুন</Chip>
-            {['গাড়ি ভাড়া', 'মেশিন ভাড়া', 'বিদ্যুৎ-জল', 'প্ল্যান পাশ'].map((n) => (
+            {['গাড়ি ভাড়া', 'মেশিন ভাড়া', 'বিদ্যুৎ-জল', ...(house ? ['প্ল্যান পাশ'] : [])].map((n) => (
               <Chip key={n} onClick={() => setExtras([...extras, { id: n + Date.now(), name: n, amount: null }])}>{t(n)}</Chip>
             ))}
           </div>
@@ -341,7 +393,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   if (step === 'margin') {
     return (
       <>
-        <TopBar title="লাভ ও মোট" sub={tf('{0} · {1} বর্গফুট', t(kindLabel(ptype)), toBn(Math.round(builtUp)))} onBack={() => setStep('extras')} />
+        <TopBar title="লাভ ও মোট" sub={sized(t(kindLabel(ptype)))} onBack={() => setStep('extras')} />
         <div className="scroll">
           <div className="card">
             <Field label="অনিশ্চয়তার জন্য %"><NumField value={prefs.contingency_pct} onChange={(v) => savePrefs({ ...prefs, contingency_pct: v ?? 0 })} decimal /></Field>
@@ -357,7 +409,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
             <div className="amountline"><span className="n">{tf('ওভারহেড {0}%', toBn(prefs.overhead_pct))}</span><span className="v num">{money(overhead)}</span></div>
             <div className="amountline"><span className="n">{tf('লাভ {0}%', toBn(prefs.profit_pct))}</span><span className="v num">{money(profit)}</span></div>
             <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(total)}</span></div>
-            <p className="small muted" style={{ marginTop: '.5rem' }}>{tf('প্রতি বর্গফুট {0}', moneyExact(builtUp ? total / builtUp : 0))}</p>
+            {builtUp > 0 && <p className="small muted" style={{ marginTop: '.5rem' }}>{tf('প্রতি বর্গফুট {0}', moneyExact(total / builtUp))}</p>}
           </div>
         </div>
         <div className="actionbar">
@@ -369,7 +421,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   }
 
   const quote = quoteText({
-    ptype, perFloor, floors: floors || 1, builtUp, foundation, days, client,
+    ptype, house, perFloor, floors: floors || 1, builtUp, foundation, days, client,
     total, owner: s.settings.owner_bn, phone: s.settings.owner_phone,
   })
   return (
@@ -402,28 +454,35 @@ export function Estimator({ onBack }: { onBack: () => void }) {
    price was built (material, wages, contingency, overhead, profit) stays on his own screen: a
    breakdown sent on WhatsApp is his margin handed to the customer to bargain with. */
 function quoteText(q: {
-  ptype: string; perFloor: number; floors: number; builtUp: number; foundation: string; days: number | null
+  ptype: string; house: boolean; perFloor: number; floors: number; builtUp: number; foundation: string; days: number | null
   client: string; total: number; owner: string; phone: string
 }): string {
   const L: string[] = []
   L.push(tf('দরপত্র · {0}', dateBn(isoDate(), false)))
   if (q.client) L.push(tf('খদ্দের: {0}', q.client))
-  L.push(tf('কাজ: {0} · {1} তলা · মোট {2} বর্গফুট', t(kindLabel(q.ptype)), toBn(q.floors), toBn(Math.round(q.builtUp))))
-  L.push(tf('ভিত: {0}', q.foundation))
+  if (q.house) {
+    L.push(tf('কাজ: {0} · {1} তলা · মোট {2} বর্গফুট', t(kindLabel(q.ptype)), toBn(q.floors), toBn(Math.round(q.builtUp))))
+    L.push(tf('ভিত: {0}', q.foundation))
+  } else if (q.builtUp > 0) {
+    L.push(tf('কাজ: {0} · মোট {1} বর্গফুট', t(kindLabel(q.ptype)), toBn(Math.round(q.builtUp))))
+  } else {
+    L.push(tf('কাজ: {0}', t(kindLabel(q.ptype))))
+  }
   if (q.days) L.push(tf('সময়: প্রায় {0} দিন', toBn(q.days)))
   L.push('')
   L.push(tf('মোট               {0}', money(q.total)))
-  L.push(tf('প্রতি বর্গফুট       {0}', moneyExact(q.builtUp ? q.total / q.builtUp : 0)))
+  if (q.builtUp > 0) L.push(tf('প্রতি বর্গফুট       {0}', moneyExact(q.total / q.builtUp)))
   L.push('')
   L.push(t('শর্ত: মাল ও মজুরির দর বদলালে হিসাব বদলাতে পারে। কাজ শুরুর আগে ৩০% অগ্রিম।'))
   if (q.owner.trim() || q.phone.trim()) { L.push(''); L.push(['—', q.owner.trim(), q.phone.trim()].filter(Boolean).join(' ')) }
   return L.join('\n')
 }
 
-/** His own labour cost per square foot, from jobs that have both. */
-function labourPerSqft(s: State): number | null {
+/** His own labour cost per square foot, from jobs of the same kind that have both — a house's figure would
+    price a paint job several times over. A job saved before kinds existed is a house. */
+function labourPerSqft(s: State, kind: string): number | null {
   const rows = projects(s)
-    .filter((p) => (p.area_sqft || 0) > 0)
+    .filter((p) => (p.area_sqft || 0) > 0 && (p.ptype || HOUSE) === kind)
     .map((p) => ({ p, t: projectTotals(p, s.entries, stages(s)) }))
     .filter((r) => r.t.labour > 0 && r.t.pct_done > 25)
   if (!rows.length) return null
