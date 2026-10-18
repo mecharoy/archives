@@ -665,6 +665,25 @@ export const EN: Record<string, string> = {
   'দরজা-জানালা, লাইন': 'Doors, windows, lines',
   'রং ও ফিনিশিং': 'Paint and finishing',
 
+  /* ---- kinds of work, and their steps (kinds.ts) ---- */
+  'নতুন বাড়ি': 'New house',
+  'রঙের কাজ': 'Painting',
+  'স্যানিটারি': 'Sanitary',
+  'অন্য কাজ': 'Other work',
+  'ঘষা ও পুটি': 'Scraping and putty',
+  'প্রাইমার': 'Primer',
+  'প্রথম কোট': 'First coat',
+  'শেষ কোট': 'Final coat',
+  'পাইপের লাইন': 'Pipe lines',
+  'প্যান-বেসিন ও ফিটিংস': 'Pan, basin and fittings',
+  'জল দিয়ে পরীক্ষা': 'Water test',
+  'শেষ কাজ': 'Finishing',
+  'ভাঙা ও সরানো': 'Breaking and clearing',
+  'গাঁথনি ও প্লাস্টার': 'Masonry and plaster',
+  'মেঝে ও টাইল': 'Floor and tiles',
+  'রং ও শেষ কাজ': 'Paint and finishing touches',
+  'পুরো কাজ': 'Whole job',
+
   /* ---- months and days (dates are built in bn.ts, these are for chips) ---- */
   'আজ': 'Today',
   'গতকাল': 'Yesterday',

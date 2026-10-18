@@ -139,5 +139,21 @@ if (both.sites) both.sites[0].att = { w1: full(700) }
 ck('a man ticked at the first job is named at the second', run(() => [...day.menElsewhere(both, 1)].join()), 'w1')
 ck('…and not at the first', run(() => [...day.menElsewhere(both, 0)].join()), '')
 
+/* ---------- kinds of work ---------- */
+
+const { kinds } = app
+const K = run(() => kinds.KINDS)
+ck('five kinds of work', Array.isArray(K) && K.map((k) => k.key).join('|'), 'ঘর|রং|স্যানিটারি|মেরামত|অন্য কাজ')
+ck("every kind's steps add up to 100", Array.isArray(K) && K.every((k) => k.stages.reduce((a, s) => a + s[1], 0) === 100), true)
+ck('the house keeps its eight steps and their ids', run(() => [1, 2, 8].map((q) => kinds.kindStageId('ঘর', q)).join()), 'seed-stage-1,seed-stage-2,seed-stage-8')
+const ids = run(() => K.flatMap((k) => k.stages.map((_, i) => kinds.kindStageId(k.key, i + 1))))
+ck('no two seeded steps share an id', Array.isArray(ids) && new Set(ids).size === ids.length, true)
+ck('a painting step has an id of its own', run(() => kinds.kindStageId('রং', 1)), 'seed-stage-paint-1')
+ck('the house is called a new house', run(() => kinds.kindLabel('ঘর')), 'নতুন বাড়ি')
+ck('painting is called painting work (রং alone means colour)', run(() => kinds.kindLabel('রং')), 'রঙের কাজ')
+ck('a kind he made up shows as itself', run(() => kinds.kindLabel('ঢালাই')), 'ঢালাই')
+ck('before anything is saved, a kind has its starting steps', run(() => kinds.kindStages([], 'স্যানিটারি').map((s) => s.seq + ':' + s.name_bn).join()), '1:পাইপের লাইন,2:প্যান-বেসিন ও ফিটিংস,3:জল দিয়ে পরীক্ষা,4:শেষ কাজ')
+ck('once saved, his own steps are used', run(() => kinds.kindStages([{ id: 'x', kind: 'stage', project_type: 'রং', seq: 1, name_bn: 'চুনকাম', weight: 100, updated_at: '' }], 'রং').map((s) => s.name_bn).join()), 'চুনকাম')
+
 console.log(`\n${pass} ok, ${fail} failed`)
 if (fail) process.exit(1)

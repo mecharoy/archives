@@ -158,6 +158,15 @@ export async function boot() {
   })
   // The language has to be live before the first render, not after it.
   setLang(state.settings.lang)
+  // A phone set up before there were kinds of work gains their steps once; its own house steps are left alone.
+  if (state.settings.onboarded) {
+    const st = state.masters.filter((m) => m.kind === 'stage') as Stage[]
+    const { KINDS } = await import('./kinds')
+    if (KINDS.some((k) => !st.some((s) => s.project_type === k.key))) {
+      const { seedKinds } = await import('./seed')
+      await seedKinds([], st, 'missing')
+    }
+  }
   // Jobs deleted before deletion reached the server were never told. Once,
   // send them up marked deleted so the dashboard stops counting them.
   const gone = masters.filter((m) => m.deleted && m.kind === 'project')

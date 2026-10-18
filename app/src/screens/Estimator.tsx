@@ -7,6 +7,7 @@ import { projectTotals } from '../lib/calc'
 import { lastPurchase } from '../lib/suggest'
 import { t, tf } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
+import { kindLabel } from '../lib/kinds'
 
 /* Quoting a job, one question at a time.
 
@@ -122,7 +123,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
             <Empty>{t("এখনও কোনো ধরন ঠিক করা নেই।")}<br />{t("কাজ → কাজের ধাপ ও থাম্ব রুল থেকে একবার বসিয়ে নিলে এই হিসাব কাজ করবে।")}</Empty>
           )}
           <div className="chips">
-            {types.map((x) => <Chip key={x} on={ptype === x} onClick={() => { setPtype(x); setStep('size') }}>{t(x)}</Chip>)}
+            {types.map((x) => <Chip key={x} on={ptype === x} onClick={() => { setPtype(x); setStep('size') }}>{t(kindLabel(x))}</Chip>)}
           </div>
         </div>
       </>
@@ -133,7 +134,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   if (step === 'size') {
     return (
       <>
-        <TopBar title={ptype} onBack={() => setStep('type')} />
+        <TopBar title={t(kindLabel(ptype))} onBack={() => setStep('type')} />
         <div className="scroll">
           <h2 className="question">{t("এক তলার মাপ কত বর্গফুট?")}</h2>
           <p className="hint">{t('একটা তলার বিল্ট-আপ মাপ। তলার সংখ্যা নিচে বসালে মোট মাপ নিজে থেকেই বেরোবে।')}</p>
@@ -179,7 +180,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   if (step === 'material') {
     return (
       <>
-        <TopBar title="মালের হিসাব" sub={tf('{0} · {1} বর্গফুট', ptype, toBn(Math.round(builtUp)))} onBack={() => setStep('size')} />
+        <TopBar title="মালের হিসাব" sub={tf('{0} · {1} বর্গফুট', t(kindLabel(ptype)), toBn(Math.round(builtUp)))} onBack={() => setStep('size')} />
         <div className="scroll">
           <p className="hint" style={{ marginTop: '.8rem' }}>
             {t('পরিমাণ আসছে আপনার নিজের থাম্ব রুল থেকে, দর আসছে আপনি শেষবার যা দিয়েছেন তা থেকে। আজকের বাজারদর আলাদা হলে এখানেই বদলে দিন।')}
@@ -340,7 +341,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   if (step === 'margin') {
     return (
       <>
-        <TopBar title="লাভ ও মোট" sub={tf('{0} · {1} বর্গফুট', ptype, toBn(Math.round(builtUp)))} onBack={() => setStep('extras')} />
+        <TopBar title="লাভ ও মোট" sub={tf('{0} · {1} বর্গফুট', t(kindLabel(ptype)), toBn(Math.round(builtUp)))} onBack={() => setStep('extras')} />
         <div className="scroll">
           <div className="card">
             <Field label="অনিশ্চয়তার জন্য %"><NumField value={prefs.contingency_pct} onChange={(v) => savePrefs({ ...prefs, contingency_pct: v ?? 0 })} decimal /></Field>
@@ -407,7 +408,7 @@ function quoteText(q: {
   const L: string[] = []
   L.push(tf('দরপত্র · {0}', dateBn(isoDate(), false)))
   if (q.client) L.push(tf('খদ্দের: {0}', q.client))
-  L.push(tf('কাজ: {0} · {1} তলা · মোট {2} বর্গফুট', q.ptype, toBn(q.floors), toBn(Math.round(q.builtUp))))
+  L.push(tf('কাজ: {0} · {1} তলা · মোট {2} বর্গফুট', t(kindLabel(q.ptype)), toBn(q.floors), toBn(Math.round(q.builtUp))))
   L.push(tf('ভিত: {0}', q.foundation))
   if (q.days) L.push(tf('সময়: প্রায় {0} দিন', toBn(q.days)))
   L.push('')

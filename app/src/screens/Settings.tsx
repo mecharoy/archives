@@ -16,7 +16,8 @@ import { fetchBrief } from '../lib/brief'
 import { makePhoneBrief, setAiKey, testAiKey, explainAiError, aiStatus, type AiStatus } from '../lib/aiBrief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
 import { restoreFromServer } from '../lib/restore'
-import { seedHouse, HOUSE } from '../lib/seed'
+import { seedHouse } from '../lib/seed'
+import { KINDS, kindLabel } from '../lib/kinds'
 import { chipMissRate } from '../lib/suggest'
 import { readContacts, pickOneContact, type PhoneContact } from '../lib/contacts'
 import { plan, reschedule, type RemindWhen } from '../lib/remind'
@@ -501,8 +502,8 @@ export function ProjectsPage({ s, onBack }: { s: State; onBack: () => void }) {
           <Field label="খদ্দের"><input className="input" value={edit.client_bn} onChange={(e) => setEdit({ ...edit, client_bn: e.target.value })} /></Field>
           <Field label="ধরন">
             <div className="chips">
-              {[...new Set([HOUSE, ...stages(s).map((x) => x.project_type)])].map((t) => (
-                <Chip key={t} on={edit.ptype === t} onClick={() => setEdit({ ...edit, ptype: t })}>{t}</Chip>
+              {[...new Set([...KINDS.map((k) => k.key), ...stages(s).map((x) => x.project_type)])].map((k) => (
+                <Chip key={k} on={edit.ptype === k} onClick={() => setEdit({ ...edit, ptype: k })}>{t(kindLabel(k))}</Chip>
               ))}
             </div>
           </Field>
@@ -773,7 +774,7 @@ export function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
 
         {types.map((ptype) => (
           <div key={ptype}>
-            <p className="sectionlabel">{t(ptype)} — {t('ধাপ')} {weight !== 100 && <span style={{ color: 'var(--warn)' }}>{tf('(ওজনের যোগফল {0}, ১০০ হওয়া দরকার)', toBn(weight))}</span>}</p>
+            <p className="sectionlabel">{t(kindLabel(ptype))} — {t('ধাপ')} {weight !== 100 && <span style={{ color: 'var(--warn)' }}>{tf('(ওজনের যোগফল {0}, ১০০ হওয়া দরকার)', toBn(weight))}</span>}</p>
             <div className="card">
               {list.filter((x) => x.project_type === ptype).map((st) => (
                 <button className="review-row" key={st.id} onClick={() => setEdit(st)}>
@@ -783,7 +784,7 @@ export function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
                 </button>
               ))}
             </div>
-            <p className="sectionlabel">{t(ptype)} — {t('প্রতি বর্গফুটে')}</p>
+            <p className="sectionlabel">{t(kindLabel(ptype))} — {t('প্রতি বর্গফুটে')}</p>
             <div className="card">
               {cf.filter((x) => x.project_type === ptype).map((c) => (
                 <button className="review-row" key={c.id} onClick={() => setEditC(c)}>
