@@ -1102,6 +1102,14 @@ export const EN: Record<string, string> = {
   '{0} — {1} দিতে হবে {2}': '{0} — {1} to pay {2}',
   'শেষ গোনা {0} — {1}। তারপর ঢুকেছে {2}, বেরিয়েছে {3}।': 'Last counted {0} — {1}. Since then {2} came in and {3} went out.',
 
+  /* ---- the four reminders (build 27) ---- */
+  'আজকের কথা': "Today's word",
+  'আজকের হিসাব এখনও লেখা হয়নি।': "Today's entry is not written yet.",
+  'টাকা পাবেন': 'Money to collect',
+  '{0} জনের কাছে {1} পাওনা।': '{1} owed to you by {0} people.',
+  'হিসাবের কথা আর মনে করিয়ে দেওয়া': 'Notes about the book, and reminders',
+  'মনে করিয়ে দেওয়া ঠিকমতো আসছে।': 'Reminders are coming through.',
+
   /* ---- today's entry, job by job (build 27) ---- */
   'আজ কোন কাজের হিসাব লিখবেন?': 'Which jobs to write for today?',
   'আজ কোনো কাজের হিসাব নেই': 'No job today',

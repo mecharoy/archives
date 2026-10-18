@@ -34,13 +34,15 @@ const owed3 = [owedRow('a', 'pA', 3000, '2026-10-25'), owedRow('b', 'pB', 800, '
 ck('owed by person, largest first', calc.owedByPerson(owed3).map((x) => x.party_id + ':' + x.amount).join(), 'pC:5000,pA:3000,pB:800')
 
 /* The Monday note: 9 in the morning of the coming Monday, how many people and how much. */
-const monday = (entries, when, iso) => { freeze(iso); try { return remind.plan(entries, when).filter((x) => x.extra && x.extra.screen === 'payments') } finally { globalThis.Date = RealDate } }
+// Due-date notes open the money screen too; the Monday note is the one titled টাকা পাবেন.
+const monday = (entries, when, iso) => { freeze(iso); try { return remind.plan(entries, when).filter((x) => x.title === 'টাকা পাবেন') } finally { globalThis.Date = RealDate } }
 const two = owed3.slice(0, 2)
 const fri = monday(two, 'day', '2026-10-16T04:30:00Z')   // Friday 10 am in Kolkata
 ck('on a Friday there is one Monday note', fri.length, 1)
 ck('it is for Monday the 19th', fri[0] && bn.isoDate(fri[0].at), '2026-10-19')
 ck('at 9 in the morning', fri[0] && fri[0].at.getHours() + ':' + fri[0].at.getMinutes(), '9:0')
-ck('it says how many people owe and how much', fri[0] && fri[0].body, '২ জনের কাছে ₹৩,৮০০ পাওনা')
+ck('it says how many people owe and how much', fri[0] && fri[0].body, '২ জনের কাছে ₹৩,৮০০ পাওনা।')
+ck('its title is plain: money to collect', fri[0] && fri[0].title, 'টাকা পাবেন')
 ck('a Monday before 9 gets it the same morning', bn.isoDate(monday(two, 'day', '2026-10-19T02:00:00Z')[0].at), '2026-10-19')
 ck('a Monday after 9 gets it the next Monday', bn.isoDate(monday(two, 'day', '2026-10-19T05:00:00Z')[0].at), '2026-10-26')
 ck('nothing owed, no note', monday([], 'day', '2026-10-16T04:30:00Z').length, 0)
@@ -51,17 +53,38 @@ ck('reminders off, no note', monday(two, 'off', '2026-10-16T04:30:00Z').length, 
 const dayRow = (date) => ({ id: 'd' + date, kind: 'day', batch: 'bd' + date, date, project_id: '', created_at: date + 'T14:00:00Z', cash_counted: null, cash_computed: null, note: '' })
 const nudges = (entries, when, iso, onboarded = true) => {
   freeze(iso)
-  try { return remind.plan(entries, when, 9, [], onboarded).filter((x) => x.extra && x.extra.screen === 'home') } finally { globalThis.Date = RealDate }
+  try { return remind.plan(entries, when, 9, [], onboarded).filter((x) => x.extra && x.extra.screen === 'day') } finally { globalThis.Date = RealDate }
 }
 const n1 = nudges([], 'day', '2026-10-16T04:30:00Z')
 ck('nothing written today: a nudge tonight and on each of the next six evenings', n1.length, 7)
 ck('the first is tonight at 8', n1[0] && bn.isoDate(n1[0].at) + ' ' + n1[0].at.getHours(), '2026-10-16 20')
-ck('it says the day is not written yet', n1[0] && n1[0].body, 'আজকের হিসাব লেখা বাকি')
+ck('it says the day is not written yet', n1[0] && n1[0].body, 'আজকের হিসাব এখনও লেখা হয়নি।')
+ck('tapping it opens today’s entry', n1[0] && n1[0].extra.screen, 'day')
 ck("today written: tonight's nudge is gone", bn.isoDate(nudges([dayRow('2026-10-16')], 'day', '2026-10-16T04:30:00Z')[0].at), '2026-10-17')
 ck('after 8 pm the first is tomorrow', bn.isoDate(nudges([], 'day', '2026-10-16T15:30:00Z')[0].at), '2026-10-17')
 ck('before setup is done, no nudge', nudges([], 'day', '2026-10-16T04:30:00Z', false).length, 0)
 ck('payment reminders off: the nudges stay', nudges(two, 'off', '2026-10-16T04:30:00Z').length, 7)
 ck('payment reminders off: no Monday note', monday(two, 'off', '2026-10-16T04:30:00Z').length, 0)
+
+/* Each of the four can be switched off on its own. */
+const planWith = (entries, iso, o) => { freeze(iso); try { return remind.plan(entries, 'day', 9, [], true, o) } finally { globalThis.Date = RealDate } }
+ck('the evening note switched off: none', planWith([], '2026-10-16T04:30:00Z', { evening: false }).filter((x) => x.extra && x.extra.screen === 'day').length, 0)
+ck('the Monday note switched off: none', planWith(two, '2026-10-16T04:30:00Z', { monday: false }).filter((x) => x.title === 'টাকা পাবেন').length, 0)
+
+/* The 8 am note: the morning right after a saved evening, carrying the day's few lines in full. The app is
+   not running at 8, so it is planned in advance, whenever the reminders are rebuilt. */
+const LINES = 'রামপুরের বাড়িতে খরচ কাজের চেয়ে এগিয়ে।'
+const morning = (entries, iso, text = LINES) => planWith(entries, iso, { morning: text }).filter((x) => x.title === 'আজকের কথা')
+const m1 = morning([dayRow('2026-10-16')], '2026-10-16T15:30:00Z')      // 9 pm, the evening saved
+ck('after a saved evening there is one morning note', m1.length, 1)
+ck('…at 8 the next morning', m1[0] && bn.isoDate(m1[0].at) + ' ' + m1[0].at.getHours() + ':' + m1[0].at.getMinutes(), '2026-10-17 8:0')
+ck('…carrying the lines', m1[0] && m1[0].body, LINES)
+ck('…in full when opened out', m1[0] && m1[0].largeBody, LINES)
+ck('…and tapping it opens home', m1[0] && m1[0].extra.screen, 'home')
+ck('no evening saved last night or today: no morning note', morning([dayRow('2026-10-13')], '2026-10-16T15:30:00Z').length, 0)
+ck('no lines to say: no morning note', morning([dayRow('2026-10-16')], '2026-10-16T15:30:00Z', '').length, 0)
+ck('before 8, after a saved yesterday: this morning', bn.isoDate(morning([dayRow('2026-10-16')], '2026-10-17T01:30:00Z')[0]?.at || new RealDate(0)), '2026-10-17')
+ck('after 8, yesterday’s lines are not sent tomorrow', morning([dayRow('2026-10-16')], '2026-10-17T05:30:00Z').length, 0)
 
 /* When the phone writes its brief: after 6 pm, once today's day is saved; again whenever the day is saved
    after the last brief; a missed evening is caught up the next morning; a refused key or a try in the last

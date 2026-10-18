@@ -31,6 +31,15 @@ export interface Settings {
   text_scale: number
   lang: Lang
   remind: RemindWhen
+  /* The other three reminders, each on unless he switches it off: the 8 am lines, the 8 pm "not written yet",
+     and Monday's who-owes-what. (Due dates are `remind`.) */
+  notify_morning: boolean
+  notify_evening: boolean
+  notify_monday: boolean
+  /* The first full count of the shop: when it was saved, and the day the soft reminder may come back after
+     "পরে". */
+  full_count_at: string
+  count_later_until: string
   owner_bn: string
   /* His own number, printed on a quote; and the person nearby who sits with him and whom the help
      button and the crash screen tell him to ring. All set at setup, all editable in সেটিংস → নাম ও ফোন. */
@@ -60,7 +69,7 @@ export const DEFAULT_SETTINGS: Settings = {
   chips_taken: 0, chips_expanded: 0,
   // Large by default: he reads it at arm's length in the evening. Smaller is one tap away in সেটিংস.
   theme: 'system', text_scale: 1.12,
-  lang: 'bn', remind: 'day', owner_bn: '', owner_phone: '', helper_name: '', helper_phone: '', runs_shop: true, runs_sites: true, ai_key: '',
+  lang: 'bn', remind: 'day', notify_morning: true, notify_evening: true, notify_monday: true, full_count_at: '', count_later_until: '', owner_bn: '', owner_phone: '', helper_name: '', helper_phone: '', runs_shop: true, runs_sites: true, ai_key: '',
 }
 
 export interface OutboxRow {

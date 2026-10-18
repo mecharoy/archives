@@ -114,8 +114,10 @@ export function App() {
       try {
         const { LocalNotifications } = await import('@capacitor/local-notifications')
         const h = await LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
-          if (a.notification.extra?.screen === 'payments') setStack(['home', 'money', 'payments'])
-          else if (a.notification.extra?.screen === 'home') setStack(['home'])
+          const to = a.notification.extra?.screen
+          if (to === 'payments') setStack(['home', 'money', 'payments'])
+          else if (to === 'day') { setDraft(null); setStack(['home', 'day']) }
+          else if (to === 'home') setStack(['home'])
         })
         remove = () => void h.remove()
       } catch { /* browser */ }
@@ -148,7 +150,7 @@ export function App() {
   useEffect(() => {
     if (!ready || needsSetup) return
     void reschedule()
-  }, [ready, needsSetup, entryCount, settings.remind, settings.onboarded])
+  }, [ready, needsSetup, entryCount, settings.remind, settings.onboarded, settings.notify_morning, settings.notify_evening, settings.notify_monday, state.brief?.generated_at]) // the 8 am note carries the latest brief
 
   /* theme and text size follow the settings, and the Android status bar
      follows the theme so the top of the screen never looks borrowed. */

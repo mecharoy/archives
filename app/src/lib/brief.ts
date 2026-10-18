@@ -80,6 +80,17 @@ export function briefIsStale(b: Brief | null): boolean {
   return briefAgeHours(b) > STALE_HOURS
 }
 
+/** The summary to show — on home, and in the 8 am note. The kept brief while it is fresh and still covers the
+    last saved day; otherwise the phone's own sums. A day saved after the brief was written makes the brief out
+    of date (on the first evening it would still say the book is new). Only a saved day counts: a sale at the
+    counter in the morning should not hide last night's words all day. */
+export function currentBrief(): Brief {
+  const s = getState()
+  const lastDayAt = s.entries.reduce((m, e) => (e.kind === 'day' && e.created_at > m ? e.created_at : m), '')
+  const outdated = !!s.brief && lastDayAt > s.brief.generated_at
+  return s.brief && !briefIsStale(s.brief) && !outdated ? s.brief : localBrief()
+}
+
 /** Which of two briefs should the phone keep? One with a model's words beats
     a computed-only one while that one is fresh; otherwise the newer wins. So a
     dead key or a night offline can never replace a good brief with a bare one,
