@@ -112,14 +112,43 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
 const liveProgress = (entries: Entry[], p: Project) =>
   liveEntries(entries.filter((e) => e.kind === 'progress' && e.project_id === p.id)) as ProgressEntry[]
 
-/** Percent from stage weights, never a guess he typed. */
+/** How far the job has got by the evening's slider: its latest live 'pct' row — by date, then the moment it
+    was written, then id — or null when the slider has never been moved for it. */
+export function sliderPct(p: Project, entries: Entry[]): number | null {
+  let best: ProgressEntry | null = null
+  for (const e of liveProgress(entries, p)) {
+    if (e.state !== 'pct') continue
+    if (!best || e.date > best.date || (e.date === best.date && (e.created_at > best.created_at || (e.created_at === best.created_at && e.id > best.id)))) best = e
+  }
+  return best ? Math.max(0, Math.min(100, Number(best.pct) || 0)) : null
+}
+
+/** The step a percentage falls in: the job's stages in order, each taking its share of 100 by weight (equal
+    shares when the weights add to nothing), and the first whose share ends past `pct`. Null at 100 — no step
+    is left. */
+export function stageAtPct(stages: Stage[], pct: number): Stage | null {
+  const st = [...stages].sort((a, b) => a.seq - b.seq)
+  if (!st.length) return null
+  const total = st.reduce((a, s) => a + (s.weight || 0), 0)
+  let end = 0
+  for (const s of st) {
+    end += total > 0 ? ((s.weight || 0) / total) * 100 : 100 / st.length
+    if (end > pct + 1e-9) return s
+  }
+  return null
+}
+
+/** Percent done: the slider's figure when he has set one, else from the stage weights — never a guess. */
 export function projectPct(p: Project, entries: Entry[], stages: Stage[]): number {
+  const slid = sliderPct(p, entries)
+  if (slid != null) return slid
   const st = stagesFor(p, stages)
   if (!st.length) return 0
   const total = st.reduce((a, s) => a + s.weight, 0) || 100
   const live = liveProgress(entries, p)
   const best = new Map<number, 'half' | 'done'>()
   for (const e of live) {
+    if (e.state === 'pct') continue
     const cur = best.get(e.stage_seq)
     if (cur === 'done') continue
     if (cur === 'half' && e.state === 'half') continue
@@ -138,10 +167,19 @@ export function stagesFor(p: Project, stages: Stage[]): Stage[] {
   return stages.filter((s) => s.project_type === p.ptype).sort((a, b) => a.seq - b.seq)
 }
 
-/** The stage he is on and the one after it — the wizard shows only these two. */
+/** The stage he is on and the one after it. With a slider figure it is the step that figure falls in (the
+    last step once it reaches 100); otherwise the first stage not marked done. */
 export function currentStage(p: Project, entries: Entry[], stages: Stage[]) {
   const st = stagesFor(p, stages)
-  const live = liveProgress(entries, p)
+  const slid = sliderPct(p, entries)
+  if (slid != null) {
+    const cur = stageAtPct(st, slid) || st[st.length - 1]
+    const next = cur ? st.find((s) => s.seq > cur.seq) : undefined
+    const doneSeqs = new Set(st.filter((s) => cur && s.seq < cur.seq).map((s) => s.seq))
+    if (slid >= 100 && cur) doneSeqs.add(cur.seq)
+    return { stages: st, current: cur, next, isHalf: false, doneSeqs }
+  }
+  const live = liveProgress(entries, p).filter((e) => e.state !== 'pct')
   const done = new Set<number>()
   const half = new Set<number>()
   for (const e of live) (e.state === 'done' ? done : half).add(e.stage_seq)

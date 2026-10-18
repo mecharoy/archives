@@ -389,3 +389,17 @@ Location: wrangler d1 execute site-khata --remote (live step L4)
 Action: one query joining 14 per-table counts with UNION ALL.
 Cause: D1 caps the number of terms in a compound SELECT.
 Fix: one SELECT with a scalar sub-query per table: SELECT (SELECT COUNT(*) FROM t1 WHERE …) AS t1, (…) AS t2, …
+
+2026-10-19
+Problem: a shell line printed the same "syntax error near unexpected token" dozens of times.
+Location: a one-off Bash command while reading src/lib/suggest.ts (no file changed)
+Action: printing one function with sed -n "$(grep -n … | cut …)p".
+Cause: the nested command substitution built a broken sed expression, and the error repeated for every line.
+Fix: read a function with grep -n "export function name" -A 12 instead of building sed ranges inside $(…).
+
+2026-10-19
+Problem: a Playwright script in the session scratchpad failed with "Cannot find package 'playwright'".
+Location: scratchpad/shot-design.mjs (screenshot of the redesign page)
+Action: taking one screenshot of a local HTML file.
+Cause: Node resolves packages from the script's own folder, and the scratchpad has no node_modules.
+Fix: load it through the app's folder: createRequire('…/archives-app/app/package.json')('playwright').

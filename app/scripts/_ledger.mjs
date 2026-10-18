@@ -105,6 +105,8 @@ export function genLedger(app, r, nEvents, o = {}) {
     if (r.chance(0.25)) dr.progress = { stage_seq: r.int(1, 5), state: r.pick(['half', 'done']) }
     if (r.chance(0.25)) { dr.cash_counted = r.chance(0.1) ? 0 : r.money(0, 120000); dr.cash_computed = r.money(0, 120000) }
     const rows = draft.buildEntries(dr)
+    /* How far the job has got, by the evening's slider: a quarter of the days on a job move it. */
+    if (proj && r.chance(0.25)) rows.push({ kind: 'progress', batch: dr.batch, date, project_id: proj, stage_seq: 0, state: 'pct', pct: r.int(0, 20) * 5 })
     const at = stamp()                                   // a whole day is saved in one instant
     for (const e of rows) { e.id = nid('e'); e.created_at = at }
     return rows
@@ -308,6 +310,10 @@ export function reference(L) {
       }
       pct = Math.min(100, (done / total) * 100)
     }
+    /* A slider row, when there is one, is the figure: the latest by date, then by the moment written, then by id. */
+    const slid = live.filter((e) => e.kind === 'progress' && e.project_id === p.id && e.state === 'pct')
+      .sort((a, b) => (a.date !== b.date ? (a.date < b.date ? -1 : 1) : a.created_at !== b.created_at ? (a.created_at < b.created_at ? -1 : 1) : a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+    if (slid.length) pct = Number(slid[slid.length - 1].pct) || 0
     const cost = (labour + material + other) / 100
     const budget = p.budget || 0
     const earned = (pct / 100) * budget

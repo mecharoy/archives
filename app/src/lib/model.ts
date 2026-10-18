@@ -147,11 +147,14 @@ export interface MoneyEntry extends BaseEntry {
   photo_id: ID | ''
 }
 
+/* Two kinds of progress row. 'half' / 'done' mark a stage (the older way, and a job set up half-way).
+   'pct' is the evening's slider: how much of the whole job is done, 0–100, in `pct` (stage_seq 0). A job's
+   latest 'pct' row, when it has one, is its figure; see calc.ts sliderPct. */
 export interface ProgressEntry extends BaseEntry {
   kind: 'progress'
   stage_seq: number
-  state: 'half' | 'done'
-  pct: number            // derived from stage weights, stored so the Sheet needn't re-derive
+  state: 'half' | 'done' | 'pct'
+  pct: number
 }
 
 export type Entry = DayEntry | AttendanceEntry | StockEntry | MoneyEntry | ProgressEntry

@@ -246,6 +246,23 @@ ck('phone: the last thing he wrote is the last thing that stands', calc.lastEntr
 ck('server: when the phone last sent is known', Number.isFinite(Date.parse(sb.last_received_at)), true)
 ck('server: a household that never sent has no such moment', (await serverSummary(ledger(() => {}))).business.last_received_at, null)
 
+/* The slider: how far the job has got, set by hand in the evening. The latest slider row is the figure,
+   on the phone and on the server alike, over the stage rows written before it; and the step named on the
+   job card is the one that figure falls in. This job's steps are ভিত 20, ছাদ 30, দেওয়াল 25, ফিনিশিং 25,
+   so 55 is inside দেওয়াল (50 to 75) — where the stage rows alone (ভিত done) would say ছাদ. The 40 written
+   the day before is superseded. */
+const SL = ledger(({ masters, entries }) => {
+  masters.push(...A.masters)
+  entries.push(...A.entries)
+  entries.push({ id: 'sl1', kind: 'progress', batch: 'bsl1', date: d(3), project_id: 'p1', created_at: stamp(), stage_seq: 0, state: 'pct', pct: 40 })
+  entries.push({ id: 'sl2', kind: 'progress', batch: 'bsl2', date: d(2), project_id: 'p1', created_at: stamp(), stage_seq: 0, state: 'pct', pct: 55 })
+})
+ck('phone: a slider row sets the percent done', calc.projectTotals(p1, SL.entries, stages).pct_done, 55)
+ck('phone: the step named is the one 55% falls in', calc.currentStage(p1, SL.entries, stages).current?.name_bn, 'দেওয়াল')
+const SLs = (await serverSummary(SL)).projects[0]
+ck('server: a slider row sets the percent done', SLs.pct_done, 55)
+ck('server: the step named is the one 55% falls in', SLs.stage_now_bn, 'দেওয়াল')
+
 const C = ledger(({ entries }) => {
   const w = draft.newDraft(d(1), '')
   const rows = draft.buildEntries(w)

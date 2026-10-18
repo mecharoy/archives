@@ -112,7 +112,7 @@ export async function buildSummary(db, hid) {
   ] = await Promise.all([
     all(db, 'SELECT id, name_bn, client_bn, ptype, budget, area_sqft, start_date, plan_days, status FROM projects WHERE household_id = ?1 AND COALESCE(status,\'\') <> \'deleted\' ORDER BY status, name_bn', hid),
     all(db, 'SELECT project_type, seq, name_bn, weight FROM stages WHERE household_id = ?1 ORDER BY project_type, seq', hid),
-    all(db, 'SELECT id, project_id, stage_seq, state, reverses FROM progress WHERE household_id = ?1', hid),
+    all(db, 'SELECT id, project_id, stage_seq, state, pct, date, created_at, reverses FROM progress WHERE household_id = ?1', hid),
     // A count that was later cancelled is not "the last count".
     one(db, `SELECT cash_counted, cash_computed, date FROM day
              WHERE household_id = ?1 AND cash_counted IS NOT NULL AND ${LIVE('day')}
@@ -471,8 +471,36 @@ async function periodTotals(db, hid, where) {
 
 const daysBetween = (from, today) => Math.max(0, Math.round((Date.parse(today + 'T00:00:00Z') - Date.parse(from + 'T00:00:00Z')) / 86400000))
 
-/** Stage weights, with reversed rows cancelled. Half counts half. */
+/** The evening slider's figure for a job — its latest live 'pct' row by date, then the moment written, then
+    id — or null when the slider was never moved. The phone's calc.ts sliderPct is the same rule. */
+function sliderPct(project, progress) {
+  const reversed = new Set(progress.filter((r) => r.reverses).map((r) => r.reverses))
+  let best = null
+  for (const r of progress) {
+    if (r.project_id !== project.id || r.state !== 'pct' || r.reverses || reversed.has(r.id)) continue
+    const d = r.date || '', c = r.created_at || '', i = r.id || ''
+    if (!best || d > best.d || (d === best.d && (c > best.c || (c === best.c && i > best.i)))) best = { d, c, i, pct: n(r.pct) }
+  }
+  return best ? Math.max(0, Math.min(100, best.pct)) : null
+}
+
+/** The step a percentage falls in: each stage takes its share of 100 by weight (equal shares when the weights
+    add to nothing); the first whose share ends past `pct`. Null at 100. The phone's stageAtPct is the same. */
+function stageAtPct(mine, pct) {
+  const st = [...mine].sort((a, b) => n(a.seq) - n(b.seq))
+  const total = st.reduce((a, s) => a + n(s.weight), 0)
+  let end = 0
+  for (const s of st) {
+    end += total > 0 ? (n(s.weight) / total) * 100 : 100 / st.length
+    if (end > pct + 1e-9) return s
+  }
+  return null
+}
+
+/** Stage weights, with reversed rows cancelled. Half counts half. A slider figure, when there is one, wins. */
 function stagePercent(project, stages, progress) {
+  const slid = sliderPct(project, progress)
+  if (slid != null) return slid
   const mine = stages.filter((s) => s.project_type === project.ptype)
   if (!mine.length) return 0
   const total = mine.reduce((a, s) => a + n(s.weight), 0) || 100
@@ -491,15 +519,17 @@ function stagePercent(project, stages, progress) {
 function currentStage(project, stages, progress) {
   const mine = stages.filter((s) => s.project_type === project.ptype).sort((a, b) => n(a.seq) - n(b.seq))
   if (!mine.length) return null
+  const slid = sliderPct(project, progress)
+  if (slid != null) { const s = stageAtPct(mine, slid); return s ? s.name_bn : null }
   const best = bestStates(project, progress)
   for (const s of mine) if (best.get(s.seq) !== 'done') return s.name_bn
   return null // every stage done
 }
 
-/** The best state reached per stage, with reversed rows cancelled. */
+/** The best state reached per stage, with reversed rows cancelled. Slider rows are not stage marks. */
 function bestStates(project, progress) {
   const reversed = new Set(progress.filter((r) => r.reverses).map((r) => r.reverses))
-  const live = progress.filter((r) => r.project_id === project.id && !r.reverses && !reversed.has(r.id))
+  const live = progress.filter((r) => r.project_id === project.id && r.state !== 'pct' && !r.reverses && !reversed.has(r.id))
   const best = new Map()
   for (const r of live) {
     if (best.get(r.stage_seq) === 'done') continue
