@@ -57,5 +57,87 @@ ck('100% means no step left', run(() => calc.stageAtPct(house, 100)), null)
 ck("the job card's step follows the slider", run(() => calc.currentStage(job, [footing, s60], stages).current?.name_bn), 'ছাদ ঢালাই')
 ck('a job of one step is as far as its slider says', run(() => calc.projectPct(other, [prog({ project_id: 'p2', date: '2026-10-05', state: 'pct', pct: 40 })], stages)), 40)
 
+/* ---------- one evening, several jobs ---------- */
+
+const { draft, day } = app
+const full = (rate) => ({ presence: 'full', rate, amount: rate, advance: 0 })
+const cement = (paid) => ({ key: 'm1', item_id: 'i1', qty: 10, rate: 380, party_id: 's1', due_date: paid ? '' : '2026-10-25', paid, photo_id: '' })
+const tea = { key: 'x1', head_bn: 'চা-জলখাবার', amount: 120, mode: 'নগদ', note: '', photo_id: '' }
+
+const ev = run(() => draft.newDraft('2026-10-19', ['p1', 'p2']))
+const evRows = run(() => {
+  ev.sites[0].att = { w1: full(700) }
+  ev.sites[0].mats = [cement(true)]
+  ev.sites[0].pct = 60
+  ev.sites[1].att = { w2: full(700) }
+  ev.sites[1].exps = [tea]
+  ev.pexps = [{ key: 'o1', head_bn: 'বাজার', amount: 300, mode: 'নগদ', note: '', photo_id: '' }]
+  ev.recv = [{ key: 'r1', project_id: 'p1', amount: 5000, mode: 'নগদ' }]
+  return draft.buildEntries(ev)
+})
+const rowsOk = Array.isArray(evRows)
+const find = (f) => (rowsOk ? evRows.find(f) : undefined)
+ck('two jobs: one batch', rowsOk && new Set(evRows.map((e) => e.batch)).size, 1)
+ck('two jobs: one moment for every row', rowsOk && new Set(evRows.map((e) => e.created_at)).size, 1)
+ck("the first job's wage carries the first job", find((e) => e.kind === 'attendance' && e.worker_id === 'w1')?.project_id, 'p1')
+ck("the second job's wage carries the second job", find((e) => e.kind === 'attendance' && e.worker_id === 'w2')?.project_id, 'p2')
+ck("the cement is the first job's", find((e) => e.kind === 'stock')?.project_id, 'p1')
+ck("the tea is the second job's", find((e) => e.kind === 'money' && e.head_bn === 'চা-জলখাবার')?.project_id, 'p2')
+ck('own spending carries no job', find((e) => e.kind === 'money' && e.personal)?.project_id, '')
+ck('money received keeps its own job', find((e) => e.kind === 'money' && e.dir === 'received')?.project_id, 'p1')
+ck('one day row, with no job', rowsOk && evRows.filter((e) => e.kind === 'day').map((e) => '[' + e.project_id + ']').join(), '[]')
+ck('a moved slider writes one slider row; an untouched one writes none', rowsOk && evRows.filter((e) => e.kind === 'progress' && e.state === 'pct').map((e) => e.project_id + ':' + e.pct).join(), 'p1:60')
+/* The cash after it, by the book's own rule: 10,000 + 5,000 received in cash − 1,400 wages − 3,800 cement paid
+   − 120 tea. The ₹300 of household spending is his own book's, not the business cash (only a drawing is). */
+ck('cash after a two-job day matches the hand sum', run(() => draft.cashAfterDay([], ev, 10000, '2026-10-01')), 9680)
+
+const sm = run(() => draft.newDraft('2026-10-19', ['']))
+const smRows = run(() => { sm.sites[0].att = { w3: full(400) }; return draft.buildEntries(sm) })
+ck("the shop's men are written with no job", Array.isArray(smRows) && smRows.filter((e) => e.kind === 'attendance').map((e) => '[' + e.project_id + ']').join(), '[]')
+
+/* A day half-written by build 26: one job, its fields at the top of the draft. */
+const old = {
+  batch: 'bold', date: '2026-10-18', project_id: 'p1',
+  att: { w1: full(700), w2: { presence: 'half', rate: 500, amount: 250, advance: 100 } },
+  mats: [cement(false)], rets: [], exps: [tea], pexps: [], invs: [],
+  recv: [{ key: 'r', project_id: 'p1', amount: 5000, mode: 'নগদ' }],
+  progress: { stage_seq: 2, state: 'half' }, cash_counted: null, cash_computed: null, note: 'বৃষ্টি',
+  step: 3, at: 'material', started_at: '2026-10-18T12:00:00Z', from_yesterday: false, att_seeded: true,
+}
+const nd = run(() => draft.normalizeDraft(structuredClone(old)))
+ck('an old draft becomes one job', nd?.sites?.length, 1)
+ck('…with its men', nd?.sites && Object.keys(nd.sites[0].att).sort().join(), 'w1,w2')
+ck('…its cement and its tea', nd?.sites && nd.sites[0].mats.length + '+' + nd.sites[0].exps.length, '1+1')
+ck('…and its note and money received', nd?.note + '/' + nd?.recv?.length, 'বৃষ্টি/1')
+const sig = (rs) => rs.map((e) => [e.kind, e.project_id, e.amount ?? '', e.state ?? '', e.stage_seq ?? ''].join('/')).sort().join(' ')
+const OLD_ROWS = ['attendance/p1/700//', 'attendance/p1/250//', 'stock/p1/3800//', 'money/p1/120//', 'money/p1/5000//', 'progress/p1//half/2', 'day////'].sort().join(' ')
+ck('an old draft saves the rows build 26 saved (its day row now carries no job)', run(() => sig(draft.buildEntries(structuredClone(old)))), OLD_ROWS)
+
+/* ---------- the order of the questions ---------- */
+
+const keys = (o) => run(() => day.daySteps(o).map((s) => s.key).join(' '))
+const one = { ...draft.newDraft('2026-10-19', ['p1']) }
+if (one.sites) one.sites[0].att = { w1: full(700) }
+ck('one job with men', keys({ draft: one, jobs: 1, hasMen: true, runsShop: true }),
+  'pick men:0 wages:0 mat:0 exp:0 recv:0 pct:0 shop own cash review')
+const nobody = draft.newDraft('2026-10-19', ['p1'])
+ck('no men on the books: no men, no wages', keys({ draft: nobody, jobs: 1, hasMen: false, runsShop: true }),
+  'pick mat:0 exp:0 recv:0 pct:0 shop own cash review')
+ck('a job where nobody came has no wages question', keys({ draft: nobody, jobs: 1, hasMen: true, runsShop: true }),
+  'pick men:0 mat:0 exp:0 recv:0 pct:0 shop own cash review')
+const two = draft.newDraft('2026-10-19', ['p2', 'p1'])
+ck('two jobs, in the order ticked', keys({ draft: two, jobs: 2, hasMen: true, runsShop: false }),
+  'pick men:0 mat:0 exp:0 recv:0 pct:0 men:1 mat:1 exp:1 recv:1 pct:1 own cash review')
+ck('no jobs and no shop men: no first question', keys({ draft: draft.newDraft('2026-10-19', []), jobs: 0, hasMen: true, runsShop: false }),
+  'own cash review')
+const shopOnly = draft.newDraft('2026-10-19', [''])
+if (shopOnly.sites) shopOnly.sites[0].att = { w3: full(400) }
+ck("the shop's men only", keys({ draft: shopOnly, jobs: 0, hasMen: true, runsShop: true }),
+  'pick men:0 wages:0 shop own cash review')
+const both = draft.newDraft('2026-10-19', ['p1', 'p2'])
+if (both.sites) both.sites[0].att = { w1: full(700) }
+ck('a man ticked at the first job is named at the second', run(() => [...day.menElsewhere(both, 1)].join()), 'w1')
+ck('…and not at the first', run(() => [...day.menElsewhere(both, 0)].join()), '')
+
 console.log(`\n${pass} ok, ${fail} failed`)
 if (fail) process.exit(1)

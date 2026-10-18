@@ -80,11 +80,13 @@ export function genLedger(app, r, nEvents, o = {}) {
   function dayRows() {
     const date = past()
     const proj = r.chance(0.12) ? '' : r.pick(projects).id
-    const dr = draft.newDraft(date, proj)
+    // One job per generated day (or none: the men and spending of a day with no job). The draft's site holds it.
+    const dr = draft.newDraft(date, [proj])
+    const site = dr.sites[0]
     dr.batch = nid('b')
     for (const w of workers) if (r.chance(0.5)) {
       const presence = r.pick(['full', 'half', 'ot'])
-      dr.att[w.id] = {
+      site.att[w.id] = {
         presence, rate: w.rate,
         amount: r.chance(0.85) ? round2(draft.DAYS_FOR[presence] * w.rate) : r.money(0, 1500),
         advance: r.chance(0.25) ? r.money(0, 400) : 0,
@@ -97,16 +99,16 @@ export function genLedger(app, r, nEvents, o = {}) {
       if (!paid) owe(party_id, round2(m.qty * m.rate))
       return m
     }
-    for (let k = r.int(0, 3); k--;) dr.mats.push(mat())
+    for (let k = r.int(0, 3); k--;) site.mats.push(mat())
     for (let k = r.int(0, 2); k--;) dr.invs.push(mat())
-    if (r.chance(0.2)) dr.rets.push({ key: nid('k'), item_id: r.pick(items).id, qty: r.int(1, 20), rate: r.money(1, 900) })
-    for (let k = r.int(0, 2); k--;) dr.exps.push({ key: nid('k'), head_bn: r.pick(model.MONEY_HEADS_SITE), amount: r.money(10, 5000), mode: r.chance(0.7) ? CASH : r.pick(model.PAY_MODES), note: '', photo_id: '' })
+    if (r.chance(0.2)) site.rets.push({ key: nid('k'), item_id: r.pick(items).id, qty: r.int(1, 20), rate: r.money(1, 900) })
+    for (let k = r.int(0, 2); k--;) site.exps.push({ key: nid('k'), head_bn: r.pick(model.MONEY_HEADS_SITE), amount: r.money(10, 5000), mode: r.chance(0.7) ? CASH : r.pick(model.PAY_MODES), note: '', photo_id: '' })
     if (r.chance(0.2)) dr.pexps.push({ key: nid('k'), head_bn: r.pick(model.MONEY_HEADS_PERSONAL), amount: r.money(10, 2000), mode: CASH, note: '', photo_id: '' })
-    if (r.chance(0.25)) dr.progress = { stage_seq: r.int(1, 5), state: r.pick(['half', 'done']) }
+    if (r.chance(0.25)) site.stage = { stage_seq: r.int(1, 5), state: r.pick(['half', 'done']) }
     if (r.chance(0.25)) { dr.cash_counted = r.chance(0.1) ? 0 : r.money(0, 120000); dr.cash_computed = r.money(0, 120000) }
-    const rows = draft.buildEntries(dr)
     /* How far the job has got, by the evening's slider: a quarter of the days on a job move it. */
-    if (proj && r.chance(0.25)) rows.push({ kind: 'progress', batch: dr.batch, date, project_id: proj, stage_seq: 0, state: 'pct', pct: r.int(0, 20) * 5 })
+    if (proj && r.chance(0.25)) site.pct = r.int(0, 20) * 5
+    const rows = draft.buildEntries(dr)
     const at = stamp()                                   // a whole day is saved in one instant
     for (const e of rows) { e.id = nid('e'); e.created_at = at }
     return rows
