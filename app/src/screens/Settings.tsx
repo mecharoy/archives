@@ -3,7 +3,7 @@ import { SyncLine } from './Home'
 import { NewProjectSheet } from './NewJob'
 import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast, Toast, Empty } from '../ui/kit'
 import { PinSheet } from './Personal'
-import { NewItemSheet } from './DayWizard'
+import { NewItemSheet } from './day/NewSheets'
 import {
   useStore, saveMaster, saveSettings, allWorkers, allItems, parties, stages, coeffs,
   projects as allProjects, nameOf, type State,

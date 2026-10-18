@@ -222,10 +222,52 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
   padding: calc(.5rem + env(safe-area-inset-top)) .55rem .5rem;
   background: var(--surface); border-bottom: 1px solid var(--line);
 }
-.stepdots { display: flex; gap: .22rem; flex: 1; padding: 0 .3rem; }
-.stepdots i { height: 3px; border-radius: 2px; background: var(--line); flex: 1; transition: background .2s; }
-.stepdots i.on { background: var(--accent); }
-.stepcount { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; padding-right: .5rem; }
+.stepcount { font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; padding-right: .3rem; white-space: nowrap; }
+/* Where he is in the evening: a coloured tag naming the job (and which of how many) or the part of the day,
+   over a thin bar of how far along he is. One colour per part, the same as everywhere else in the app. */
+.wizmid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .35rem; }
+.sec {
+  align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: .8rem; font-weight: 600; padding: .1rem .6rem; border-radius: 999px;
+  background: var(--c-work-bg); color: var(--c-work);
+}
+.sec.stock { background: var(--c-stock-bg); color: var(--c-stock); }
+.sec.money { background: var(--c-money-bg); color: var(--c-money); }
+.sec.plain { background: var(--sunk); color: var(--ink-2); }
+.sec.done  { background: var(--accent-bg); color: var(--accent); }
+.wizbar { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.wizbar i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .2s; }
+
+/* The visible "change" on a ticked man's row: half a day, a day and a half. */
+.chg {
+  display: inline-block; font-size: .78rem; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px; padding: .2rem .65rem; white-space: nowrap;
+}
+
+/* কাজ কতটা হয়েছে? — the figure, the slider, and a − and + for a thumb that slips. */
+.pctbig { font-size: 3rem; font-weight: 700; text-align: center; line-height: 1.1; margin: .4rem 0 .6rem; font-variant-numeric: tabular-nums; }
+input.slider {
+  -webkit-appearance: none; appearance: none; width: 100%; height: 2.6rem; background: transparent; margin: 0; touch-action: pan-y;
+}
+input.slider::-webkit-slider-runnable-track {
+  height: .55rem; border-radius: .3rem;
+  background: linear-gradient(to right, var(--c-work) var(--fill, 0%), var(--sunk) var(--fill, 0%));
+}
+input.slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 2.2rem; height: 2.2rem; margin-top: -.83rem; border-radius: 50%;
+  background: var(--surface); border: .2rem solid var(--c-work); box-shadow: var(--shadow);
+}
+input.slider::-moz-range-track { height: .55rem; border-radius: .3rem; background: var(--sunk); }
+input.slider::-moz-range-progress { height: .55rem; border-radius: .3rem; background: var(--c-work); }
+input.slider::-moz-range-thumb { width: 2rem; height: 2rem; border-radius: 50%; background: var(--surface); border: .2rem solid var(--c-work); }
+input.slider:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: .5rem; }
+.pm { display: flex; align-items: center; justify-content: space-between; gap: .8rem; margin-top: .4rem; }
+.pm .mid { flex: 1; text-align: center; font-size: .9rem; color: var(--muted); }
+.pmbtn {
+  width: 3.4rem; height: 3.4rem; border-radius: 50%; border: 1px solid var(--line); background: var(--surface);
+  font-size: 1.7rem; font-weight: 700; color: var(--ink); display: grid; place-items: center; flex: none;
+}
+.pmbtn:active { background: var(--sunk); }
 
 /* Bengali carries marks above and below the line, so headings need more
    room than a Latin face would. */

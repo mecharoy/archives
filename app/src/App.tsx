@@ -3,7 +3,7 @@ import { Home } from './screens/Home'
 import { Work } from './screens/Work'
 import { Money } from './screens/Money'
 import { AllFeatures } from './screens/AllFeatures'
-import { DayWizard } from './screens/DayWizard'
+import { DayWizard } from './screens/day/DayWizard'
 import { Shop } from './screens/Shop'
 import { Personal } from './screens/Personal'
 import { Estimator } from './screens/Estimator'
@@ -194,7 +194,7 @@ export function App() {
 
   if (needsSetup) {
     return (
-      <div className="app">
+      <div className="app" data-screen="setup">
         <Onboarding onDone={() => toast.show('শুরু হল — এবার আজকের হিসাব লিখুন')} />
         {toast.msg && <Toast text={toast.msg} />}
       </div>
@@ -204,11 +204,10 @@ export function App() {
   const back = () => { setDraft(null); pop() }
 
   return (
-    <div className="app">
+    <div className="app" data-screen="main">
       {screen === 'home' && (
         <Home
           onDay={() => openDay(null)}
-          onSameAsYesterday={(d) => openDay(d)}
           onGo={push}
         />
       )}

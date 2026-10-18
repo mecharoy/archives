@@ -83,7 +83,8 @@ function DayDetail({ s, date, onCorrected }: { s: State; date: string; onCorrect
           <div className="review-row" key={e.id}>
             <span>
               <span className="t">{describe(s, e)}</span>
-              <span className="k">{label(e)}</span>
+              {/* One evening can hold two jobs: each line says which. */}
+              <span className="k">{label(e)}{e.project_id ? ' · ' + nameOf(s, e.project_id) : ''}</span>
             </span>
             <span className="v num">{amountOf(e) ? money(amountOf(e)) : ''}</span>
             <button className="iconbtn" onClick={() => setConfirm(e)} aria-label="সংশোধন"><Icon name="edit" size={18} /></button>
@@ -128,7 +129,7 @@ function label(e: Entry): string {
     case 'stock': return e.dir === 'in' ? (e.paid ? t('কেনা') : t('বাকিতে কেনা')) : e.dir === 'sale' ? t('বিক্রি') : e.dir === 'transfer' ? (e.qty < 0 ? t('কাজ থেকে ফেরত') : t('কাজে পাঠানো'))
       : e.dir === 'opening_get' ? t('উনি দেবেন') : e.dir === 'opening_owe' ? t('আমি দেব') : t('গোনা')
     case 'money': return e.personal ? t('নিজের খাতা') : modeLabel(e.mode)
-    case 'progress': return e.state === 'done' ? t('ধাপ শেষ') : t('অর্ধেক')
+    case 'progress': return e.state === 'pct' ? tf('{0}% হয়েছে', toBn(e.pct)) : e.state === 'done' ? t('ধাপ শেষ') : t('অর্ধেক')
     default: return ''
   }
 }

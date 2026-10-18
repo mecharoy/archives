@@ -1,13 +1,12 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Icon, Sheet } from '../ui/kit'
 import { telHref } from '../lib/phone'
-import { useStore, activeProjects, workers, stages, type State, type Brief } from '../lib/store'
-import { money, toBn, isoDate, agoBn, dayLabelBn, addDays, daysBetween } from '../lib/bn'
+import { useStore, activeProjects, stages, type State, type Brief } from '../lib/store'
+import { money, toBn, isoDate, agoBn, dayLabelBn, addDays } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
 import { maybeMakeBrief } from '../lib/aiBrief'
 import { cashState, projectTotals, daysWritten, lastEntryDate, shopStock, shopEverHandled, duesSplit, receivablesSplit } from '../lib/calc'
-import { lastAttendance, lastAttendanceDay, lastDayFor, rankProjects } from '../lib/suggest'
-import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
+import { rankProjects } from '../lib/suggest'
 import { allItems } from '../lib/store'
 import { flush } from '../lib/sync'
 import { t, tf, pick } from '../lib/i18n'
@@ -24,9 +23,8 @@ import type { Screen } from '../App'
    he has to remember to press; the summaries of all three are always in view.
    At the very bottom, one button opens every single thing the app can do. */
 
-export function Home({ onDay, onSameAsYesterday, onGo }: {
+export function Home({ onDay, onGo }: {
   onDay: () => void
-  onSameAsYesterday: (d: Draft) => void
   onGo: (screen: Screen) => void
 }) {
   const s = useStore((x) => x)
@@ -67,7 +65,6 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
   const outdated = !!s.brief && lastDayAt > s.brief.generated_at
   const brief: Brief = useMemo(() => (s.brief && !stale && !outdated ? s.brief : localBrief()), [s.brief, stale, outdated, s.entries, s.masters])
 
-  const sameDraft = useMemo(() => buildSameAsYesterday(s), [s])
   const doneToday = useMemo(() => s.entries.some((e) => e.date === isoDate() && e.kind === 'day'), [s.entries])
   const last = lastEntryDate(s.entries)
   const gap = last && last < addDays(isoDate(), -1)
@@ -116,12 +113,6 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
           <Icon name="fwd" size={22} />
         </button>
 
-        {sameDraft && !doneToday && (
-          <button className="btn quiet" style={{ width: '100%', marginTop: '.6rem', minHeight: '3.4rem' }}
-            onClick={() => onSameAsYesterday(sameDraft)}>
-            {t('কালকের মতোই')} · {toBn(Object.keys(sameDraft.att).length)} {t('জন')}, {money(Object.values(sameDraft.att).reduce((a, x) => a + x.amount, 0))}
-          </button>
-        )}
 
         {/* Only drawn when someone has written from the website and he has not
             looked yet — a customer waiting for a call is worth a line here. */}
@@ -326,36 +317,6 @@ function StandingTotals({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
       </button>
     </div>
   )
-}
-
-/** কালকের মতোই — the last day on the site he touched most recently, with the
-    men and their wages carried over. Materials and one-off expenses are not
-    copied: repeating a purchase he did not make is the one wrong guess that
-    would cost him money. */
-export function buildSameAsYesterday(s: State): Draft | null {
-  const act = activeProjects(s)
-  if (!act.length) return null
-  const pid = rankProjects(s.entries, act.map((p) => p.id))[0]
-  if (!pid) return null
-  const prev = lastDayFor(s.entries, pid)
-  if (!prev) return null
-  // The crew of the last day BEFORE today, and only if that was recent: offering "the same as yesterday"
-  // for a crew last seen last week would tick men who may long since have gone.
-  const att = lastAttendance(s.entries, pid, isoDate())
-  const seen = lastAttendanceDay(s.entries, pid, isoDate())
-  if (!att.size || !seen || daysBetween(seen, isoDate()) > 3) return null
-  const men = workers(s)
-  const d = newDraft(isoDate(), pid)
-  d.from_yesterday = true
-  for (const [wid, presence] of att) {
-    const w = men.find((x) => x.id === wid)
-    if (!w) continue
-    d.att[wid] = { presence, rate: w.rate, amount: w.rate * DAYS_FOR[presence], advance: 0 }
-  }
-  if (!Object.keys(d.att).length) return null
-  // No cash count is invented here: a count is something he does with the money in his hand.
-  d.step = 999
-  return d
 }
 
 export function projectLines(s: State) {

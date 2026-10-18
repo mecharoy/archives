@@ -115,18 +115,24 @@ const liveProgress = (entries: Entry[], p: Project) =>
 /** How far the job has got by the evening's slider: its latest live 'pct' row — by date, then the moment it
     was written, then id — or null when the slider has never been moved for it. */
 export function sliderPct(p: Project, entries: Entry[]): number | null {
+  const best = lastSlider(p, entries)
+  return best ? Math.max(0, Math.min(100, Number(best.pct) || 0)) : null
+}
+
+/** The slider row that sets the job's figure (see sliderPct), for when it was written. */
+export function lastSlider(p: Project, entries: Entry[]): ProgressEntry | null {
   let best: ProgressEntry | null = null
   for (const e of liveProgress(entries, p)) {
     if (e.state !== 'pct') continue
     if (!best || e.date > best.date || (e.date === best.date && (e.created_at > best.created_at || (e.created_at === best.created_at && e.id > best.id)))) best = e
   }
-  return best ? Math.max(0, Math.min(100, Number(best.pct) || 0)) : null
+  return best
 }
 
 /** The step a percentage falls in: the job's stages in order, each taking its share of 100 by weight (equal
     shares when the weights add to nothing), and the first whose share ends past `pct`. Null at 100 — no step
     is left. */
-export function stageAtPct(stages: Stage[], pct: number): Stage | null {
+export function stageAtPct<T extends { seq: number; weight: number }>(stages: T[], pct: number): T | null {
   const st = [...stages].sort((a, b) => a.seq - b.seq)
   if (!st.length) return null
   const total = st.reduce((a, s) => a + (s.weight || 0), 0)

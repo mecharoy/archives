@@ -14,6 +14,18 @@ export function toBn(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => BN[+d])
 }
 
+/** A name in the possessive, the way Bengali writes it: সিমেন্ট → সিমেন্টের, বালি → বালির, রং → রঙের. A name that
+    ends in a digit or a sign gets a hyphen, -এর, rather than a guess. */
+export function ofBn(name: string): string {
+  const s = name.trim()
+  if (!s) return s
+  const c = s.charCodeAt(s.length - 1)
+  if (c === 0x0982) return s.slice(0, -1) + 'ঙের'                                // ং
+  if ((c >= 0x09be && c <= 0x09cc) || (c >= 0x0985 && c <= 0x0994)) return s + 'র'   // a vowel sign, or a vowel
+  if ((c >= 0x0995 && c <= 0x09b9) || (c >= 0x09dc && c <= 0x09df) || c === 0x09cd || c === 0x09ce) return s + 'ের'
+  return s + '-এর'
+}
+
 /** Bengali digits whatever language the app is shown in — for text he sends to someone else. */
 export function digitsBn(s: string | number): string {
   return String(s).replace(/[0-9]/g, (d) => BN[+d])

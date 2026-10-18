@@ -20,16 +20,19 @@ const MODES: { value: Mode; label: string }[] = [
   { value: 'UPI', label: 'অনলাইনে (UPI)' },
 ]
 
-function ReceivedFields({ s, project, setProject, amount, setAmount, mode, setMode }: {
+function ReceivedFields({ s, project, setProject, amount, setAmount, mode, setMode, fixed = false }: {
   s: State; project: ID | ''; setProject: (id: ID) => void
-  amount: string; setAmount: (v: string) => void; mode: Mode; setMode: (m: Mode) => void
+  amount: string; setAmount: (v: string) => void; mode: Mode; setMode: (m: Mode) => void; fixed?: boolean
 }) {
   return (
     <>
-      <h2 className="question">{t('কোন কাজের টাকা?')}</h2>
-      <div className="chips">
-        {activeProjects(s).map((p) => <Chip key={p.id} on={project === p.id} onClick={() => setProject(p.id)}>{p.name_bn}</Chip>)}
-      </div>
+      {/* Asked inside one job's part of the evening, the job is already known: only how much. */}
+      <h2 className="question">{fixed ? t('কত পেলেন?') : t('কোন কাজের টাকা?')}</h2>
+      {!fixed && (
+        <div className="chips">
+          {activeProjects(s).map((p) => <Chip key={p.id} on={project === p.id} onClick={() => setProject(p.id)}>{p.name_bn}</Chip>)}
+        </div>
+      )}
       <MoneyPad value={amount} onChange={setAmount} />
       <p className="sectionlabel">{t('কীভাবে পেলেন')}</p>
       <div className="chips">
@@ -46,16 +49,16 @@ const onlyJob = (s: State, preferred: ID | ''): ID | '' => {
 }
 
 /** The evening's version: a whole screen inside the day, handing one line back to the draft. */
-export function ReceivedForm({ s, defaultProject, onBack, onAdd }: {
-  s: State; defaultProject: ID | ''; onBack: () => void; onAdd: (r: DraftRecv) => void
+export function ReceivedForm({ s, defaultProject, fixed = false, onBack, onAdd }: {
+  s: State; defaultProject: ID | ''; fixed?: boolean; onBack: () => void; onAdd: (r: DraftRecv) => void
 }) {
-  const [project, setProject] = useState<ID | ''>(onlyJob(s, defaultProject))
+  const [project, setProject] = useState<ID | ''>(fixed ? defaultProject : onlyJob(s, defaultProject))
   const [amount, setAmount] = useState('')
   const [mode, setMode] = useState<Mode>('নগদ')
   return (
     <>
       <div className="scroll">
-        <ReceivedFields s={s} project={project} setProject={setProject} amount={amount} setAmount={setAmount} mode={mode} setMode={setMode} />
+        <ReceivedFields s={s} project={project} setProject={setProject} amount={amount} setAmount={setAmount} mode={mode} setMode={setMode} fixed={fixed} />
       </div>
       <div className="actionbar">
         <button className="btn ghost" onClick={onBack}>{t('ফিরে')}</button>

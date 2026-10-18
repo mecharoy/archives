@@ -139,6 +139,14 @@ if (both.sites) both.sites[0].att = { w1: full(700) }
 ck('a man ticked at the first job is named at the second', run(() => [...day.menElsewhere(both, 1)].join()), 'w1')
 ck('…and not at the first', run(() => [...day.menElsewhere(both, 0)].join()), '')
 
+/* ---------- the price question names the thing in the possessive ---------- */
+
+const { bn } = app
+ck('a word ending in a consonant takes -ের', run(() => bn.ofBn('সিমেন্ট')), 'সিমেন্টের')
+ck('a word ending in a vowel takes -র', run(() => bn.ofBn('বালি')), 'বালির')
+ck('ং becomes ঙ before -ের', run(() => bn.ofBn('রং')), 'রঙের')
+ck('a name ending in a sign keeps a hyphen', run(() => bn.ofBn('পাইপ ৩/৪"')), 'পাইপ ৩/৪"-এর')
+
 /* ---------- kinds of work ---------- */
 
 const { kinds } = app
