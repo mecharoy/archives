@@ -117,7 +117,7 @@ export async function fetchBrief(silent = true): Promise<string> {
     if (auth) headers['Authorization'] = 'Bearer ' + auth
     const res = await fetch(url + (url.includes('?') ? '&' : '?') + 'v=' + Date.now(), { headers, signal: ctrl.signal, cache: 'no-store' })
     clearTimeout(timer)
-    if (res.status === 404) return silent ? '' : t('রাতের হিসাব এখনও তৈরি হয়নি')
+    if (res.status === 404) return silent ? '' : t('আজকের কথা এখনও তৈরি হয়নি')
     if (!res.ok) return tf('ব্রিফ পাওয়া গেল না ({0})', res.status)
     const parsed = parseBrief(await res.json())
     if (!parsed) return t('ব্রিফের ফাইলটা ঠিক নেই')

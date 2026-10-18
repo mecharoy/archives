@@ -56,7 +56,7 @@ export async function restoreFromServer(): Promise<RestoreResult> {
   let data: { ok?: boolean; error?: string; tables?: Record<string, unknown[][]> }
   try {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + s.settings.token }, cache: 'no-store' })
-    if (!res.ok) return { masters: 0, entries: 0, error: res.status === 401 ? t('টোকেন মিলল না') : tf('সার্ভার {0}', res.status) }
+    if (!res.ok) return { masters: 0, entries: 0, error: res.status === 401 ? t('চাবি মিলল না') : tf('সার্ভার {0}', res.status) }
     data = await res.json()
   } catch {
     return { masters: 0, entries: 0, error: t('নেট পাওয়া যাচ্ছে না') }

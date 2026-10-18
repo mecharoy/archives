@@ -90,8 +90,8 @@ export function makePhoneBrief(): Promise<string> {
 /** What went wrong, in his language, with what to do about it. */
 export function explainAiError(kind: string): string {
   switch (kind) {
-    case 'no_key': return t('এখনও কোনো কী বসানো হয়নি')
-    case 'key': return t('গুগল এই কী নিচ্ছে না — ভুল, মেয়াদ শেষ, বা বাতিল হয়ে গেছে। aistudio.google.com/apikey থেকে নতুন কী নিন।')
+    case 'no_key': return t('এখনও কোনো চাবি বসানো হয়নি')
+    case 'key': return t('গুগল এই চাবি নিচ্ছে না — ভুল, মেয়াদ শেষ, বা বাতিল হয়ে গেছে। aistudio.google.com/apikey থেকে নতুন চাবি নিন।')
     case 'quota': return t('বিনামূল্যের সীমা এখনকার মতো শেষ — একটু পরে বা কাল আবার চলবে।')
     case 'busy': return t('গুগলের সার্ভার এখন ব্যস্ত — একটু পরে আবার চেষ্টা হবে।')
     case 'network': return t('নেট পাওয়া যাচ্ছে না')
@@ -105,7 +105,7 @@ export function explainAiError(kind: string): string {
 export async function testAiKey(raw: string): Promise<{ ok: boolean; message: string; detail: string }> {
   const { testKey } = await import('../../nightly/gemini.mjs')
   const r = await testKey(raw)
-  if (r.ok) return { ok: true, message: t('কী ঠিক আছে — গুগল নিচ্ছে'), detail: '' }
+  if (r.ok) return { ok: true, message: t('চাবি ঠিক আছে — গুগল নিচ্ছে'), detail: '' }
   return { ok: false, message: explainAiError(r.kind), detail: r.detail || '' }
 }
 

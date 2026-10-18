@@ -74,7 +74,7 @@ export async function fetchEnquiries(silent = true): Promise<string> {
     const res = await fetch(url, { headers: { Authorization: 'Bearer ' + s.settings.token }, signal: ctrl.signal, cache: 'no-store' })
     clearTimeout(timer)
     if (res.status === 404) return silent ? '' : t('সার্ভারে এখনও এই সুবিধা নেই')
-    if (res.status === 401) return t('টোকেন মিলল না')
+    if (res.status === 401) return t('চাবি মিলল না')
     if (!res.ok) return tf('সার্ভার {0}', res.status)
     const data = (await res.json()) as { enquiries?: unknown }
     const list = parseEnquiries(data.enquiries)

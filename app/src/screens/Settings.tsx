@@ -284,13 +284,13 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
       <TopBar title="গুগলের চাবি" onBack={onBack} />
       <div className="scroll">
         <p className="hint" style={{ marginTop: '1rem' }}>
-          {t("রাতের হিসাবের কথাগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।")}
+          {t("আজকের কথার লাইনগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।")}
         </p>
         <p className="small muted">
           {t("মাল, খরচের ধরন (যেমন চা, ওষুধ) আর টাকার অঙ্ক কিন্তু গুগলে যায় — না হলে বাক্য লেখা যায় না।")}
         </p>
         <p className="small muted">
-          {t("কী-টা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।")}
+          {t("চাবিটা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।")}
         </p>
         <Field label="চাবি">
           <input className="input" value={key} onChange={(e) => { setKey(e.target.value); setResult(null) }}
@@ -298,7 +298,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
             placeholder="AIza…" autoComplete="off" />
         </Field>
         <button className="btn quiet small" onClick={() => setShow(!show)}>{show ? t('লুকান') : t('দেখান')}</button>
-        <p className="small muted" style={{ marginTop: '.6rem' }}>{t('বিনামূল্যে নতুন কী:')} aistudio.google.com/apikey</p>
+        <p className="small muted" style={{ marginTop: '.6rem' }}>{t('বিনামূল্যে নতুন চাবি:')} aistudio.google.com/apikey</p>
 
         {result && (
           <div className="card" style={{ marginTop: '.8rem' }}>
@@ -317,7 +317,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
             setBusy('save')
             setKey(await setAiKey(key))
             setBusy('')
-            toast.show(t('কী সেভ হয়েছে'))
+            toast.show(t('চাবি সেভ হয়েছে'))
           }}>{t('খাতায় তুলুন')}</button>
         </div>
 
@@ -325,8 +325,8 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
           <button className="btn quiet small" disabled={!!busy} onClick={async () => {
             setKey(await setAiKey(''))
             setResult(null)
-            toast.show(t('কী মুছে ফেলা হয়েছে'))
-          }}>{t('কী মুছে দিন')}</button>
+            toast.show(t('চাবি মুছে ফেলা হয়েছে'))
+          }}>{t('চাবি মুছে দিন')}</button>
         )}
 
         <div className="divider" />
@@ -349,7 +349,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
               setBusy('make')
               const err = await makePhoneBrief()
               setBusy('')
-              toast.show(err || t('রাতের হিসাব এসে গেছে'))
+              toast.show(err || t('আজকের কথা এসে গেছে'))
             }}>{busy === 'make' ? t('আনছি…') : t('এখনই তৈরি করুন')}</button>
         </div>
       </div>
@@ -443,7 +443,7 @@ function SyncPage({ s, onBack }: { s: State; onBack: () => void }) {
               setBusy('brief')
               const err = hasKey ? await makePhoneBrief() : await fetchBrief(false)
               setBusy('')
-              toast.show(err || t('রাতের হিসাব এসে গেছে'))
+              toast.show(err || t('আজকের কথা এসে গেছে'))
             }}>{busy === 'brief' ? t('আনছি…') : hasKey ? t('এখনই তৈরি করুন') : t('এখন আনুন')}</button>
         </div>
 

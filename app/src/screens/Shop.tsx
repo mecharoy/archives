@@ -264,7 +264,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | '
             <MoneyPad value={qty} onChange={setQty} prefix="" allowDecimal chips={qtyChips(s.entries, item.id)} onChipTaken={() => noteChip(true)} />
             {flow !== 'in' && flow !== 'count' && Number(qty) > held && (
               <div className="alert warn" style={{ marginTop: '.8rem' }}>
-                <span className="dot" /><span>{t("দোকানে এত নেই। মজুত শেষ হয়ে যাবে — আগে ‘মাল গোনা’ করে নিন।")}</span>
+                <span className="dot" /><span>{t("দোকানে এত নেই। মজুত শেষ হয়ে যাবে — আগে ‘মাল গুনে মেলান’ করে নিন।")}</span>
               </div>
             )}
           </div>
@@ -327,7 +327,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | '
               </>
             ) : (
               <>
-                <h2 className="question">{flow === 'sale' ? t('কাকে বিক্রি?') : t('কার কাছ থেকে?')}</h2>
+                <h2 className="question">{flow === 'sale' ? t('কাকে বিক্রি?') : t('কার থেকে নিলেন?')}</h2>
                 <PartyPicker list={list} top={topParties} value={party} onPick={choose} onNew={() => setNewParty(true)}
                   extra={flow === 'sale' ? <Chip on={party === ''} onClick={() => choose('')}>{t("খুচরো খদ্দের")}</Chip> : undefined} />
                 {(flow === 'in' || flow === 'sale') && (
@@ -347,7 +347,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null | '
                       <p className="small" style={{ marginTop: '.5rem', color: 'var(--warn)' }}>{t('বাকিতে কিনলে দোকানের নাম দিন।')}</p>
                     )}
                     {paid === false && (
-                      <DueChips question={flow === 'sale' ? 'কবে দেবে?' : 'কবে দিতে হবে?'} days={days} onChange={setDueDays} own={partyObj?.terms_days} from={date} />
+                      <DueChips question={flow === 'sale' ? 'কবে দেবে?' : 'কবে দেবেন?'} days={days} onChange={setDueDays} own={partyObj?.terms_days} from={date} />
                     )}
                     <button className="btn quiet small" style={{ marginTop: '1rem' }}
                       onClick={async () => { const id = await capture(); if (id) setPhoto(id) }}>

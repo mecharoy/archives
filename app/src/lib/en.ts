@@ -76,8 +76,8 @@ export const EN: Record<string, string> = {
   'দুপুর': 'afternoon',
   'সন্ধে': 'evening',
   'রাতের হিসাব': "Last night's brief",
-  'রাতের হিসাব এসে গেছে': 'The nightly brief has arrived',
-  'রাতের হিসাব এখনও তৈরি হয়নি': 'The nightly brief is not ready yet',
+  'আজকের কথা এসে গেছে': "Today's note has arrived",
+  'আজকের কথা এখনও তৈরি হয়নি': "Today's note is not ready yet",
   'ফোনের নিজের হিসাব': "The phone's own sums",
   'নিচের সংখ্যাগুলো ফোনের নিজের হিসাব।': "The numbers below are the phone's own sums.",
   'নজর দেওয়ার মতো': 'Worth a look',
@@ -224,7 +224,6 @@ export const EN: Record<string, string> = {
   'হিসাবে বাকি হিসেবে থাকবে।': 'It will stay in the books as a due.',
   '{0} — {1} দিনের মধ্যে, অর্থাৎ {2}।': '{0} — within {1} days, that is {2}.',
   'কার কাছ থেকে': 'From whom',
-  'কার কাছ থেকে?': 'From whom?',
   'কাকে বিক্রি?': 'Sold to whom?',
   'বিলের ছবি': 'Photo of the bill',
   'বিলের ছবি (ইচ্ছে হলে)': 'Photo of the bill (optional)',
@@ -309,8 +308,7 @@ export const EN: Record<string, string> = {
   'খদ্দেরকে': 'to a customer',
   'দামে নয়, খরচে': 'at cost, not at price',
   'যা আছে মিলিয়ে নিন': 'Check what is there',
-  'দোকানে এত নেই। মজুত শেষ হয়ে যাবে — আগে ‘মাল গোনা’ করে নিন।':
-    'There is not that much in the shop. Stock will run out — do a count first.',
+  'দোকানে এত নেই। মজুত শেষ হয়ে যাবে — আগে ‘মাল গুনে মেলান’ করে নিন।': 'There is not that much in the shop. Stock will run out — do a count first.',
   'কাজে পাঠানো মাল কেনা দামেই ধরা হয় — তাতে দোকানের লাভ আর কাজের খরচ, দুটোই ঠিক থাকে।':
     'Material sent to a site goes in at cost — that keeps both the shop profit and the job cost honest.',
   'এখনও কোনো মাল ঢোকেনি।': 'No goods have come in yet.',
@@ -616,7 +614,6 @@ export const EN: Record<string, string> = {
   'সার্ভার {0}': 'Server {0}',
   'সার্ভার মানল না': 'The server refused it',
   'উত্তর বোঝা গেল না': 'Could not read the reply',
-  'টোকেন মিলল না': 'Token did not match',
   'অনলাইন খাতার চাবি বসানো নেই': 'The online ledger key is not set',
   'জোড়া লাগল না': 'Could not connect',
   'সময় শেষ': 'Timed out',
@@ -985,7 +982,6 @@ export const EN: Record<string, string> = {
   'আজ যা করবেন': 'To do today',
 
   /* ---- the website link ---- */
-  'ওয়েবসাইটের অনুসন্ধান': 'Website enquiries',
   'যাঁরা সাইটে লিখেছেন, ফোন নম্বর সহ': 'People who wrote on the site, with their number',
   'ওয়েবসাইটে {0} জন লিখেছেন': '{0} wrote on the website',
   'ফোন নম্বর সহ — ফোন করুন': 'With a number — give them a call',
@@ -1007,21 +1003,19 @@ export const EN: Record<string, string> = {
   'গুগল এআই কী': 'Google AI key',
   'দেখান': 'Show',
   'লুকান': 'Hide',
-  'বিনামূল্যে নতুন কী:': 'Free new key:',
-  'কী সেভ হয়েছে': 'Key saved',
-  'কী মুছে দিন': 'Remove key',
-  'কী মুছে ফেলা হয়েছে': 'Key removed',
-  'কী ঠিক আছে — গুগল নিচ্ছে': 'Key works — Google accepted it',
+  'বিনামূল্যে নতুন চাবি:': 'Free new key:',
+  'চাবি সেভ হয়েছে': 'Key saved',
+  'চাবি মুছে দিন': 'Remove key',
+  'চাবি মুছে ফেলা হয়েছে': 'Key removed',
+  'চাবি ঠিক আছে — গুগল নিচ্ছে': 'Key works — Google accepted it',
   'সবশেষ চেষ্টা': 'Last try',
   'এখনও হয়নি': 'Not yet',
   '{0} দিয়ে লেখা হয়েছে': 'Written by {0}',
-  'রাতের হিসাবের কথাগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।':
-    "The phone has Google's free AI write the sentences in the nightly brief. Every number is the phone's own — the AI only writes sentences. Names never go to Google; short labels like [J1] and [W1] go instead.",
-  'কী-টা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।':
-    'The key stays on this phone only. It is never sent to the online ledger, put in a backup, or built into the app.',
-  'এখনও কোনো কী বসানো হয়নি': 'No key has been entered yet',
-  'গুগল এই কী নিচ্ছে না — ভুল, মেয়াদ শেষ, বা বাতিল হয়ে গেছে। aistudio.google.com/apikey থেকে নতুন কী নিন।':
-    'Google is not accepting this key — it is wrong, expired or cancelled. Make a new one at aistudio.google.com/apikey.',
+  'আজকের কথার লাইনগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।':
+    "The phone has Google's free AI write the sentences in the day's note. Every number is the phone's own — the AI only writes sentences. Names never go to Google; short labels like [J1] and [W1] go instead.",
+  'চাবিটা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।': 'The key stays on this phone only. It is never sent to the online ledger, put in a backup, or built into the app.',
+  'এখনও কোনো চাবি বসানো হয়নি': 'No key has been entered yet',
+  'গুগল এই চাবি নিচ্ছে না — ভুল, মেয়াদ শেষ, বা বাতিল হয়ে গেছে। aistudio.google.com/apikey থেকে নতুন চাবি নিন।': 'Google is not accepting this key — it is wrong, expired or cancelled. Make a new one at aistudio.google.com/apikey.',
   'আজকের বিনামূল্যের সীমা শেষ — কাল আবার চলবে।': "Today's free limit is used up — it will work again tomorrow.",
   'গুগলের সার্ভার এখন ব্যস্ত — একটু পরে আবার চেষ্টা হবে।': 'Google is busy right now — it will try again shortly.',
   'গুগল এই হিসাব লিখতে রাজি হয়নি।': 'Google declined to write this brief.',
@@ -1153,7 +1147,7 @@ export const EN: Record<string, string> = {
   'সব তৈরি — সন্ধেবেলা আজকের হিসাব লিখবেন': "All set — write today's entry in the evening",
 
   /* ---- the four reminders (build 27) ---- */
-  'আজকের কথা': "Today's word",
+  'আজকের কথা': "Today's note",
   'আজকের হিসাব এখনও লেখা হয়নি।': "Today's entry is not written yet.",
   'টাকা পাবেন': 'Money to collect',
   '{0} জনের কাছে {1} পাওনা।': '{1} owed to you by {0} people.',

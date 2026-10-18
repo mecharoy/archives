@@ -613,7 +613,7 @@ const toWho = async (page, tile, qty, rate) => {
   })
   await step("shop: with the supplier picked it falls due on the supplier's own days", page, async () => {
     await tap(page, 'শর্মা', true)
-    await page.getByText('কবে দিতে হবে?').waitFor({ timeout: 3000 })
+    await page.getByText('কবে দেবেন?').waitFor({ timeout: 3000 })
     await page.locator('.actionbar .btn.primary').click()
     await page.waitForTimeout(400)
     const r = await lastStock(page, 'in')

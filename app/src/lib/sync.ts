@@ -127,7 +127,7 @@ async function postRows(endpoint: string, token: string, rows: OutboxRow[]): Pro
       redirect: 'follow',
     })
     const text = await res.text()
-    if (res.status === 401) return { ok: false, accepted: [], rejected: [], error: t('টোকেন মিলল না') }
+    if (res.status === 401) return { ok: false, accepted: [], rejected: [], error: t('চাবি মিলল না') }
     if (!res.ok) return { ok: false, accepted: [], rejected: [], error: tf('সার্ভার {0}', res.status) }
     let data: { ok?: boolean; accepted?: string[]; rejected?: { id: string; error: string }[]; error?: string }
     try { data = JSON.parse(text) } catch { return { ok: false, accepted: [], rejected: [], error: t('উত্তর বোঝা গেল না') } }
@@ -157,7 +157,7 @@ export async function testEndpoint(endpoint: string, token: string): Promise<str
     const text = await res.text()
     if (!res.ok) return tf('সার্ভার {0}', res.status)
     const data = JSON.parse(text) as { ok?: boolean; error?: string; household?: string }
-    if (!data.ok) return data.error === 'token' ? t('টোকেন মিলল না') : (data.error || t('জোড়া লাগল না'))
+    if (!data.ok) return data.error === 'token' ? t('চাবি মিলল না') : (data.error || t('জোড়া লাগল না'))
     return ''
   } catch (e) {
     return describe(e)

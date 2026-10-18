@@ -29,7 +29,7 @@ export function Enquiries({ onBack }: { onBack: () => void }) {
 
   return (
     <>
-      <TopBar title="ওয়েবসাইটের অনুসন্ধান" onBack={onBack}
+      <TopBar title="ওয়েবসাইটে খোঁজ" onBack={onBack}
         right={<button className="iconbtn" onClick={load} aria-label={t('নতুন করে আনুন')} style={{ opacity: busy ? .5 : 1 }}><Icon name="refresh" /></button>} />
       <div className="scroll">
         {error && <div className="alert warn" style={{ marginTop: '.8rem' }}><span className="dot" /><span>{error}</span></div>}

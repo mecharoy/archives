@@ -772,7 +772,7 @@ await step('ai key: the page is in settings and says none is entered', async () 
 await step('ai key: a revoked key is named as the key, with Google\'s own words', async () => {
   await page.locator('input.input').fill(BAD_KEY)
   await tap('পরীক্ষা করুন')
-  await page.getByText('গুগল এই কী নিচ্ছে না').first().waitFor({ timeout: 6000 })
+  await page.getByText('গুগল এই চাবি নিচ্ছে না').first().waitFor({ timeout: 6000 })
   const body = await page.locator('.scroll').first().innerText()
   if (!/leaked/.test(body)) throw new Error('Google\'s reason is not shown: ' + body.slice(0, 300))
   if (body.includes(BAD_KEY)) throw new Error('the key is printed back on the screen')
@@ -781,9 +781,9 @@ await step('ai key: a revoked key is named as the key, with Google\'s own words'
 await step('ai key: a good key passes the test and is saved', async () => {
   await page.locator('input.input').fill(`  GEMINI_API_KEY="${GOOD_KEY}"  `)   // pasted the way people paste it
   await tap('পরীক্ষা করুন')
-  await page.getByText('কী ঠিক আছে').first().waitFor({ timeout: 6000 })
+  await page.getByText('চাবি ঠিক আছে').first().waitFor({ timeout: 6000 })
   await tap('খাতায় তুলুন')
-  await page.getByText('কী সেভ হয়েছে').first().waitFor({ timeout: 4000 })
+  await page.getByText('চাবি সেভ হয়েছে').first().waitFor({ timeout: 4000 })
   const kept = await page.locator('input.input').inputValue()
   if (kept !== GOOD_KEY) throw new Error('the pasted wrapper was not stripped: ' + kept)
 })
@@ -804,8 +804,8 @@ await step('ai key: it went to Google and nowhere else', async () => {
 })
 
 await step('ai key: removing it clears it', async () => {
-  await tap('কী মুছে দিন')
-  await page.getByText('কী মুছে ফেলা হয়েছে').first().waitFor({ timeout: 4000 })
+  await tap('চাবি মুছে দিন')
+  await page.getByText('চাবি মুছে ফেলা হয়েছে').first().waitFor({ timeout: 4000 })
   await pressBack()
   await page.waitForTimeout(300)
   const row = await page.locator('.pick', { hasText: 'গুগলের চাবি' }).innerText()

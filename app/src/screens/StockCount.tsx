@@ -10,11 +10,11 @@ import { scheduleSync } from '../lib/sync'
 import { useBackHandler } from '../lib/back'
 import { t, tf } from '../lib/i18n'
 
-/* পুরো মজুত একবারে — the whole shop counted in one sitting, at setup.
+/* পুরো দোকান গোনা — the whole shop counted in one sitting, at setup.
 
    One list: find each thing on the shelf (his own items, or the catalogue,
    grouped and searchable), say how many, and — if he knows it — what he paid.
-   Saving writes one count row per item, which is exactly what ‘মাল গোনা’
+   Saving writes one count row per item, which is exactly what ‘মাল গুনে মেলান’
    writes for one item, so the shelf starts from what is really there.
 
    The list is kept as a draft on every change: a count of a whole shop takes
