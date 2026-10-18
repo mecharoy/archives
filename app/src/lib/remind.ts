@@ -69,11 +69,9 @@ export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bil
     }
   }
 
-  if (when === 'off') return out
-  const before = REMIND_DAYS[when]
-
   /* Monday, 9 in the morning: who still owes him, all together. Collecting is the thing he most needs
-     the book for, and a weekly nudge with the total is what gets the calls made. Tapping it opens পাবেন. */
+     the book for, and a weekly nudge with the total is what gets the calls made. Tapping it opens পাবেন.
+     It has its own switch: due dates switched off do not silence it. */
   const owed = owedByPerson(entries)
   if (owed.length && o.monday !== false) {
     const at = new Date()
@@ -86,6 +84,9 @@ export function plan(entries: Entry[], when: RemindWhen, hour = 9, billRows: Bil
       extra: { screen: 'payments' },
     })
   }
+
+  if (when === 'off') return out
+  const before = REMIND_DAYS[when]
 
   /* Three things can fall due on a morning: a shop bill, money a customer
      owes him, and a payment he has written down himself — rent, a fee, a

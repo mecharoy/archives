@@ -754,16 +754,16 @@ page.on('request', (r) => {
 const openAiPage = async () => {
   await home()
   await page.locator('.topbar .iconbtn').last().click()
-  await page.locator('.pick', { hasText: 'এআই কী' }).click()
+  await page.locator('.pick', { hasText: 'গুগলের চাবি' }).click()
   await page.locator('input.input').waitFor({ timeout: 4000 })
 }
 
 await step('ai key: the page is in settings and says none is entered', async () => {
   await home()
   await page.locator('.topbar .iconbtn').last().click()
-  const row = await page.locator('.pick', { hasText: 'এআই কী' }).innerText()
+  const row = await page.locator('.pick', { hasText: 'গুগলের চাবি' }).innerText()
   if (!/বসানো নেই/.test(row)) throw new Error('the row did not say no key is entered: ' + row)
-  await page.locator('.pick', { hasText: 'এআই কী' }).click()
+  await page.locator('.pick', { hasText: 'গুগলের চাবি' }).click()
   await page.locator('input.input').waitFor({ timeout: 4000 })
   const type = await page.locator('input.input').getAttribute('type')
   if (type !== 'password') throw new Error('the key box shows the key openly: ' + type)
@@ -808,7 +808,7 @@ await step('ai key: removing it clears it', async () => {
   await page.getByText('কী মুছে ফেলা হয়েছে').first().waitFor({ timeout: 4000 })
   await pressBack()
   await page.waitForTimeout(300)
-  const row = await page.locator('.pick', { hasText: 'এআই কী' }).innerText()
+  const row = await page.locator('.pick', { hasText: 'গুগলের চাবি' }).innerText()
   if (!/বসানো নেই/.test(row)) throw new Error('the row still says a key is entered: ' + row)
   const stored = await page.evaluate(async () => (await import('/src/lib/db.ts')).kvGet('settings', null))
   if (stored && stored.ai_key) throw new Error('the key is still stored')

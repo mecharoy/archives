@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { SyncLine } from './Home'
 import { NewProjectSheet } from './NewJob'
-import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast, Toast, Empty } from '../ui/kit'
+import { Icon, TopBar, Pick, CheckPick, Chip, Sheet, Field, NumField, PhoneField, useToast, Toast, Empty } from '../ui/kit'
 import { PinSheet } from './Personal'
 import { NewItemSheet } from './day/NewSheets'
 import {
@@ -20,7 +20,7 @@ import { seedHouse } from '../lib/seed'
 import { KINDS, kindLabel } from '../lib/kinds'
 import { chipMissRate } from '../lib/suggest'
 import { readContacts, pickOneContact, type PhoneContact } from '../lib/contacts'
-import { plan, reschedule, type RemindWhen } from '../lib/remind'
+import { plan, notifyPermission, askNotify, exactAlarms, openExactAlarms, testNotification, type RemindWhen } from '../lib/remind'
 import { factoryReset, hasServer, CONFIRM_WORDS } from '../lib/reset'
 import { cashState } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
@@ -31,7 +31,7 @@ import {
 } from '../lib/update'
 import { BUILD_CODE, BUILD_NAME } from '../lib/buildinfo'
 
-type Page = null | 'me' | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update' | 'ai'
+type Page = null | 'me' | 'sync' | 'projects' | 'workers' | 'items' | 'parties' | 'stages' | 'cash' | 'backup' | 'display' | 'lang' | 'remind' | 'reset' | 'update' | 'ai' | 'runs'
 
 export function Settings({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
@@ -56,73 +56,62 @@ export function Settings({ onBack }: { onBack: () => void }) {
   if (page === 'reset') return <ResetPage onBack={() => setPage(null)} />
   if (page === 'update') return <UpdatePage s={s} onBack={() => setPage(null)} />
   if (page === 'ai') return <AiPage s={s} onBack={() => setPage(null)} />
+  if (page === 'runs') return <RunsPage s={s} onBack={() => setPage(null)} />
 
   const miss = chipMissRate({ taken: s.settings.chips_taken, expanded: s.settings.chips_expanded })
+  const st = s.settings
+  const reminders = [st.notify_morning, st.notify_evening, st.notify_monday, st.remind !== 'off'].filter(Boolean).length
+  const go = <Icon name="fwd" size={18} />
 
   return (
     <>
       <TopBar title="সেটিংস" onBack={onBack} />
       <div className="scroll">
-        {/* The lists he edits — সাইট, লোক, মাল, দোকান, ধাপ — used to live here.
-            They now sit inside the book each belongs to (কাজ, মজুত) and in
-            ‘সব কিছু’, so a thing is changed where it is added, not in a separate
-            settings drawer. What remains here is the app itself: how it looks,
-            how it talks to the server, backups and the passcode. */}
+        {/* Two groups. His own first: his name, how the screen looks, what the phone reminds him of, the language,
+            the walk round. Then what the helper sets up once and he need never open: the online book, the Google
+            key, which tabs show, backups, updates, the passcode, starting afresh. The lists he edits — jobs, men,
+            goods, people, steps — live in the tab each belongs to. */}
         <div style={{ marginTop: '.9rem' }}><SyncLine s={s} /></div>
-        <p className="sectionlabel">{t("টাকা ও খাতা")}</p>
+        <p className="sectionlabel">{t('আপনার জন্য')}</p>
         <div className="rowlist">
-          <Pick title="নাম ও ফোন" sub={[s.settings.owner_bn, s.settings.helper_name && tf('সাহায্য: {0}', s.settings.helper_name)].filter(Boolean).join(' · ') || t('দেওয়া নেই')}
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('me')} />
-          <Pick title="অনলাইন খাতা" sub={s.settings.endpoint ? t('জোড়া লাগানো আছে') : t('শুধু ফোনে রাখা হচ্ছে')}
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('sync')} />
-          <Pick title="এআই কী (রাতের হিসাব)" sub={s.settings.ai_key.trim() ? t('বসানো আছে') : t('বসানো নেই')}
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('ai')} />
-          <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={<Icon name="fwd" size={18} />} onClick={() => setPage('backup')} />
-          <Pick title="টাকার তাগাদা" sub={REMIND_LABEL[s.settings.remind]} right={<Icon name="fwd" size={18} />} onClick={() => setPage('remind')} />
-          <Pick title="নিজের খরচের পাসকোড" sub={s.settings.pin_hash ? t('দেওয়া আছে') : t('দেওয়া নেই')} right={<Icon name="lock" size={18} />} onClick={() => setPin(true)} />
-        </div>
-
-        <p className="sectionlabel">{t("কী কী চালান")}</p>
-        <div className="rowlist">
-          <Pick on={s.settings.runs_sites} title="সাইটের কাজ" sub="ঠিকাদারি, বাড়ি তোলা" onClick={() => void saveSettings({ runs_sites: !s.settings.runs_sites })} />
-          <Pick on={s.settings.runs_shop} title="দোকান" sub="মাল কেনা-বেচা, মজুত" onClick={() => void saveSettings({ runs_shop: !s.settings.runs_shop })} />
-        </div>
-
-        <p className="sectionlabel">{t("দেখা ও পড়া")}</p>
-        <div className="rowlist">
-          <Pick title="ভাষা" sub={s.settings.lang === 'en' ? 'English' : 'বাংলা'}
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('lang')} />
-          <Pick title="লেখার আকার ও রং" sub={s.settings.theme === 'system' ? t('ফোনের মতো') : s.settings.theme === 'dark' ? t('অন্ধকার') : t('আলো')}
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('display')} />
-          {/* Clearing the flag is all it takes — the app shell watches it and
-              takes him home, where every stop on the walk round lives. */}
-          <Pick title="অ্যাপটা ঘুরে দেখুন" sub="প্রথম দিনের মতো আবার দেখিয়ে দেবে"
-            right={<Icon name="fwd" size={18} />}
+          <Pick title="নাম ও ফোন" sub={[st.owner_bn, st.helper_name && tf('সাহায্য: {0}', st.helper_name)].filter(Boolean).join(' · ') || t('দেওয়া নেই')}
+            right={go} onClick={() => setPage('me')} />
+          <Pick title="লেখার আকার ও রং" sub={st.theme === 'system' ? t('ফোনের মতো') : st.theme === 'dark' ? t('অন্ধকার') : t('আলো')}
+            right={go} onClick={() => setPage('display')} />
+          <Pick title="মনে করিয়ে দেওয়া" sub={reminders === 4 ? t('চারটেই চালু') : reminders === 0 ? t('বন্ধ') : tf('{0}টে চালু', toBn(reminders))}
+            right={go} onClick={() => setPage('remind')} />
+          <Pick title="ভাষা" sub={st.lang === 'en' ? 'English' : 'বাংলা'} right={go} onClick={() => setPage('lang')} />
+          {/* Clearing the flag is all it takes — the app shell watches it and takes him to আজ, where the walk
+              round's stops are. */}
+          <Pick title="অ্যাপটা আবার দেখে নিন" sub="প্রথম দিনের মতো আবার দেখিয়ে দেবে" right={go}
             onClick={async () => { await saveSettings({ toured: false }); onBack() }} />
-          <Pick title="অ্যাপ আপডেট" sub="নতুন সংস্করণ এসেছে কিনা দেখুন"
-            right={<Icon name="fwd" size={18} />} onClick={() => setPage('update')} />
         </div>
 
-        {miss != null && (
-          <>
-            <p className="sectionlabel">{t("নিজের জন্য")}</p>
-            <div className="card">
-              <div className="spread"><span>{t("বাছাই ঠিক হচ্ছে?")}</span>
-                <strong className="num">{toBn(Math.round((1 - miss) * 100))}%</strong></div>
-              <p className="small muted" style={{ marginTop: '.4rem' }}>
-                {miss > 0.34
-                  ? t('তিন ভাগের এক ভাগের বেশি সময় পুরো তালিকা খুলতে হচ্ছে — বাছাইয়ের নিয়মটা ঠিক করা দরকার।')
-                  : t('বেশির ভাগ সময় প্রথম তিনটে চিপেই কাজ হয়ে যাচ্ছে।')}
-              </p>
-            </div>
-          </>
-        )}
-
-        <p className="sectionlabel">{t('বিপজ্জনক')}</p>
+        <p className="sectionlabel">{t('সাহায্যকারীর জন্য')}</p>
         <div className="rowlist">
+          <Pick title="অনলাইন খাতা" sub={st.endpoint ? t('জোড়া লাগানো আছে') : t('শুধু ফোনে রাখা হচ্ছে')} right={go} onClick={() => setPage('sync')} />
+          <Pick title="গুগলের চাবি" sub={st.ai_key.trim() ? t('বসানো আছে') : t('বসানো নেই')} right={go} onClick={() => setPage('ai')} />
+          <Pick title="কাজ আর দোকান" sub={[st.runs_sites && t('ঠিকাদারির কাজ'), st.runs_shop && t('দোকান')].filter(Boolean).join(' · ')}
+            right={go} onClick={() => setPage('runs')} />
+          <Pick title="ব্যাকআপ" sub="ফোনে একটা কপি রেখে দিন" right={go} onClick={() => setPage('backup')} />
+          <Pick title="অ্যাপ আপডেট" sub="নতুন সংস্করণ এসেছে কিনা দেখুন" right={go} onClick={() => setPage('update')} />
+          <Pick title="নিজের খরচের পাসকোড" sub={st.pin_hash ? t('দেওয়া আছে') : t('দেওয়া নেই')} right={<Icon name="lock" size={18} />} onClick={() => setPin(true)} />
           <Pick title="সব মুছে নতুন করে শুরু" sub="ফোন আর অনলাইন খাতা — দুটোই খালি হয়ে যাবে"
             right={<Icon name="trash" size={18} />} onClick={() => setPage('reset')} />
         </div>
+
+        {/* How often the first three chips were enough — for the helper, to tell whether the picking works. */}
+        {miss != null && (
+          <div className="card" style={{ marginTop: '.9rem' }}>
+            <div className="spread"><span>{t("বাছাই ঠিক হচ্ছে?")}</span>
+              <strong className="num">{toBn(Math.round((1 - miss) * 100))}%</strong></div>
+            <p className="small muted" style={{ marginTop: '.4rem' }}>
+              {miss > 0.34
+                ? t('তিন ভাগের এক ভাগের বেশি সময় পুরো তালিকা খুলতে হচ্ছে — বাছাইয়ের নিয়মটা ঠিক করা দরকার।')
+                : t('বেশির ভাগ সময় প্রথম তিনটে চিপেই কাজ হয়ে যাচ্ছে।')}
+            </p>
+          </div>
+        )}
 
         <p className="small muted" style={{ marginTop: '1.6rem' }}>{tf('Site Khata · {0} · হিসাব আগে ফোনে লেখা হয়, তারপর খাতায় ওঠে।', toBn(BUILD_NAME))}</p>
       </div>
@@ -292,7 +281,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
 
   return (
     <>
-      <TopBar title="এআই কী" onBack={onBack} />
+      <TopBar title="গুগলের চাবি" onBack={onBack} />
       <div className="scroll">
         <p className="hint" style={{ marginTop: '1rem' }}>
           {t("রাতের হিসাবের কথাগুলো ফোন নিজেই গুগলের বিনামূল্যের এআই দিয়ে লেখায়। অঙ্ক সব ফোনের নিজের — এআই শুধু বাক্য লেখে। নাম-ধাম গুগলে যায় না; তার বদলে [J1], [W1] এমন চিহ্ন যায়।")}
@@ -303,7 +292,7 @@ function AiPage({ s, onBack }: { s: State; onBack: () => void }) {
         <p className="small muted">
           {t("কী-টা শুধু এই ফোনেই থাকে। অনলাইন খাতায়, ব্যাকআপে বা অ্যাপের ফাইলে যায় না।")}
         </p>
-        <Field label="গুগল এআই কী">
+        <Field label="চাবি">
           <input className="input" value={key} onChange={(e) => { setKey(e.target.value); setResult(null) }}
             type={show ? 'text' : 'password'} autoCapitalize="off" autoCorrect="off" spellCheck={false}
             placeholder="AIza…" autoComplete="off" />
@@ -951,53 +940,118 @@ const REMIND_LABEL: Record<RemindWhen, string> = {
   off: 'বন্ধ', same: 'যেদিন দিতে হবে', day: 'একদিন আগে', three: 'তিনদিন আগে',
 }
 
+/* The four reminders, each with a switch of its own; the app shell plans the phone's notes afresh whenever one
+   changes. Two cards come only when needed: notes not allowed at all, and a phone that holds notes back from the
+   exact minute (recent Android) — the helper turns that on once. The test note shows, ten seconds later, that a
+   note really arrives. */
 function RemindPage({ s, onBack }: { s: State; onBack: () => void }) {
   const toast = useToast()
-  const [busy, setBusy] = useState(false)
-  /* Preview exactly what reschedule() will queue — including the dates he set
-     for himself (দিতে হবে), which live in masters as bills. Leaving billRows
-     off here was the reason a বill he had just added showed nothing under
-     ‘এখন যা যা মনে করানো হবে’, even though the phone had it queued. */
-  const planned = useMemo(
-    () => plan(s.entries, s.settings.remind, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[], s.settings.onboarded),
-    [s.entries, s.settings.remind, s.masters],
+  const st = s.settings
+  const [perm, setPerm] = useState<'granted' | 'denied' | 'none'>('none')
+  const [exact, setExact] = useState<'granted' | 'denied' | 'none'>('none')
+  const look = async () => {
+    if (!(await nativePlatform())) return     // a browser has neither question to answer
+    setPerm(await notifyPermission())
+    setExact(await exactAlarms())
+  }
+  useEffect(() => {
+    void look()
+    // Back from the phone's own settings page: look again.
+    let remove: (() => void) | undefined
+    void (async () => {
+      try {
+        const { App: CapApp } = await import('@capacitor/app')
+        const h = await CapApp.addListener('resume', () => { void look() })
+        remove = () => void h.remove()
+      } catch { /* browser */ }
+    })()
+    return () => remove?.()
+  }, [])
+
+  /* The due-date notes coming up: the same call reschedule() makes — the dates he set for himself (bills, kept in
+     masters) included — with the other three left out. */
+  const dues = useMemo(
+    () => plan(s.entries, st.remind, 9, s.masters.filter((m) => m.kind === 'bill') as Bill[], st.onboarded, { evening: false, monday: false }),
+    [s.entries, st.remind, s.masters, st.onboarded],
   )
 
-  const choose = async (w: RemindWhen) => {
-    await saveSettings({ remind: w })
-    setBusy(true)
-    const r = await reschedule()
-    setBusy(false)
-    toast.show(r.ok ? (w === 'off' ? t('তাগাদা বন্ধ করা হল') : tf('{0}টা তাগাদা রাখা হল', toBn(r.count))) : r.error)
+  const allow = async () => {
+    if (await askNotify()) { void look(); return }
+    toast.show(t('ফোনের সেটিংসে গিয়ে চালু করতে হবে'))
   }
 
   return (
     <>
-      <TopBar title="টাকার তাগাদা" onBack={onBack} />
+      <TopBar title="মনে করিয়ে দেওয়া" onBack={onBack} />
       <div className="scroll">
-        <p className="hint" style={{ marginTop: '1rem' }}>
-          {t('কাকে টাকা দিতে হবে আর কার কাছ থেকে পাওনা আছে — তারিখ এলে ফোন নিজেই মনে করিয়ে দেবে। সকাল ৯টায়।')}
-        </p>
-        <div className="rowlist">
-          {(['day', 'same', 'three', 'off'] as RemindWhen[]).map((w) => (
-            <Pick key={w} on={s.settings.remind === w} title={REMIND_LABEL[w]}
-              sub={w === 'off' ? 'কিছু মনে করাবে না' : undefined}
-              onClick={() => void choose(w)} disabled={busy} />
-          ))}
-        </div>
-        <p className="sectionlabel">{t('এখন যা যা মনে করানো হবে')}</p>
-        {planned.length === 0 && <Empty>{t('এখন কোনো তারিখ বাকি নেই।')}</Empty>}
-        {planned.length > 0 && (
-          <div className="card">
-            {planned.slice(0, 8).map((r) => (
-              <div className="review-row" key={r.id}>
-                <span><span className="t">{r.body}</span><span className="k">{dateBn(isoDate(r.at), false)}</span></span>
-              </div>
-            ))}
+        {perm === 'denied' && (
+          <div className="softcard warn">
+            <strong>{t('মনে করিয়ে দেওয়ার অনুমতি দেওয়া হয়নি')}</strong>
+            <span>{t('অনুমতি না দিলে কোনো খবর আসবে না।')}</span>
+            <span className="pair"><button className="btn primary small" onClick={() => void allow()}>{t('অনুমতি দিন')}</button></span>
           </div>
         )}
+        {perm !== 'denied' && exact === 'denied' && (
+          <div className="softcard warn">
+            <strong>{t('এই ফোন ঠিক সময়ে খবর দিচ্ছে না')}</strong>
+            <span>{t('সাহায্যকারী একবার চালু করে দিন।')}</span>
+            <span className="pair"><button className="btn primary small" onClick={() => void openExactAlarms()}>{t('চালু করুন')}</button></span>
+          </div>
+        )}
+        <div className="rowlist" style={{ marginTop: '.9rem' }}>
+          <CheckPick on={st.notify_morning} title="আজকের কথা" sub="সকাল ৮টা" onClick={() => void saveSettings({ notify_morning: !st.notify_morning })} />
+          <CheckPick on={st.notify_evening} title="হিসাব লেখার কথা" sub="রাত ৮টা, লেখা না হলে" onClick={() => void saveSettings({ notify_evening: !st.notify_evening })} />
+          <CheckPick on={st.notify_monday} title="কে কত টাকা দেবে" sub="সোমবার সকাল ৯টা" onClick={() => void saveSettings({ notify_monday: !st.notify_monday })} />
+          <CheckPick on={st.remind !== 'off'} title="বাকির তারিখ" sub={st.remind === 'off' ? t('বন্ধ') : tf('{0}, সকাল ৯টা', t(REMIND_LABEL[st.remind]))}
+            onClick={() => void saveSettings({ remind: st.remind === 'off' ? 'day' : 'off' })} />
+        </div>
+        {st.remind !== 'off' && (
+          <>
+            <div className="chips" style={{ marginTop: '.7rem' }}>
+              {(['day', 'same', 'three'] as RemindWhen[]).map((w) => (
+                <Chip key={w} on={st.remind === w} onClick={() => void saveSettings({ remind: w })}>{REMIND_LABEL[w]}</Chip>
+              ))}
+            </div>
+            <p className="sectionlabel">{t('এখন যা যা মনে করানো হবে')}</p>
+            {dues.length === 0 && <Empty>{t('এখন কোনো তারিখ বাকি নেই।')}</Empty>}
+            {dues.length > 0 && (
+              <div className="card">
+                {dues.slice(0, 8).map((r) => (
+                  <div className="review-row" key={r.id}>
+                    <span><span className="t">{r.body}</span><span className="k">{dateBn(isoDate(r.at), false)}</span></span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        <button className="btn quiet" style={{ marginTop: '1.2rem' }} onClick={async () => {
+          const err = await testNotification()
+          toast.show(err || t('দশ সেকেন্ডে একটা খবর আসবে'))
+        }}>{t('একটা পরীক্ষা পাঠান')}</button>
       </div>
       {toast.msg && <Toast text={toast.msg} />}
+    </>
+  )
+}
+
+/* Which tabs show: কাজ for contract work, দোকান for the shop. One always stays on — with neither, the app is
+   two empty tabs. */
+function RunsPage({ s, onBack }: { s: State; onBack: () => void }) {
+  const { runs_sites: sites, runs_shop: shop } = s.settings
+  return (
+    <>
+      <TopBar title="কাজ আর দোকান" onBack={onBack} />
+      <div className="scroll">
+        <p className="hint" style={{ marginTop: '1rem' }}>{t('যেটা চালান, নিচে শুধু তার ঘর থাকবে।')}</p>
+        <div className="rowlist">
+          <CheckPick on={sites} title="ঠিকাদারির কাজ" sub="বাড়ি, রং, স্যানিটারি, মেরামত"
+            onClick={() => { if (!sites || shop) void saveSettings({ runs_sites: !sites }) }} />
+          <CheckPick on={shop} title="দোকান" sub="মাল কেনা-বেচা"
+            onClick={() => { if (!shop || sites) void saveSettings({ runs_shop: !shop }) }} />
+        </div>
+        {sites !== shop && <p className="small muted" style={{ marginTop: '.6rem' }}>{t('একটা অন্তত চালু থাকবে।')}</p>}
+      </div>
     </>
   )
 }

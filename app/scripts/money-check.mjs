@@ -709,8 +709,16 @@ const listText = (page) => page.locator('.scroll').first().innerText()
 /* ---- his name and number, and the helper's, can be set and changed ---- */
 {
   const { ctx, page } = await fresh()
-  await step('settings: names and phone numbers are kept on a page of their own', page, async () => {
+  await step('settings: two groups, his first — নাম ও ফোন is his, অনলাইন খাতা the helper\'s', page, async () => {
     await page.getByLabel('সেটিংস').click()
+    const group = (name) => page.locator(`.scroll p.sectionlabel:has-text("${name}") + .rowlist`)
+    const want = [['আপনার জন্য', 'নাম ও ফোন'], ['আপনার জন্য', 'মনে করিয়ে দেওয়া'], ['সাহায্যকারীর জন্য', 'অনলাইন খাতা'],
+      ['সাহায্যকারীর জন্য', 'গুগলের চাবি'], ['সাহায্যকারীর জন্য', 'কাজ আর দোকান']]
+    for (const [g, row] of want) if (!(await group(g).locator('.pick', { hasText: row }).count())) throw new Error(row + ' is not under ' + g)
+    const first = await page.locator('.scroll p.sectionlabel').first().innerText()
+    if (first.trim() !== 'আপনার জন্য') throw new Error('the first group is ' + first)
+  })
+  await step('settings: names and phone numbers are kept on a page of their own', page, async () => {
     await tap(page, 'নাম ও ফোন')
     const box = (label) => page.locator('.field', { hasText: label }).locator('input')
     await box('আপনার নাম').fill('সুবীর রায়')
@@ -721,6 +729,37 @@ const listText = (page) => page.locator('.scroll').first().innerText()
     await page.waitForTimeout(300)
     const st = await page.evaluate(async () => { const s = (await import('/src/lib/store.ts')).getState().settings; return [s.owner_bn, s.owner_phone, s.helper_name, s.helper_phone].join('|') })
     if (st !== 'সুবীর রায়|98300 12345|অমল|90000 11111') throw new Error('saved: ' + st)
+  })
+  await ctx.close()
+}
+
+/* ---- reminders: four switches, each on its own ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('settings: মনে করিয়ে দেওয়া has four switches, and turning আজকের কথা off is saved', page, async () => {
+    await page.getByLabel('সেটিংস').click()
+    const row = page.locator('.pick', { hasText: 'মনে করিয়ে দেওয়া' })
+    if (!(await row.innerText()).includes('চারটেই চালু')) throw new Error('the row reads: ' + (await row.innerText()))
+    await row.click()
+    for (const w of ['আজকের কথা', 'হিসাব লেখার কথা', 'কে কত টাকা দেবে', 'বাকির তারিখ']) {
+      if (!(await page.locator('.pick', { hasText: w }).count())) throw new Error('no switch for ' + w)
+    }
+    await page.locator('.pick', { hasText: 'আজকের কথা' }).click()
+    await page.waitForTimeout(300)
+    const on = await page.evaluate(async () => (await import('/src/lib/store.ts')).getState().settings.notify_morning)
+    if (on !== false) throw new Error('notify_morning is ' + on)
+    await page.evaluate(() => window.__shellBack())
+    await page.waitForTimeout(300)
+    const after = await page.locator('.pick', { hasText: 'মনে করিয়ে দেওয়া' }).innerText()
+    if (!after.includes('৩টে চালু')) throw new Error('after one is off the row reads: ' + after)
+  })
+  await step('settings: due dates switched off leave the Monday switch on', page, async () => {
+    await page.locator('.pick', { hasText: 'মনে করিয়ে দেওয়া' }).click()
+    await page.locator('.pick', { hasText: 'বাকির তারিখ' }).click()
+    await page.waitForTimeout(300)
+    const st = await page.evaluate(async () => { const s = (await import('/src/lib/store.ts')).getState().settings; return s.remind + '|' + s.notify_monday })
+    if (st !== 'off|true') throw new Error('saved: ' + st)
+    if (!(await page.locator('.pick.on', { hasText: 'কে কত টাকা দেবে' }).count())) throw new Error('the Monday switch shows off')
   })
   await ctx.close()
 }

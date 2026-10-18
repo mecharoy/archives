@@ -662,6 +662,8 @@ textarea.input { min-height: 5rem; resize: none; }
 .softcard > span { font-size: .86rem; color: var(--ink-2); }
 .softcard .pair { display: flex; gap: .5rem; margin-top: .45rem; }
 .softcard .pair .btn { flex: 0 0 auto; }
+/* The same card when the phone stands in the way of something he relies on: notes not allowed, or held back. */
+.softcard.warn { background: var(--warn-bg); }
 
 .helpline {
   display: flex; align-items: center; justify-content: center; gap: .45rem; margin: 1.4rem 0 .6rem;

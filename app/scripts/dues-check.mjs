@@ -46,7 +46,7 @@ ck('its title is plain: money to collect', fri[0] && fri[0].title, 'টাকা
 ck('a Monday before 9 gets it the same morning', bn.isoDate(monday(two, 'day', '2026-10-19T02:00:00Z')[0].at), '2026-10-19')
 ck('a Monday after 9 gets it the next Monday', bn.isoDate(monday(two, 'day', '2026-10-19T05:00:00Z')[0].at), '2026-10-26')
 ck('nothing owed, no note', monday([], 'day', '2026-10-16T04:30:00Z').length, 0)
-ck('reminders off, no note', monday(two, 'off', '2026-10-16T04:30:00Z').length, 0)
+ck('due dates off: the Monday note still comes — it has its own switch', monday(two, 'off', '2026-10-16T04:30:00Z').length, 1)
 
 /* The 8 pm nudge: once setup is done, at 8 in the evening on every day with nothing written — whatever
    the payment-reminder setting. Saving today's day drops today's nudge. */
@@ -64,7 +64,9 @@ ck("today written: tonight's nudge is gone", bn.isoDate(nudges([dayRow('2026-10-
 ck('after 8 pm the first is tomorrow', bn.isoDate(nudges([], 'day', '2026-10-16T15:30:00Z')[0].at), '2026-10-17')
 ck('before setup is done, no nudge', nudges([], 'day', '2026-10-16T04:30:00Z', false).length, 0)
 ck('payment reminders off: the nudges stay', nudges(two, 'off', '2026-10-16T04:30:00Z').length, 7)
-ck('payment reminders off: no Monday note', monday(two, 'off', '2026-10-16T04:30:00Z').length, 0)
+const dueNotes = (when) => { freeze('2026-10-16T04:30:00Z'); try { return remind.plan(two, when).filter((x) => x.title === 'টাকা পাওয়ার দিন').length } finally { globalThis.Date = RealDate } }
+ck('due dates on: a note for each date', dueNotes('day'), 2)
+ck('due dates off: no due-date note', dueNotes('off'), 0)
 
 /* Each of the four can be switched off on its own. */
 const planWith = (entries, iso, o) => { freeze(iso); try { return remind.plan(entries, 'day', 9, [], true, o) } finally { globalThis.Date = RealDate } }
