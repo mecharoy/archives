@@ -424,3 +424,24 @@ Location: scratchpad/jsxtext.mjs, written through a bash heredoc
 Action: scanning the screens for Bengali text between tags that has no English.
 Cause: the same heredoc lesson a third time: a double backslash in the regex lost one backslash on the way in, even with a quoted delimiter.
 Fix: wrote the script with the Write tool. Rule from now on: any script holding a backslash goes through the Write tool, never a heredoc.
+
+2026-10-19
+Problem: `git log origin/dad-handover..HEAD` failed with "unknown revision".
+Location: the archives repo, branch dad-handover
+Action: listing the commits not yet pushed, before amending one.
+Cause: this branch has no remote-tracking ref here (it was never fetched or tracked locally).
+Fix: `git ls-remote origin dad-handover` gives the remote head; `git merge-base --is-ancestor <head> HEAD` confirms a push will fast-forward.
+
+2026-10-19
+Problem: a made-up owner name in the screen sweep ended in the family's own surname, in a script of a PUBLIC repo.
+Location: scripts/ui-sweep.mjs (setup walk)
+Action: choosing a long Bengali name for the setup screens.
+Cause: picked a plausible name without checking it against the family's name.
+Fix: replaced with an unrelated name and amended the commit before any push, so it never reached the public history. Rule: test names never use the family's surname.
+
+2026-10-19
+Problem: a screenshot script could not call window.__shellBack, and the sweep's crash screen never showed.
+Location: scratchpad look-settings.mjs and scripts/ui-sweep.mjs
+Action: driving the dev server after loading the check modules with scripts/_app.mjs.
+Cause: _app.mjs runs a vite build, which leaves NODE_ENV at production, so the dev server started next ran without its development hooks.
+Fix: set process.env.NODE_ENV back to development after loadApp (done in ui-sweep.mjs).
