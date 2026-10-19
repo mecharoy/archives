@@ -3,7 +3,9 @@
    small to hit, grey on white that cannot be read, a bar that hides the last row.
 
    It seeds a believable ledger (long Bengali names on purpose), then for each combination of
-   language / screen width / text size / light-dark, opens each screen, takes a picture
+   language / screen width / text size / light-dark, walks the four tabs and every screen opened from
+   them, setup on an empty phone, and the evening at each of its questions with two jobs and the shop's
+   men in it. It opens each screen, takes a picture
    (scripts/shot-ui-*.png) and runs the same checks in the page. The findings are listed once per
    kind, with the screens and combinations they show up in (scripts/ui-report/latest.md).
 
@@ -33,12 +35,23 @@ const OUT = join(ROOT, 'scripts')
 const PORT = 5231
 
 const app = await loadApp()
+// Building those modules leaves NODE_ENV at 'production'; the screens below are the development server's
+// (the crash screen and the shell's test hook exist only there).
+process.env.NODE_ENV = 'development'
 const today = app.bn.isoDate()
 const demo = demoData(app, today)
 
-/* His own words — names, units, notes, the website's enquiries — are Bengali on every screen by design. */
+/* A second running job, of another kind and with a long name, so the evening has two jobs to walk. */
+const JOB2 = { id: 'p-sweep2', kind: 'project', name_bn: 'দত্তবাবুর দোতলা বাড়ির রঙের কাজ', client_bn: '', ptype: 'রং', area_sqft: null, budget: 350000, start_date: today, plan_days: null, status: 'active', updated_at: new Date().toISOString() }
+const MASTERS = [...demo.masters, JOB2]
+const HELPER = 'অমল'
+
+/* His own words — names, units, notes, the website's enquiries, the helper's name — are Bengali on every screen
+   by design; so are three on purpose: বাংলা (the language's own name on its button), the reset word he types, and
+   the sample of Bengali digits on the language page. */
 const KNOWN = [...new Set([
-  ...demo.masters.flatMap((m) => [m.name_bn, m.unit_bn, m.client_bn, m.to_bn, m.ptype]),
+  ...MASTERS.flatMap((m) => [m.name_bn, m.unit_bn, m.client_bn, m.to_bn, m.ptype]),
+  HELPER, 'বাংলা', 'মুছে দিন', '১,২৫০',
   ...demo.entries.flatMap((e) => [e.head_bn, e.note]),
   ...demo.enquiries.flatMap((q) => [q.name, q.location, q.service, q.message]),
 ].filter((x) => typeof x === 'string' && x.length > 1))].sort((a, b) => b.length - a.length)
@@ -137,28 +150,31 @@ const AUDIT = ({ lang, known }) => {
 /* ---------- driving the app ---------- */
 
 const findings = new Map()      // key -> { name, type, sel, detail, text, n, where: Set }
-const problems = []             // console / page errors
+const problems = []             // console / page errors, and screens the walk could not reach
 let shots = 0
 
 async function seed(page, combo, extra = {}) {
   await page.goto(`http://localhost:${PORT}/`)
-  await page.waitForSelector('.app, .onboarding, body')
+  await page.waitForSelector('.app')
   await page.evaluate(async ({ masters, entries, brief, enquiries, settings, draft }) => {
     const db = await import('/src/lib/db.ts')
     for (const s of ['masters', 'entries', 'outbox', 'kv']) await db.dbClear(s)
     await db.dbPutMany('masters', masters)
     await db.dbPutMany('entries', entries)
     await db.kvSet('settings', settings)
-    await db.kvSet('brief', brief)
-    await db.kvSet('brief_fetched_at', new Date().toISOString())
+    if (brief) { await db.kvSet('brief', brief); await db.kvSet('brief_fetched_at', new Date().toISOString()) }
     await db.kvSet('enquiries', enquiries)
-    if (draft) await db.kvSet('draft', draft)
-  }, {
-    masters: demo.masters, entries: demo.entries, brief: demo.brief, enquiries: demo.enquiries, draft: extra.draft || null,
-    settings: { onboarded: true, toured: true, lang: combo.lang, theme: combo.theme, text_scale: combo.scale, runs_shop: true, runs_sites: true, remind: 'day' },
+    if (draft) await (await import('/src/lib/draft.ts')).saveDraft(draft)
+  }, extra.setup ? {
+    // An empty phone: setup asks everything.
+    masters: [], entries: [], brief: null, enquiries: [], draft: null,
+    settings: { lang: combo.lang, theme: combo.theme, text_scale: combo.scale },
+  } : {
+    masters: MASTERS, entries: demo.entries, brief: demo.brief, enquiries: demo.enquiries, draft: extra.draft || null,
+    settings: { onboarded: true, toured: true, lang: combo.lang, theme: combo.theme, text_scale: combo.scale, runs_shop: true, runs_sites: true, remind: 'day', helper_name: HELPER, helper_phone: '90000 11111' },
   })
   await page.reload()
-  await page.waitForSelector('.app .topbar, .app .scroll', { timeout: 15000 })
+  await page.waitForSelector(extra.setup ? '.app[data-screen="setup"]' : '.app .tabbar', { timeout: 15000 })
   await page.waitForTimeout(350)
 }
 
@@ -178,96 +194,115 @@ async function look(page, comboName, name) {
   if (more) { await page.waitForTimeout(120); await page.screenshot({ path: join(OUT, `shot-ui-${comboName}-${name}-end.png`) }); shots++ }
 }
 
+/* The evening with two jobs and the shop's men: wages of three kinds, material bought and returned, spending,
+   money for a job, the slider moved on one job and not the other, goods for the shop, his own spending, and a
+   cash count that does not match. */
+const jobIds = MASTERS.filter((m) => m.kind === 'project' && m.status === 'active').map((m) => m.id)
+const menIds = MASTERS.filter((m) => m.kind === 'worker').map((m) => m.id)
+const mats = MASTERS.filter((m) => m.kind === 'item').slice(0, 2)
+const att = (presence, rate, amount, advance = 0) => ({ presence, rate, amount, advance })
+const dr = app.draft.newDraft(today, [jobIds[0], jobIds[1], ''])
+dr.picked = true
+dr.sites[0] = {
+  ...dr.sites[0], att_seeded: true, pct: 45,
+  att: { [menIds[0]]: att('full', 700, 700), [menIds[1]]: att('half', 500, 250, 100) },
+  mats: mats.map((m, i) => ({ key: 'k' + i, item_id: m.id, qty: 40 + i, rate: 400, party_id: 's0', due_date: app.bn.addDays(today, -5), paid: i === 0, photo_id: '' })),
+  rets: [{ key: 'r1', item_id: mats[0].id, qty: 3, rate: 400 }],
+  exps: [{ key: 'x1', head_bn: 'চা-জলখাবার', amount: 120, mode: 'নগদ', note: '', photo_id: '' }, { key: 'x2', head_bn: 'গাড়ি ভাড়া', amount: 1500, mode: 'UPI', note: 'ট্রাক', photo_id: '' }],
+}
+dr.sites[1] = { ...dr.sites[1], att_seeded: true, att: { [menIds[2]]: att('ot', 600, 900) } }
+dr.sites[2] = { ...dr.sites[2], att_seeded: true }
+dr.recv = [{ key: 'rc1', project_id: jobIds[0], amount: 25000, mode: 'UPI' }]
+dr.pexps = [{ key: 'p1', head_bn: 'বাজার', amount: 800, mode: 'নগদ', note: '', photo_id: '' }]
+dr.invs = [{ key: 'v1', item_id: mats[1].id, qty: 20, rate: 120, party_id: 's1', due_date: '', paid: true, photo_id: '' }]
+dr.cash_counted = 43800; dr.cash_computed = 48000
+const EVENING = app.day.daySteps({ draft: dr, jobs: jobIds.length, hasMen: menIds.length > 0, runsShop: true })
+
 for (const comboName of WANT) {
   const combo = COMBOS[comboName]
   const ctx = await browser.newContext({ viewport: { width: combo.w, height: combo.h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, colorScheme: combo.theme })
   const page = await ctx.newPage()
   const PRETEND = ['https://generativelanguage.googleapis.com', 'https://worker.test']
   page.on('pageerror', (e) => problems.push(`${comboName}: PAGEERROR ${e.message}`))
-  page.on('console', (m) => { if (m.type() === 'error' && !PRETEND.some((o) => (m.location().url || '').startsWith(o))) problems.push(`${comboName}: CONSOLE ${m.text().slice(0, 160)}`) })
+  // The crash screen is opened on purpose below; React logs the crash it shows.
+  page.on('console', (m) => { if (m.type() === 'error' && !PRETEND.some((o) => (m.location().url || '').startsWith(o)) && !m.text().includes('crash test')) problems.push(`${comboName}: CONSOLE ${m.text().slice(0, 160)}`) })
   await page.route('**/latest.json*', (route) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ versionCode: 1, versionName: '1.0.1', url: 'https://example.invalid/x.apk', notes_bn: '', notes_en: '' }) }))
 
-  /* home, the exploded view, and every tile. Each one is reached from a fresh start: the
-     screens keep their own little back-stacks, and a sweep must not depend on them. */
+  /* Every screen is reached from a fresh start on its tab — the screens keep their own little back-stacks, and a
+     sweep must not depend on them — and by position, not by its words, so the English pass walks the same way. */
   await seed(page, combo)
-  const fresh = async () => { await page.reload(); await page.waitForSelector('.app .scroll', { timeout: 15000 }); await page.waitForTimeout(250) }
-  const openTile = async (k) => { await fresh(); await page.locator('[data-tour="all"]').click(); await page.locator('.tile').nth(k).waitFor(); await page.locator('.tile').nth(k).click() }
-  await look(page, comboName, 'home')
-  await page.locator('[data-tour="all"]').click()
-  await look(page, comboName, 'all')
-  const TILES = ['day', 'work', 'estimate', 'projects', 'workers', 'stages', 'shop', 'items', 'parties', 'enquiries', 'payments', 'personal', 'cash', 'history', 'settings']
-  for (let k = 1; k < TILES.length; k++) {
-    await openTile(k)
-    await look(page, comboName, TILES[k])
-    // the "new" sheet, where the page has a plus
-    const plus = page.locator('.topbar .iconbtn[aria-label]').last()
-    if (['projects', 'workers', 'items', 'parties'].includes(TILES[k]) && (await plus.count())) {
-      await plus.click(); await page.waitForTimeout(300)
-      await look(page, comboName, TILES[k] + '-new')
-    }
+  const fresh = async () => { await page.reload(); await page.waitForSelector('.app .tabbar', { timeout: 15000 }); await page.waitForTimeout(250) }
+  const toTab = async (k) => { await fresh(); if (k) { await page.locator('.tabbar button').nth(k).click(); await page.waitForTimeout(250) } }
+  const more = (k) => page.locator('.rowlist').last().locator('.pick').nth(k)
+  const go = (loc, name) => loc.click({ timeout: 4000 }).then(() => page.waitForTimeout(250)).catch(() => problems.push(`${comboName}: could not open ${name}`))
+  const plus = async (name) => {
+    const b = page.locator('.topbar .iconbtn[aria-label="নতুন"]')
+    if (await b.count()) { await b.click(); await page.waitForTimeout(300); await look(page, comboName, name + '-new') }
   }
-  for (const [idx, nm] of [[0, 'set-me'], [1, 'set-sync'], [2, 'set-ai'], [3, 'set-backup'], [4, 'set-remind'], [8, 'set-lang'], [9, 'set-display'], [11, 'set-update'], [12, 'set-reset']]) {
-    await openTile(14)
-    await page.locator('.pick').nth(idx).click()
-    await look(page, comboName, nm)
+
+  // the four tabs
+  for (const [k, nm] of [[0, 'today'], [1, 'work'], [2, 'shop'], [3, 'money']]) { await toTab(k); await look(page, comboName, nm) }
+
+  // আজ → Settings, both groups, and each page (the walk round, row 4, leaves Settings, so it is not opened)
+  const openSettings = async () => { await toTab(0); await go(page.locator('.topbar .iconbtn[aria-label]').last(), 'settings') }
+  await openSettings(); await look(page, comboName, 'settings')
+  for (const [k, nm] of [[0, 'set-me'], [1, 'set-display'], [2, 'set-remind'], [3, 'set-lang'], [5, 'set-sync'], [6, 'set-ai'], [7, 'set-runs'], [8, 'set-backup'], [9, 'set-update'], [10, 'set-pin'], [11, 'set-reset']]) {
+    await openSettings(); await go(page.locator('.scroll .pick').nth(k), nm); await look(page, comboName, nm)
   }
-  // help, beside সব কিছু on the home screen
-  await fresh()
-  await page.locator('[data-tour="all"] + button').click().catch(() => {})
-  await look(page, comboName, 'help')
-  // the shop's quick credit and its full count (tiles 3 and 6 of the shop)
-  for (const [k, nm] of [[2, 'shop-credit'], [5, 'shop-fullcount']]) {
-    await openTile(6)
-    await page.locator('.tile').nth(k).click().catch(() => {})
-    await look(page, comboName, nm)
+
+  // কাজ: the price of a new job (and its size question), website enquiries, a new job, a job's card, and আরও
+  await toTab(1); await go(page.locator('.tile').nth(0), 'estimate'); await look(page, comboName, 'estimate')
+  await go(page.locator('.chips .chip').first(), 'estimate-size'); await look(page, comboName, 'estimate-size')
+  await toTab(1); await go(page.locator('.tile').nth(1), 'enquiries'); await look(page, comboName, 'enquiries')
+  await toTab(1); await go(page.locator('.scroll button.btn.quiet').filter({ hasText: '+' }).first(), 'work-newjob'); await look(page, comboName, 'work-newjob')
+  await toTab(1); await go(page.locator('button.jobcard').first(), 'work-jobcard'); await look(page, comboName, 'work-jobcard')
+  for (const [k, nm] of [[0, 'workers'], [1, 'stages'], [2, 'projects'], [3, 'history']]) {
+    await toTab(1); await go(more(k), nm); await look(page, comboName, nm)
+    if (nm === 'workers' || nm === 'projects') await plus(nm)
   }
-  // the third book, which only the home screen opens, and its two new sheets
-  await fresh()
-  await page.locator('[data-tour="books"] > *').nth(2).click().catch(() => {})
-  await look(page, comboName, 'money')
-  for (const [k, nm] of [[0, 'money-received'], [2, 'money-olddue']]) {
-    await fresh()
-    await page.locator('[data-tour="books"] > *').nth(2).click().catch(() => {})
-    await page.locator('.tile').nth(k).click().catch(() => {})
-    await look(page, comboName, nm)
+
+  // দোকান: its three tiles, its two chips, and আরও
+  for (const [k, nm] of [[0, 'shop-credit'], [1, 'shop-sale'], [2, 'shop-in']]) { await toTab(2); await go(page.locator('.tile').nth(k), nm); await look(page, comboName, nm) }
+  for (const [k, nm] of [[0, 'shop-count'], [1, 'shop-transfer']]) { await toTab(2); await go(page.locator('.tilegrid + .chips .chip').nth(k), nm); await look(page, comboName, nm) }
+  for (const [k, nm] of [[0, 'items'], [1, 'parties'], [2, 'fullcount']]) {
+    await toTab(2); await go(more(k), nm); await look(page, comboName, nm)
+    if (nm !== 'fullcount') await plus(nm)
   }
+
+  // টাকা: money that came in, his own book, the cash count, and the paper khata's old balances
+  for (const [k, nm] of [[0, 'money-received'], [1, 'personal'], [2, 'cash']]) { await toTab(3); await go(page.locator('.tile').nth(k), nm); await look(page, comboName, nm) }
+  await toTab(3); await go(more(0), 'money-olddue'); await look(page, comboName, 'money-olddue')
+
   // the crash screen (development server only)
   await page.goto(`http://localhost:${PORT}/#crash-test`); await page.reload(); await page.waitForTimeout(500)
   await look(page, comboName, 'crash')
   await page.goto(`http://localhost:${PORT}/`)
-  await fresh()
-  await page.locator('.footbar .foot').first().click().catch(() => {})
-  await look(page, comboName, 'standing')
 
-  /* the day, a step at a time, with a day's worth in it */
-  const mats = demo.masters.filter((m) => m.kind === 'item').slice(0, 2)
-  const dr = app.draft.newDraft(today, 'p0')
-  dr.att = { w0: { presence: 'full', rate: 700, amount: 700, advance: 0 }, w1: { presence: 'half', rate: 500, amount: 250, advance: 100 }, w2: { presence: 'ot', rate: 600, amount: 900, advance: 0 } }
-  dr.mats = mats.map((m, i) => ({ key: 'k' + i, item_id: m.id, qty: 40 + i, rate: 400, party_id: 's0', due_date: app.bn.addDays(today, -5), paid: i === 0, photo_id: '' }))
-  dr.rets = [{ key: 'r1', item_id: mats[0].id, qty: 3, rate: 400 }]
-  dr.exps = [{ key: 'x1', head_bn: 'চা-জলখাবার', amount: 120, mode: 'নগদ', note: '', photo_id: '' }, { key: 'x2', head_bn: 'গাড়ি ভাড়া', amount: 1500, mode: 'UPI', note: 'ট্রাক', photo_id: '' }]
-  dr.pexps = [{ key: 'p1', head_bn: 'বাজার', amount: 800, mode: 'নগদ', note: '', photo_id: '' }]
-  dr.invs = [{ key: 'v1', item_id: mats[1].id, qty: 20, rate: 120, party_id: 's1', due_date: '', paid: true, photo_id: '' }]
-  dr.progress = { stage_seq: 1, state: 'half' }
-  dr.cash_counted = 43800; dr.cash_computed = 48000
-  dr.recv = [{ key: 'rc1', project_id: 'p0', amount: 25000, mode: 'UPI' }]
-  // The steps this ledger has: the job picker only when there are two or more live jobs.
-  const activeJobs = demo.masters.filter((m) => m.kind === 'project' && m.status === 'active').length
-  const STEPS = [...(activeJobs > 1 ? ['project'] : []), 'attendance', 'wages', 'material', 'expense', 'received', 'extras', 'cash', 'review']
-  for (const [k, id] of STEPS.entries()) {
-    await seed(page, combo, { draft: { ...dr, at: id } })
+  /* the evening, at each of its questions */
+  for (const [k, st] of EVENING.entries()) {
+    await seed(page, combo, { draft: { ...dr, at: st.key } })
     await page.locator('[data-tour="today"]').click()
-    await page.waitForSelector('.wizhead')
-    await look(page, comboName, 'wizard-' + String(k + 1).padStart(2, '0') + '-' + id)
+    const opened = await page.waitForSelector('.wizhead', { timeout: 8000 }).then(() => true, () => false)
+    if (!opened) problems.push(`${comboName}: the evening did not open at ${st.key}`)
+    await look(page, comboName, 'eve-' + String(k + 1).padStart(2, '0') + '-' + st.key.replace(':', ''))
   }
-  // The four behind আর কিছু?, each opened from the hub.
-  for (const [k, id] of ['returned', 'personal', 'inventory', 'progress'].entries()) {
-    await seed(page, combo, { draft: { ...dr, at: 'extras' } })
-    await page.locator('[data-tour="today"]').click()
-    await page.waitForSelector('.wizhead')
-    await page.locator('.pick').nth(k).click().catch(() => {})
-    await look(page, comboName, 'wizard-extra-' + id)
+
+  /* setup on an empty phone, a question at a time; the new-job sheet last, from its own walk */
+  const next = async () => { await page.locator('.actionbar .btn.primary').click(); await page.waitForTimeout(300) }
+  const toJobs = async () => {
+    await seed(page, combo, { setup: true })
+    await next()                                                     // শুরু করি
+    await page.locator('input.input').first().fill('নিত্যানন্দ চক্রবর্তী')
+    await next(); await next()                                       // the name; what he does
   }
+  await seed(page, combo, { setup: true }); await look(page, comboName, 'setup-1-welcome')
+  await next(); await page.locator('input.input').first().fill('নিত্যানন্দ চক্রবর্তী'); await look(page, comboName, 'setup-2-name')
+  await next(); await look(page, comboName, 'setup-3-work')
+  await next(); await look(page, comboName, 'setup-4-jobs')
+  await next(); await look(page, comboName, 'setup-5-men')
+  await next(); await look(page, comboName, 'setup-6-cash')
+  await next(); await look(page, comboName, 'setup-7-notify')
+  await toJobs(); await go(page.locator('.rowlist .pick').last(), 'setup-newjob'); await look(page, comboName, 'setup-4-newjob')
   await ctx.close()
 }
 

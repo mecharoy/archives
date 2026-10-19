@@ -103,6 +103,11 @@ await step('onboarding: reminders, and on to আজ', async () => {
   await page.getByText('আজকের হিসাব লিখুন').first().waitFor({ timeout: 5000 })
   const names = (await page.locator('.tabbar button').allInnerTexts()).map((x) => x.trim()).join(' ')
   if (names !== 'আজ কাজ দোকান টাকা') throw new Error('after setup the tabs read: ' + names)
+  // The "all ready" message stands above the tab bar, not over two of its tabs.
+  const msg = await page.locator('.toast').boundingBox()
+  const bar = await page.locator('.tabbar').boundingBox()
+  if (!msg) throw new Error('no message after setup')
+  if (msg.y + msg.height > bar.y) throw new Error(`the message after setup covers the tab bar (ends ${Math.round(msg.y + msg.height)}, bar starts ${Math.round(bar.y)})`)
 })
 
 await step('the tour opens by itself, first time', async () => {

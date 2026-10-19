@@ -30,6 +30,8 @@
   --c-work:  #2563EB; --c-work-bg:  #E7EEFD;
   --c-stock: #B45309; --c-stock-bg: #FBEDDC;
   --c-money: #7C3AED; --c-money-bg: #EFE7FD;
+  /* The same three, darker, for words on their own tint: the bright shade there reads at only 4.4:1. */
+  --c-work-ink: #1D4ED8; --c-stock-ink: #92400E; --c-money-ink: #6D28D9;
   --shadow:    0 1px 0 rgba(20,24,27,.04), 0 10px 24px -20px rgba(20,24,27,.5);
   --radius:    12px;
   --tap:       56px;
@@ -44,6 +46,7 @@
     --accent: #57BFA0; --accent-bg: #12302A; --ok: #57BFA0; --warn: #DCA854;
     --warn-bg: #2C2413; --crit: #E8788A; --crit-bg: #331A1E;
     --c-work: #7DA9FF; --c-work-bg: #16233B; --c-stock: #E0A44E; --c-stock-bg: #2C2413; --c-money: #B794F6; --c-money-bg: #241B36;
+    --c-work-ink: #7DA9FF; --c-stock-ink: #E0A44E; --c-money-ink: #B794F6;
     --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -22px rgba(0,0,0,.9);
     --on-accent: #0B1512;
     color-scheme: dark;
@@ -55,6 +58,7 @@
   --accent: #57BFA0; --accent-bg: #12302A; --ok: #57BFA0; --warn: #DCA854;
   --warn-bg: #2C2413; --crit: #E8788A; --crit-bg: #331A1E;
     --c-work: #7DA9FF; --c-work-bg: #16233B; --c-stock: #E0A44E; --c-stock-bg: #2C2413; --c-money: #B794F6; --c-money-bg: #241B36;
+    --c-work-ink: #7DA9FF; --c-stock-ink: #E0A44E; --c-money-ink: #B794F6;
   --shadow: 0 1px 0 rgba(0,0,0,.3), 0 12px 28px -22px rgba(0,0,0,.9);
   --on-accent: #0B1512;
   color-scheme: dark;
@@ -173,10 +177,10 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
 }
 .card + .card { margin-top: .7rem; }
 
-.statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; }
+.statgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr)); gap: .7rem; }
 .stat {
   background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: .85rem .95rem; display: flex; flex-direction: column; gap: .12rem;
+  padding: .85rem .95rem; display: flex; flex-direction: column; gap: .12rem; min-width: 0;
   border-top: 3px solid var(--line);
 }
 .stat.ok   { border-top-color: var(--ok); }
@@ -227,12 +231,12 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
    over a thin bar of how far along he is. One colour per part, the same as everywhere else in the app. */
 .wizmid { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: .35rem; }
 .sec {
-  align-self: flex-start; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  font-size: .8rem; font-weight: 600; padding: .1rem .6rem; border-radius: 999px;
-  background: var(--c-work-bg); color: var(--c-work);
+  align-self: flex-start; max-width: 100%; overflow-wrap: anywhere; line-height: 1.35;
+  font-size: .8rem; font-weight: 600; padding: .15rem .6rem; border-radius: .7rem;
+  background: var(--c-work-bg); color: var(--c-work-ink);
 }
-.sec.stock { background: var(--c-stock-bg); color: var(--c-stock); }
-.sec.money { background: var(--c-money-bg); color: var(--c-money); }
+.sec.stock { background: var(--c-stock-bg); color: var(--c-stock-ink); }
+.sec.money { background: var(--c-money-bg); color: var(--c-money-ink); }
 .sec.plain { background: var(--sunk); color: var(--ink-2); }
 .sec.done  { background: var(--accent-bg); color: var(--accent); }
 .wizbar { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
@@ -240,8 +244,8 @@ button { background: none; border: 0; padding: 0; cursor: pointer; color: inheri
 
 /* The visible "change" on a ticked man's row: half a day, a day and a half. */
 .chg {
-  display: inline-block; font-size: .78rem; font-weight: 600; color: var(--accent);
-  border: 1px solid var(--accent); border-radius: 999px; padding: .2rem .65rem; white-space: nowrap;
+  display: inline-grid; place-items: center; min-height: 2.75rem; font-size: .82rem; font-weight: 600; color: var(--accent);
+  border: 1px solid var(--accent); border-radius: 999px; padding: 0 .85rem; white-space: nowrap;
 }
 
 /* কাজ কতটা হয়েছে? — the figure, the slider, and a − and + for a thumb that slips. */
@@ -445,6 +449,9 @@ textarea.input { min-height: 5rem; resize: none; }
   font-size: .92rem; max-width: 88%; text-align: center; box-shadow: 0 8px 24px -10px rgba(0,0,0,.5);
   animation: rise .18s ease;
 }
+/* Above whatever stands at the bottom of the screen: the tab bar, or a screen's row of buttons. */
+.app:has(.tabbar) .toast { bottom: calc(5.3rem + env(safe-area-inset-bottom)); }
+.app:has(.actionbar) .toast { bottom: calc(var(--tap) + 2.4rem + env(safe-area-inset-bottom)); }
 
 .statusline {
   display: flex; align-items: center; gap: .45rem; font-size: .78rem; color: var(--muted);
@@ -666,19 +673,21 @@ textarea.input { min-height: 5rem; resize: none; }
 .softcard.warn { background: var(--warn-bg); }
 
 .helpline {
-  display: flex; align-items: center; justify-content: center; gap: .45rem; margin: 1.4rem 0 .6rem;
+  display: flex; align-items: center; justify-content: center; gap: .45rem; margin: 1.1rem 0 .3rem; min-height: var(--tap);
   color: var(--accent); font-weight: 600; font-size: .92rem; text-decoration: none;
 }
 
 /* টাকা: the three figures he carries in his head. */
-.figures { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .5rem; margin-top: 1rem; }
-.figures > div {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: .6rem .7rem; min-width: 0; container-type: inline-size;
+.figures {
+  margin-top: 1rem; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: .15rem 1rem;
 }
-.figures .k { display: block; font-size: .78rem; font-weight: 600; color: var(--muted); }
-.figures .v { display: block; font-size: 1.04rem; font-weight: 650; white-space: nowrap; }
-@supports (font-size: 1cqw) { .figures .v { font-size: min(1.04rem, 15cqw); } }
+.figures > div {
+  display: flex; align-items: baseline; justify-content: space-between; gap: .8rem; min-width: 0;
+  padding: .6rem 0; border-bottom: 1px solid var(--line-soft);
+}
+.figures > div:last-child { border-bottom: 0; }
+.figures .k { font-size: 1rem; font-weight: 600; color: var(--muted); }
+.figures .v { font-size: 1.2rem; font-weight: 650; white-space: nowrap; }
 .figures .v.get { color: var(--warn); }
 .figures .v.owe { color: var(--crit); }
 
@@ -686,6 +695,6 @@ textarea.input { min-height: 5rem; resize: none; }
 button.jobcard { width: 100%; text-align: left; display: block; color: var(--ink); margin-top: .9rem; }
 .tag {
   font-size: .76rem; font-weight: 600; padding: .1rem .55rem; border-radius: 999px; white-space: nowrap;
-  background: var(--c-work-bg); color: var(--c-work);
+  background: var(--c-work-bg); color: var(--c-work-ink);
 }
 .tile.wide { grid-column: 1 / -1; flex-direction: row; align-items: center; justify-content: flex-start; min-height: 4.2rem; }
