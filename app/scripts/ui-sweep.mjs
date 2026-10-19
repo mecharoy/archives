@@ -171,7 +171,7 @@ async function seed(page, combo, extra = {}) {
     settings: { lang: combo.lang, theme: combo.theme, text_scale: combo.scale },
   } : {
     masters: MASTERS, entries: demo.entries, brief: demo.brief, enquiries: demo.enquiries, draft: extra.draft || null,
-    settings: { onboarded: true, toured: true, lang: combo.lang, theme: combo.theme, text_scale: combo.scale, runs_shop: true, runs_sites: true, remind: 'day', helper_name: HELPER, helper_phone: '90000 11111' },
+    settings: { onboarded: true, toured: true, layout_seen: 2, lang: combo.lang, theme: combo.theme, text_scale: combo.scale, runs_shop: true, runs_sites: true, remind: 'day', helper_name: HELPER, helper_phone: '90000 11111' },
   })
   await page.reload()
   await page.waitForSelector(extra.setup ? '.app[data-screen="setup"]' : '.app .tabbar', { timeout: 15000 })

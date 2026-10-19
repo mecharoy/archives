@@ -23,6 +23,8 @@ export interface Settings {
   auto_sync: boolean
   onboarded: boolean
   toured: boolean
+  /* The layout the walk round last showed: 2 is the four tabs. Build 26 stored no such field. */
+  layout_seen: number
   update_url: string
   update_checked_at: string
   chips_taken: number
@@ -65,7 +67,7 @@ const BUILT_IN_TOKEN = (import.meta.env.VITE_SYNC_TOKEN as string | undefined)?.
 export const DEFAULT_SETTINGS: Settings = {
   endpoint: BUILT_IN_ENDPOINT, token: BUILT_IN_TOKEN, briefUrl: '', briefToken: '',
   opening_cash: 0, opening_date: isoDate(), pin_hash: '',
-  auto_sync: true, onboarded: false, toured: false, update_url: '', update_checked_at: '',
+  auto_sync: true, onboarded: false, toured: false, layout_seen: 2, update_url: '', update_checked_at: '',
   chips_taken: 0, chips_expanded: 0,
   // Large by default: he reads it at arm's length in the evening. Smaller is one tap away in সেটিংস.
   theme: 'system', text_scale: 1.12,
@@ -146,6 +148,15 @@ export function useStore<T>(sel: (s: State) => T): T {
 
 /* ---- boot ---- */
 
+/* Stored settings over the defaults. A phone that took the walk round on build 26's home stored no
+   layout_seen: it has never been shown the four tabs, so it takes the walk round once more. Finishing it saves
+   the whole settings, layout_seen included, so it does not come back. */
+function withLayout(stored: Settings): Settings {
+  const merged = { ...DEFAULT_SETTINGS, ...stored }
+  if ((stored as Partial<Settings>).layout_seen === undefined && merged.toured) merged.toured = false
+  return merged
+}
+
 export async function boot() {
   const [masters, entries, outbox, settings, brief, brief_fetched_at, enquiries, enquiries_seen] = await Promise.all([
     dbAll<AnyMaster>('masters'),
@@ -162,7 +173,7 @@ export async function boot() {
     masters: masters.filter((m) => !m.deleted),
     entries: entries.sort((a, b) => (a.date < b.date ? -1 : 1)),
     outbox,
-    settings: { ...DEFAULT_SETTINGS, ...settings },
+    settings: withLayout(settings),
     brief, brief_fetched_at, enquiries, enquiries_seen,
   })
   // The language has to be live before the first render, not after it.

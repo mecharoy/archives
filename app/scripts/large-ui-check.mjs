@@ -45,7 +45,7 @@ for (const events of SIZES) {
     await db.kvSet('settings', settings)
     await db.kvSet('brief', brief)
     await db.kvSet('brief_fetched_at', new Date().toISOString())
-  }, { masters: demo.masters, brief: demo.brief, settings: { onboarded: true, toured: true, lang: 'bn', theme: 'light', text_scale: 1, remind: 'off' } })
+  }, { masters: demo.masters, brief: demo.brief, settings: { onboarded: true, toured: true, layout_seen: 2, lang: 'bn', theme: 'light', text_scale: 1, remind: 'off' } })
   for (let i = 0; i < demo.entries.length; i += 3000) {
     await page.evaluate(async (chunk) => { await (await import('/src/lib/db.ts')).dbPutMany('entries', chunk) }, demo.entries.slice(i, i + 3000))
   }

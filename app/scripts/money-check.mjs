@@ -733,6 +733,26 @@ const listText = (page) => page.locator('.scroll').first().innerText()
   await ctx.close()
 }
 
+/* ---- a phone that took build 26's walk round has never seen the tabs: it takes the walk round once more ---- */
+{
+  const { ctx, page } = await fresh()
+  await step('update: a phone that took the old walk round gets the new one, once', page, async () => {
+    // Settings as build 26 stored them: walk round done, and no word of the tab layout.
+    await page.evaluate(async () => {
+      const db = await import('/src/lib/db.ts')
+      const st = await db.kvGet('settings', null)
+      delete st.layout_seen
+      await db.kvSet('settings', { ...st, toured: true })
+    })
+    await page.reload()
+    await page.locator('.tour').waitFor({ timeout: 5000 })
+    for (let k = 0; k < 4 && (await page.locator('.tour').count()); k++) { await page.locator('.tour-card .btn.primary').click(); await page.waitForTimeout(300) }
+    await page.reload(); await page.waitForTimeout(1600)
+    if (await page.locator('.tour').count()) throw new Error('the walk round came back a second time')
+  })
+  await ctx.close()
+}
+
 /* ---- reminders: four switches, each on its own ---- */
 {
   const { ctx, page } = await fresh()
