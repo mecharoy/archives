@@ -463,6 +463,62 @@ const quietJob = async (page) => {
     await page.goto(ORIGIN); await page.locator('[data-tour="today"]').waitFor({ timeout: 5000 })
     if (await page.getByText('দোকানের মাল একবার গুনে লিখুন').count()) throw new Error('home still asks for the first count')
   })
+  await step('count: a thing found nowhere can be added by its own name, and counted', page, async () => {
+    await openCount()
+    await page.locator('input.input').first().fill('গ্যাসকেট')
+    await page.locator('.pick', { hasText: 'নতুন মাল হিসেবে যোগ করুন' }).click()
+    const name = await page.locator('.sheet .field', { hasText: 'মালের নাম' }).locator('input').inputValue()
+    if (name !== 'গ্যাসকেট') throw new Error('the new-item sheet opened with: ' + name)
+    await page.locator('.sheet .chip', { hasText: 'পিস' }).first().click()
+    await page.locator('.sheet .btn.primary', { hasText: 'যোগ করুন' }).click()
+    await pad(page, ['১', '২'])
+    await page.locator('.sheet .btn.primary').click()
+    await page.waitForTimeout(200)
+    await page.locator('.actionbar .btn.primary').click()
+    await page.waitForTimeout(600)
+    const r = await page.evaluate(async () => {
+      const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts')
+      const s = m.getState()
+      const it = m.items(s).find((i) => i.name_bn === 'গ্যাসকেট')
+      return it ? { unit: it.unit_bn, qty: (c.shopStock(s.entries, m.items(s)).find((l) => l.item_id === it.id) || {}).qty } : null
+    })
+    if (!r || r.unit !== 'পিস' || r.qty !== 12) throw new Error('gasket: ' + JSON.stringify(r))
+  })
+  await ctx.close()
+}
+
+/* ---- his own book: an allowance from the business, and money from elsewhere ---- */
+{
+  const { ctx, page } = await fresh()
+  const cash = () => page.evaluate(async () => {
+    const m = await import('/src/lib/store.ts'); const c = await import('/src/lib/calc.ts')
+    const s = m.getState()
+    return c.cashState(s.entries, s.settings.opening_cash, s.settings.opening_date).computed
+  })
+  await step('own book: money from outside the business goes in, and business cash does not move', page, async () => {
+    const before = await cash()
+    await tabBtn(page, 'টাকা').click()
+    await page.locator('.tile', { hasText: 'নিজের খরচ' }).click()
+    await tap(page, 'অন্য টাকা এল')
+    await page.getByText('কোথা থেকে টাকা এল?').waitFor({ timeout: 3000 })
+    await page.locator('.chip', { hasText: 'পেনশন' }).click()
+    await pad(page, ['৫', '০', '০', '০'])
+    await tap(page, 'খাতায় তুলুন')
+    await page.waitForTimeout(600)
+    const after = await cash()
+    if (after !== before) throw new Error(`business cash moved: ${before} → ${after}`)
+    const body = await page.locator('.scroll').first().innerText()
+    if (!body.includes('পেনশন') || !body.includes('৫,০০০')) throw new Error('the month does not show it: ' + body.replace(/\n+/g, ' | ').slice(0, 300))
+  })
+  await step('own book: the allowance from the business still comes out of business cash', page, async () => {
+    const before = await cash()
+    await tap(page, 'ব্যবসা থেকে হাতখরচ')
+    await pad(page, ['১', '০', '০', '০'])
+    await tap(page, 'খাতায় তুলুন')
+    await page.waitForTimeout(600)
+    const after = await cash()
+    if (before - after !== 1000) throw new Error(`business cash went ${before} → ${after}, not down by 1000`)
+  })
   await ctx.close()
 }
 

@@ -15,9 +15,10 @@ import { t, tf } from '../../lib/i18n'
    until he picks it, and the wizard's chips still come only from what he has
    actually bought. Whatever he types wins: the typed name is what gets saved
    if he presses যোগ করুন, and the list below is only ever a shortcut to it. */
-export function NewItemSheet({ onClose, onCreated }: { onClose: () => void; onCreated: (i: Item) => void }) {
+/* `initial`: what he was searching for when nothing matched, so he need not type it twice. */
+export function NewItemSheet({ onClose, onCreated, initial = '' }: { onClose: () => void; onCreated: (i: Item) => void; initial?: string }) {
   const s = useStore((x) => x)
-  const [base, setBase] = useState('')
+  const [base, setBase] = useState(initial)
   const [variant, setVariant] = useState('')
   const [writing, setWriting] = useState<string | null>(null)   // which group's own-words box is open
   const [own, setOwn] = useState('')

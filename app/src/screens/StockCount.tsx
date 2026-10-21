@@ -9,6 +9,7 @@ import { useOnce } from '../lib/once'
 import { scheduleSync } from '../lib/sync'
 import { useBackHandler } from '../lib/back'
 import { t, tf } from '../lib/i18n'
+import { NewItemSheet } from './day/NewSheets'
 
 /* পুরো দোকান গোনা — the whole shop counted in one sitting, at setup.
 
@@ -28,6 +29,8 @@ export function StockCount({ s, onDone }: { s: State; onDone: (msg?: string) => 
   const [q, setQ] = useState('')
   const [cat, setCat] = useState<string | null>(null)
   const [edit, setEdit] = useState<Row | null>(null)
+  // A thing on his shelf that is neither his nor in the catalogue (a gasket): he names it himself.
+  const [naming, setNaming] = useState<string | null>(null)
   useBackHandler(() => onDone())
 
   useEffect(() => { void kvGet<Row[]>(DRAFT, []).then(setRows) }, [])
@@ -84,12 +87,16 @@ export function StockCount({ s, onDone }: { s: State; onDone: (msg?: string) => 
       <div className="scroll">
         <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t('মালের নাম লিখে খুঁজুন')} />
         <div className="chips" style={{ marginTop: '.5rem' }}>
+          <Chip onClick={() => setNaming(needle)}>{t('+ নতুন মাল')}</Chip>
           {CATS.map((c) => <Chip key={c} on={cat === c} onClick={() => setCat(cat === c ? null : c)}>{t(c)}</Chip>)}
         </div>
-        {(ownHits.length > 0 || catHits.length > 0) && (
+        {(ownHits.length > 0 || catHits.length > 0 || needle) && (
           <div className="rowlist" style={{ marginTop: '.6rem' }}>
             {ownHits.map((i) => <Pick key={i.id} title={i.name_bn} sub={t('আপনার মাল')} onClick={() => add({ item_id: i.id, name_bn: i.name_bn, unit_bn: i.unit_bn }, i.last_rate)} />)}
             {catHits.map((c) => <Pick key={c.name_bn} title={c.name_bn} sub={c.unit_bn} onClick={() => add({ item_id: '', name_bn: c.name_bn, unit_bn: c.unit_bn }, null)} />)}
+            {needle && !have.has(needle) && !catHits.some((c) => c.name_bn === needle) && (
+              <Pick title={'+ ' + needle} sub={t('নতুন মাল হিসেবে যোগ করুন')} onClick={() => setNaming(needle)} />
+            )}
           </div>
         )}
 
@@ -110,6 +117,10 @@ export function StockCount({ s, onDone }: { s: State; onDone: (msg?: string) => 
         <RowSheet row={edit} onClose={() => setEdit(null)}
           onSave={(r) => { keep((rows ?? []).map((x) => (x.key === r.key ? r : x))); setEdit(null) }}
           onRemove={() => { keep((rows ?? []).filter((x) => x.key !== edit.key)); setEdit(null) }} />
+      )}
+      {naming != null && (
+        <NewItemSheet initial={naming} onClose={() => setNaming(null)}
+          onCreated={(it) => { setNaming(null); add({ item_id: it.id, name_bn: it.name_bn, unit_bn: it.unit_bn }, null) }} />
       )}
     </>
   )

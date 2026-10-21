@@ -20,7 +20,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
   const [pin, setPin] = useState('')
   const [wrong, setWrong] = useState(false)
   const [setting, setSetting] = useState(false)
-  const [adding, setAdding] = useState<null | 'expense' | 'drawing'>(null)
+  const [adding, setAdding] = useState<null | Kind>(null)
   const [bill, setBill] = useState<Bill | null>(null)
   useBackHandler(() => setAdding(null), adding !== null)
   const toast = useToast()
@@ -34,6 +34,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
 
   const spent = rows.filter((r) => r.dir === 'paid').reduce((a, r) => a + r.amount, 0)
   const drawn = rows.filter((r) => r.head_bn === DRAWING_HEAD).reduce((a, r) => a + r.amount, 0)
+  const cameIn = rows.filter((r) => isOwnIn(r)).reduce((a, r) => a + r.amount, 0)
 
   const tryPin = async (p: string) => {
     setPin(p)
@@ -74,6 +75,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
         <div className="statgrid" style={{ marginTop: '1rem' }}>
           <div className="stat info"><span className="k">{t("এ মাসে খরচ")}</span><span className="v num">{money(spent)}</span></div>
           <div className="stat warn"><span className="k">{t("ব্যবসা থেকে নেওয়া")}</span><span className="v num">{money(drawn)}</span></div>
+          {cameIn > 0 && <div className="stat ok"><span className="k">{t("অন্য জায়গা থেকে এল")}</span><span className="v num">{money(cameIn)}</span></div>}
         </div>
 
         <div className="tilegrid" style={{ marginTop: '.9rem' }}>
@@ -81,7 +83,10 @@ export function Personal({ onBack }: { onBack: () => void }) {
             <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("খরচ লিখুন")}</span><span className="s">{t("বাজার, ওষুধ, বিল")}</span></span>
           </button>
           <button className="tile" onClick={() => setAdding('drawing')}>
-            <Icon name="wallet" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("ব্যবসা থেকে নিলাম")}</span><span className="s">{t("ঘরের জন্য টাকা")}</span></span>
+            <Icon name="wallet" size={22} stroke={1.6} /><span><span className="t" style={{ display: 'block' }}>{t("ব্যবসা থেকে হাতখরচ")}</span><span className="s">{t("ব্যবসার টাকা থেকে, ঘরের জন্য")}</span></span>
+          </button>
+          <button className="tile wide" onClick={() => setAdding('income')}>
+            <Icon name="plus" size={22} /><span><span className="t" style={{ display: 'block' }}>{t("অন্য টাকা এল")}</span><span className="s">{t("পেনশন, ভাড়া, ব্যাংক — ব্যবসার টাকা নয়")}</span></span>
           </button>
         </div>
 
@@ -103,6 +108,7 @@ export function Personal({ onBack }: { onBack: () => void }) {
         )}
         <p className="small muted" style={{ marginTop: '1rem' }}>
           {t("ব্যবসা থেকে নেওয়া টাকা ব্যবসার খরচ নয় — তাই কাজের হিসাবে এটা ধরা হয় না, শুধু হাতের টাকা কমে।")}
+          {' '}{t("অন্য জায়গা থেকে আসা টাকা শুধু এই খাতার — ব্যবসার হাতের টাকা তাতে বদলায় না।")}
         </p>
       </div>
       {bill && (
@@ -226,7 +232,15 @@ function BillSheet({ bill, onClose, onSaved }: {
   )
 }
 
-function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (msg?: string) => void }) {
+type Kind = 'expense' | 'drawing' | 'income'
+
+/* Money into his own book that did not come from the business: a pension, rent, a bank withdrawal, a loan, a
+   gift. Written as his own (personal) money received under any name but the allowance's, so the business cash
+   never counts it (calc.ts cashState counts only the allowance among his own rows). */
+const INCOME_HEADS = ['পেনশন', 'বাড়িভাড়া', 'ব্যাংক থেকে তুললাম', 'ধার পেলাম', 'উপহার']
+const isOwnIn = (m: MoneyEntry) => m.personal && m.dir === 'received' && m.head_bn !== DRAWING_HEAD
+
+function AddPersonal({ kind, onDone }: { kind: Kind; onDone: (msg?: string) => void }) {
   const s = useStore((x) => x)
   const [head, setHead] = useState(kind === 'drawing' ? DRAWING_HEAD : '')
   const [amount, setAmount] = useState('')
@@ -234,7 +248,12 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
   const [writing, setWriting] = useState(false)
   const [own, setOwn] = useState('')
   const ranked = rankHeads(s.entries, true).filter((h) => h !== DRAWING_HEAD)
-  const ordered = [...ranked, ...MONEY_HEADS_PERSONAL.filter((h) => !ranked.includes(h))]
+  // Where money came from before comes first, newest first; then the usual ones.
+  const pastIn = [...new Set((liveEntries(s.entries).filter((e) => e.kind === 'money' && isOwnIn(e as MoneyEntry)) as MoneyEntry[])
+    .sort((a, b) => (a.date < b.date ? 1 : -1)).map((e) => e.head_bn))]
+  const ordered = kind === 'income'
+    ? [...pastIn, ...INCOME_HEADS.filter((h) => !pastIn.includes(h))]
+    : [...ranked, ...MONEY_HEADS_PERSONAL.filter((h) => !ranked.includes(h))]
   const chips = amountChips(s.entries, head, true)
   const saveOnce = useOnce(() => save())
 
@@ -242,7 +261,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
     const e: MoneyEntry = {
       id: uid(), kind: 'money', batch: uid(), date: isoDate(), project_id: '',
       created_at: new Date().toISOString(), head_bn: head,
-      dir: kind === 'drawing' ? 'received' : 'paid',
+      dir: kind === 'expense' ? 'paid' : 'received',
       amount: Number(amount) || 0, party_id: '', mode, note: '', personal: true, photo_id: '',
     }
     await saveEntries([e])
@@ -253,9 +272,9 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
   if (!head) {
     return (
       <>
-        <TopBar title="নিজের খরচ" onBack={() => onDone()} />
+        <TopBar title={kind === 'income' ? 'অন্য টাকা এল' : 'নিজের খরচ'} onBack={() => onDone()} />
         <div className="scroll">
-          <h2 className="question">{t("কীসের খরচ?")}</h2>
+          <h2 className="question">{kind === 'income' ? t('কোথা থেকে টাকা এল?') : t("কীসের খরচ?")}</h2>
           <div className="chips">
             {ordered.slice(0, 8).map((h) => <Chip key={h} onClick={() => { noteChip(true); setHead(h) }}>{h}</Chip>)}
             {/* The list can never be complete — a wedding gift, a bike
@@ -266,11 +285,11 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
           </div>
           {writing && (
             <div style={{ marginTop: '1rem' }}>
-              <Field label="কীসের খরচ">
+              <Field label={kind === 'income' ? 'কোথা থেকে' : 'কীসের খরচ'}>
                 <input className="input" value={own} onChange={(e) => setOwn(e.target.value)}
-                  placeholder="যেমন — সাইকেল সারানো" autoFocus />
+                  placeholder={kind === 'income' ? t('যেমন — জমির ফসল') : t('যেমন — সাইকেল সারানো')} autoFocus />
               </Field>
-              <button className="btn primary" style={{ width: '100%' }} disabled={!own.trim()}
+              <button className="btn primary" style={{ width: '100%' }} disabled={!own.trim() || own.trim() === DRAWING_HEAD}
                 onClick={() => { noteChip(true); setHead(own.trim()) }}>{t('এগিয়ে যান')}</button>
             </div>
           )}
@@ -285,6 +304,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
       <div className="scroll">
         <h2 className="question">{t("কত টাকা?")}</h2>
         {kind === 'drawing' && <p className="hint">{t("ব্যবসার হাতের টাকা থেকে এই টাকাটা কমে যাবে।")}</p>}
+        {kind === 'income' && <p className="hint">{t("এটা ব্যবসার টাকা নয় — ব্যবসার হাতের টাকা বদলাবে না।")}</p>}
         <MoneyPad value={amount} onChange={setAmount} chips={chips} onChipTaken={() => noteChip(true)} />
         <p className="sectionlabel">{t("কীভাবে")}</p>
         <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{modeLabel(m)}</Chip>)}</div>

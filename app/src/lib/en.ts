@@ -1272,4 +1272,21 @@ export const EN: Record<string, string> = {
   'দশ সেকেন্ডে একটা খবর আসবে': 'A reminder will come in ten seconds',
   'যেটা চালান, নিচে শুধু তার ঘর থাকবে।': 'Only what you run gets a tab at the bottom.',
   'একটা অন্তত চালু থাকবে।': 'At least one stays on.',
+
+  /* ---- the full count names a new item; his own book takes money from elsewhere ---- */
+  'অন্য টাকা এল': 'Other money came in',
+  'পেনশন, ভাড়া, ব্যাংক — ব্যবসার টাকা নয়': 'Pension, rent, bank — not business money',
+  'অন্য জায়গা থেকে আসা টাকা শুধু এই খাতার — ব্যবসার হাতের টাকা তাতে বদলায় না।': 'Money from elsewhere belongs to this book only — the business cash does not change.',
+  'পেনশন': 'Pension',
+  'বাড়িভাড়া': 'House rent',
+  'ব্যাংক থেকে তুললাম': 'Withdrawn from the bank',
+  'ধার পেলাম': 'Borrowed',
+  'উপহার': 'Gift',
+  'কোথা থেকে টাকা এল?': 'Where did the money come from?',
+  'যেমন — জমির ফসল': 'e.g. — crop from the land',
+  'এটা ব্যবসার টাকা নয় — ব্যবসার হাতের টাকা বদলাবে না।': 'This is not business money — the business cash will not change.',
+  'নতুন মাল হিসেবে যোগ করুন': 'Add as a new item',
+  'অন্য জায়গা থেকে এল': 'Came from elsewhere',
+  'ব্যবসা থেকে হাতখরচ': 'Allowance from the business',
+  'ব্যবসার টাকা থেকে, ঘরের জন্য': 'From business money, for the home',
 }
