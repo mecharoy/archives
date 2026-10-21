@@ -1,9 +1,9 @@
 {
-  "code": 27,
-  "name": "1.0.27",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=27",
-  "size": 7529267,
-  "notes_bn": "নতুন সাজ — নিচে চারটে ঘর, কাজ ধরে ধরে আজকের হিসাব, কাজ কতটা হল তার দাগ, আর ঠিক সময়ে মনে করিয়ে দেওয়া।",
-  "notes_en": "A calmer app: four tabs, today's entry job by job, a slider for how much is done, and reminders that arrive on time.",
-  "released_at": "2026-10-19T08:37:12.658Z"
+  "code": 28,
+  "name": "1.0.28",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=28",
+  "size": 7530107,
+  "notes_bn": "দোকান গোনার সময় নিজের মাল নিজে যোগ করা যায়; নিজের খাতায় ব্যবসার বাইরের টাকাও লেখা যায়।",
+  "notes_en": "The full shop count can add an item of your own; your own book takes money from outside the business.",
+  "released_at": "2026-10-21T18:02:10.142Z"
 }
