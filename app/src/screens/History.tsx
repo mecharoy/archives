@@ -3,7 +3,7 @@ import { Icon, TopBar, Pick, Sheet, useToast, Toast, Empty } from '../ui/kit'
 import { useStore, saveEntries, nameOf, type State } from '../lib/store'
 import { money, toBn, num, dateBn, dayLabelBn, isoDate, addDays } from '../lib/bn'
 import type { Entry } from '../lib/model'
-import { liveEntries } from '../lib/calc'
+import { liveEntries, SETTLE_HEAD, CASH_RESET_NOTE } from '../lib/calc'
 import { reversalOf, newDraft, type Draft } from '../lib/draft'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
@@ -69,7 +69,7 @@ function dayCost(rows: Entry[]): number {
   for (const e of rows) {
     if (e.kind === 'attendance') t += e.amount
     else if (e.kind === 'stock' && (e.dir === 'in' || e.dir === 'transfer')) t += e.amount
-    else if (e.kind === 'money' && e.dir === 'paid' && !e.personal) t += e.amount
+    else if (e.kind === 'money' && e.dir === 'paid' && !e.personal && e.head_bn !== SETTLE_HEAD) t += e.amount
   }
   return t
 }
@@ -97,7 +97,7 @@ function DayDetail({ s, date, onCorrected }: { s: State; date: string; onCorrect
             <button className="iconbtn" onClick={() => setConfirm(e)} aria-label="সংশোধন"><Icon name="edit" size={18} /></button>
           </div>
         ))}
-        {rows.filter((e) => e.kind !== 'day').length === 0 && <p className="hint">{t("এই দিনে শুধু ‘কাজ হয়নি’ লেখা আছে।")}</p>}
+        {rows.filter((e) => e.kind !== 'day').length === 0 && <p className="hint">{rows.some((e) => e.kind === 'day' && e.note !== CASH_RESET_NOTE) ? t("এই দিনে শুধু ‘কাজ হয়নি’ লেখা আছে।") : t("এই দিনে শুধু হাতের টাকা বসানো হয়েছে।")}</p>}
       </div>
       <p className="small muted" style={{ marginTop: '.8rem' }}>
         {t("কোনো লাইন মুছে ফেলা হয় না — ভুল হলে তার উল্টো লাইন লেখা হয়, তাই খাতায় সব ইতিহাস থেকে যায়।")}

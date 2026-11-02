@@ -74,16 +74,49 @@ await step('the built-in endpoint is picked up with nothing typed', async () => 
   if (s && s.endpoint === '') throw new Error('stored settings blanked the built-in endpoint')
 })
 
+const skipTour = async () => {
+  await page.evaluate(async () => { await (await import('/src/lib/store.ts')).saveSettings({ onboarded: true, toured: true }) })
+  await page.goto('http://localhost:5195/')
+  await page.getByText('আজকের হিসাব').first().waitFor({ timeout: 6000 })
+  await page.waitForTimeout(300)
+}
+const openHistory = async () => {
+  await page.locator('.bookcard.money .bookhead').click()
+  await tap('পুরোনো হিসাব')
+  await page.waitForTimeout(300)
+}
+
 await step('onboarding', async () => {
   await tap('শুরু করি')
+  await page.getByText('কোন ভাষায় দেখতে চান?').waitFor({ timeout: 4000 })
+  await page.locator('.pick').first().click()
+  await tap('এগিয়ে যান')
+  await page.getByText('আপনার নাম?').waitFor({ timeout: 4000 })
+  await page.locator('input.input').first().fill('বিমল')
+  await tap('এগিয়ে যান')
+  await page.getByText('এখন কোন কাজটা চলছে?').waitFor({ timeout: 4000 })
   await page.locator('input.input').first().fill('রামপুর বাড়ি')
   await page.locator('input.input').nth(1).fill('2800000')
   await tap('এগিয়ে যান')
+  await page.getByText('কারা কাজ করে?').waitFor({ timeout: 4000 })
   await page.locator('input.input').nth(0).fill('রতন')
   await page.locator('input.input').nth(1).fill('600')
-  await page.locator('.input.num').last().fill('52000')
+  await tap('এগিয়ে যান')
+  await page.getByText('এই মুহূর্তে হাতে কত টাকা আছে?').waitFor({ timeout: 4000 })
   await tap('হয়ে গেল')
   await page.getByText('আজকের হিসাব').first().waitFor({ timeout: 6000 })
+  // The home screen can appear a moment before the last of setup is written.
+  for (let i = 0; i < 40; i++) {
+    if (await page.evaluate(async () => (await import('/src/lib/store.ts')).getState().settings.onboarded)) break
+    await page.waitForTimeout(100)
+  }
+  // Onboarding no longer adds materials, so the day below needs one on the list.
+  await page.evaluate(async () => {
+    const st = await import('/src/lib/store.ts')
+    await st.saveMaster({ id: 'cement', kind: 'item', name_bn: 'সিমেন্ট', unit_bn: 'বস্তা', last_rate: null, active: true, updated_at: '' })
+    await st.saveSettings({ opening_cash: 52000 })
+  })
+  await skipTour()
 })
 
 await step('a full day is entered', async () => {
@@ -91,7 +124,6 @@ await step('a full day is entered', async () => {
   await page.locator('.pick').nth(0).click()
   await tap('এগিয়ে যান')
   await tap('এগিয়ে যান')
-  await tap('হ্যাঁ')
   await page.getByText('সিমেন্ট', { exact: true }).first().click()
   for (const d of ['১', '০']) await page.locator('.pad button', { hasText: d }).first().click()
   await tap('এগিয়ে যান')
@@ -99,8 +131,12 @@ await step('a full day is entered', async () => {
   await tap('হ্যাঁ, দিয়েছি')
   await page.getByText('যোগ করুন', { exact: true }).last().click()
   await tap('এগিয়ে যান')
-  await page.getByText('না', { exact: true }).first().click()
+  await tap('কিছু ফেরত আসেনি')
+  await tap('আর কোনো খরচ নেই')
   await page.getByText('অর্ধেক হয়েছে').first().click()
+  await page.getByText('না', { exact: true }).first().click()   // nothing of his own
+  await page.waitForTimeout(150)
+  await page.getByText('না', { exact: true }).first().click()   // nothing into the shop
   await page.getByText('হ্যাঁ, এটাই আছে').click()
   await tap('সেভ করুন')
   await page.getByText('আজকের হিসাব লেখা হল').waitFor({ timeout: 6000 })
@@ -136,7 +172,7 @@ await step('the server computed the same day the phone did', async () => {
 })
 
 await step('a correction reaches the server as a mirrored row', async () => {
-  await page.locator('.tile', { hasText: 'পুরোনো হিসাব' }).click()
+  await openHistory()
   await page.locator('.pick').first().click()
   await page.locator('.sheet .iconbtn').first().click()
   await page.getByText('বাতিল করুন').click()
@@ -171,11 +207,7 @@ await step('a wiped phone restores itself from the server', async () => {
   await page.goto('http://localhost:5195/')
   await page.waitForTimeout(900)
   await page.getByText('খাতাটা এবার ফোনে').waitFor({ timeout: 5000 })   // fresh install
-  await tap('শুরু করি')
-  await page.locator('input.input').first().fill('x')
-  await tap('এগিয়ে যান')
-  await tap('হয়ে গেল')
-  await page.waitForTimeout(900)
+  await skipTour()
 
   await page.locator('.topbar .iconbtn').nth(1).click()
   await tap('অনলাইন খাতা')
@@ -209,8 +241,7 @@ await step('a wiped phone restores itself from the server', async () => {
   if (back.stock < 1) throw new Error('purchase not restored')
 
   // and the restored rows must be readable by the screens, not just present
-  await page.locator('.tile', { hasText: 'পুরোনো হিসাব' }).click()
-  await page.waitForTimeout(600)
+  await openHistory()
   const hist = await page.locator('.scroll').first().innerText()
   if (!hist.includes('আজ')) throw new Error('restored day not listed in history')
 })

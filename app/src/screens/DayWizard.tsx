@@ -2,11 +2,11 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from 'react'
 import { Icon, CheckPick, Pick, Chip, Sheet, MoneyPad, Field, NumField, PhoneField, useToast, Toast } from '../ui/kit'
 import { useStore, getState, activeProjects, workers, allWorkers, items, parties, stages, saveEntries, saveMaster, noteChip, nameOf, type State } from '../lib/store'
 import { uid } from '../lib/db'
-import { money, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
-import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
-import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
+import { money, moneyExact, toBn, dayLabelBn, dateBn, isoDate, addDays, num } from '../lib/bn'
+import { MONEY_HEADS_SITE, MONEY_HEADS_PERSONAL, PAY_MODES, type AttendanceEntry, type ID, type Presence, type Item, type Party, type Project, type Worker } from '../lib/model'
+import { DAYS_FOR, newDraft, normalizeDraft, loadDraft, saveDraft, clearDraft, buildEntries, expectedCash, wageTotal, matTotal, expTotal, retTotal, pexpTotal, invTotal, dayTotal, draftIsEmpty, type Draft, type DraftMat, type DraftExp } from '../lib/draft'
 import { lastAttendance, rankItems, rankHeads, rankParties, lastPurchase, qtyChips, amountChips, rankProjects } from '../lib/suggest'
-import { cashState, currentStage } from '../lib/calc'
+import { cashState, cashKnown, currentStage, liveEntries } from '../lib/calc'
 import { capture } from '../lib/photo'
 import { searchCatalog, CATS, VARIANTS } from '../lib/catalog'
 import { ContactPicker } from './Settings'
@@ -33,7 +33,15 @@ const QUESTION: Record<StepId, string> = {
 
 export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (saved: boolean) => void }) {
   const s = useStore((x) => x)
-  const [draft, setDraft] = useState<Draft | null>(start ? normalizeDraft(start) : null)
+  /* A day started from History arrives with no job on it. With one job running
+     it belongs to that job, the same as a day started from home; the job step is
+     skipped in that case, so nothing else would ever fill it in. */
+  const [draft, setDraft] = useState<Draft | null>(() => {
+    if (!start) return null
+    const d = normalizeDraft(start)
+    const act = activeProjects(getState())
+    return !d.project_id && act.length === 1 ? { ...d, project_id: act[0].id } : d
+  })
   const [i, setI] = useState(start?.step ?? 0)
   const toast = useToast()
 
@@ -101,8 +109,9 @@ export function DayWizard({ start, onExit }: { start: Draft | null; onExit: (sav
   const jumpTo = (id: StepId) => { const k = steps.indexOf(id); if (k >= 0) setI(k) }
 
   const save = async () => {
-    const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-    const withComputed = { ...draft, cash_computed: cash.computed }
+    // What the book says after this day's own rows, so an honest count reads as
+    // matching rather than short by the day's spending.
+    const withComputed = { ...draft, cash_computed: expectedCash(s.entries, draft, s.settings.opening_cash, s.settings.opening_date) }
     await saveEntries(buildEntries(withComputed))
     // Keep the item master's rate current, so the estimator and the shop see
     // the same price he just paid on site.
@@ -196,21 +205,28 @@ function StepProject({ s, draft, patch, next }: StepProps) {
 function StepAttendance({ s, draft, patch, next }: StepProps) {
   const men = workers(s)
   const suggested = useMemo(() => lastAttendance(s.entries, draft.project_id), [s.entries, draft.project_id])
-  const [seeded, setSeeded] = useState(false)
   const [longPress, setLongPress] = useState<ID | null>(null)
   const [newMan, setNewMan] = useState(false)
 
+  /* Men already paid for this date. Coming back to add one more thing must not
+     tick them again: walking on would write their wages a second time. */
+  const already = useMemo(() => {
+    const rows = liveEntries(s.entries).filter((e) => e.kind === 'attendance' && e.date === draft.date) as AttendanceEntry[]
+    return { men: new Set(rows.map((a) => a.worker_id)), thisJob: rows.some((a) => (a.project_id || '') === (draft.project_id || '')) }
+  }, [s.entries, draft.date, draft.project_id])
+
   useEffect(() => {
-    if (seeded || Object.keys(draft.att).length || !suggested.size) { setSeeded(true); return }
-    const att: Draft['att'] = {}
-    for (const [wid, presence] of suggested) {
-      const w = men.find((x) => x.id === wid)
-      if (!w) continue
-      att[wid] = { presence, rate: w.rate, amount: w.rate * DAYS_FOR[presence], advance: 0 }
+    if (draft.att_seeded) return
+    const att: Draft['att'] = { ...draft.att }
+    if (!Object.keys(att).length && !already.thisJob) {
+      for (const [wid, presence] of suggested) {
+        const w = men.find((x) => x.id === wid)
+        if (!w || already.men.has(wid)) continue
+        att[wid] = { presence, rate: w.rate, amount: w.rate * DAYS_FOR[presence], advance: 0 }
+      }
     }
-    patch({ att })
-    setSeeded(true)
-  }, [seeded, suggested, men]) // eslint-disable-line
+    patch({ att, att_seeded: true })
+  }, [draft.att_seeded, suggested, men]) // eslint-disable-line
 
   const toggle = (wid: ID) => {
     const att = { ...draft.att }
@@ -237,7 +253,8 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
       <div className="scroll">
         <h2 className="question">{t(QUESTION.attendance)}</h2>
         <p className="hint">
-          {suggested.size ? t('গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।') : t('যারা এসেছে তাদের টিক দিন।')}
+          {already.thisJob ? t('এই দিনের মজুরি আগেই লেখা হয়েছে। শুধু নতুন কেউ এলে টিক দিন।')
+            : suggested.size ? t('গতবারের মতো টিক দেওয়া আছে। যে আসেনি তার টিক তুলে দিন।') : t('যারা এসেছে তাদের টিক দিন।')}
           {' '}{t('আধা দিন বা ওভারটাইম দিতে নামের উপর চেপে ধরুন।')}
         </p>
         <div className="rowlist">
@@ -248,7 +265,8 @@ function StepAttendance({ s, draft, patch, next }: StepProps) {
                 <CheckPick
                   on={!!a}
                   title={w.name_bn}
-                  sub={a && a.presence !== 'full' ? (a.presence === 'half' ? t('আধা দিন') : t('ওভারটাইম')) : tf('দিনে {0}', money(w.rate))}
+                  sub={a && a.presence !== 'full' ? (a.presence === 'half' ? t('আধা দিন') : t('ওভারটাইম'))
+                    : !a && already.men.has(w.id) ? t('আগেই লেখা আছে') : tf('দিনে {0}', money(w.rate))}
                   right={a ? money(a.amount) : ''}
                   onClick={() => toggle(w.id)}
                 />
@@ -325,7 +343,7 @@ function StepWages({ s, draft, patch, next }: StepProps) {
               <span>
                 <span className="t">{nameOf(s, wid)}</span>
                 <span className="k">
-                  {tf('{0} দিন × {1}', toBn(DAYS_FOR[a.presence]), money(a.rate))}
+                  {tf('{0} দিন × {1}', toBn(DAYS_FOR[a.presence]), moneyExact(a.rate))}
                   {a.advance > 0 && tf(' · অগ্রিম {0}', money(a.advance))}
                 </span>
               </span>
@@ -418,7 +436,7 @@ function StepMaterial({ s, draft, patch, next, field = 'mats', toShop = false, s
                 <div key={m.key} className="review-row">
                   <span>
                     <span className="t">{nameOf(s, m.item_id)}</span>
-                    <span className="k">{num(m.qty, m.qty % 1 ? 2 : 0)} {t(itemOf(m.item_id)?.unit_bn || '')} × {money(m.rate)}{m.paid ? '' : t(' · বাকি')}</span>
+                    <span className="k">{num(m.qty, m.qty % 1 ? 2 : 0)} {t(itemOf(m.item_id)?.unit_bn || '')} × {moneyExact(m.rate)}{m.paid ? '' : t(' · বাকি')}</span>
                   </span>
                   <span className="v num">{money(m.qty * m.rate)}</span>
                   <button className="iconbtn" onClick={() => patch({ [field]: draft[field].filter((x) => x.key !== m.key) })} aria-label="বাদ দিন">
@@ -522,12 +540,12 @@ function RateStep({ s, item, last, rate, setRate, qty, defaultParty, onBack, onD
       <div className="scroll">
         <h2 className="question">{tf('{0} দর কত?', t(item?.name_bn || ''))}</h2>
         <p className="hint">
-          {last ? tf('গতবার {0} প্রতি {1} · {2}', money(last.rate), item?.unit_bn, dayLabelBn(last.date)) : t('প্রথমবার — যা দিলেন লিখুন।')}
+          {last ? tf('গতবার {0} প্রতি {1} · {2}', moneyExact(last.rate), item?.unit_bn, dayLabelBn(last.date)) : t('প্রথমবার — যা দিলেন লিখুন।')}
         </p>
         <MoneyPad value={rate} onChange={setRate} allowDecimal />
         {rateNum > 0 && (
           <div className="card" style={{ marginTop: '.9rem' }}>
-            <div className="spread"><span>{num(qty, qty % 1 ? 2 : 0)} {item?.unit_bn} × {money(rateNum)}</span>
+            <div className="spread"><span>{num(qty, qty % 1 ? 2 : 0)} {item?.unit_bn} × {moneyExact(rateNum)}</span>
               <strong className="num">{money(qty * rateNum)}</strong></div>
             {rise && <p className="small" style={{ color: 'var(--warn)', marginTop: '.4rem' }}>
               {tf('গতবারের থেকে {0}% বেশি।', toBn(Math.round(((rateNum - last!.rate) / last!.rate) * 100)))}</p>}
@@ -657,7 +675,7 @@ function StepReturned({ s, draft, patch, next }: StepProps) {
               <div key={r.key} className="review-row">
                 <span>
                   <span className="t">{nameOf(s, r.item_id)}</span>
-                  <span className="k">{num(r.qty, r.qty % 1 ? 2 : 0)} {t(itemOf(r.item_id)?.unit_bn || '')} × {money(r.rate)}</span>
+                  <span className="k">{num(r.qty, r.qty % 1 ? 2 : 0)} {t(itemOf(r.item_id)?.unit_bn || '')} × {moneyExact(r.rate)}</span>
                 </span>
                 <span className="v num">−{money(r.qty * r.rate)}</span>
                 <button className="iconbtn" onClick={() => patch({ rets: rets.filter((x) => x.key !== r.key) })} aria-label="বাদ দিন"><Icon name="trash" size={18} /></button>
@@ -822,14 +840,16 @@ function StepProgress({ s, draft, patch, next }: StepProps) {
 
 function StepCash({ s, draft, patch, next }: StepProps) {
   const cash = useMemo(() => cashState(s.entries, s.settings.opening_cash, s.settings.opening_date), [s.entries, s.settings])
-  const spentToday = dayTotal(draft)
-  const expected = Math.round(cash.computed - spentToday)
+  const expected = useMemo(() => expectedCash(s.entries, draft, s.settings.opening_cash, s.settings.opening_date), [s.entries, s.settings, draft])
   const [counting, setCounting] = useState(false)
   const [value, setValue] = useState('')
   const diff = draft.cash_counted != null ? draft.cash_counted - expected : null
   // Before he has ever counted, the book has no idea what is in his pocket —
   // so ask him to count rather than offering a figure built out of nothing.
-  const neverCounted = !s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) && !s.settings.opening_cash
+  const neverCounted = !cashKnown(s.entries, s.settings.opening_cash)
+  // A tin cannot hold less than nothing. Below zero the book is missing something,
+  // so there is no figure for him to say yes to: only his own count will do.
+  const askCount = draft.cash_counted == null && (neverCounted || expected < 0)
 
   if (counting) {
     return (
@@ -850,8 +870,10 @@ function StepCash({ s, draft, patch, next }: StepProps) {
     <>
       <div className="scroll">
         <h2 className="question">{t(QUESTION.cash)}</h2>
-        {neverCounted && draft.cash_counted == null ? (
-          <p className="hint">{t("প্রথমবার — একবার গুনে বলে দিন, তারপর থেকে অ্যাপ নিজেই হিসাব রাখবে।")}</p>
+        {askCount ? (
+          <p className="hint">{neverCounted
+            ? t("প্রথমবার — একবার গুনে বলে দিন, তারপর থেকে অ্যাপ নিজেই হিসাব রাখবে।")
+            : t("খাতার হিসাবে টাকা মাইনাসে যাচ্ছে, তাই কোনো টাকা আসার কথা লেখা বাকি আছে। একবার গুনে বলে দিন।")}</p>
         ) : (
           <>
             <p className="hint">{draft.cash_counted != null ? t('আপনি গুনে বললেন') : t('খাতার হিসাবে এখন থাকার কথা')}</p>
@@ -868,7 +890,7 @@ function StepCash({ s, draft, patch, next }: StepProps) {
           </div>
         )}
         <div className="rowlist" style={{ marginTop: '1.1rem' }}>
-          {neverCounted && draft.cash_counted == null ? (
+          {askCount ? (
             <>
               <Pick title="গুনে বলছি" onClick={() => { setValue(''); setCounting(true) }} />
               <Pick title="থাক, পরে" onClick={next} />

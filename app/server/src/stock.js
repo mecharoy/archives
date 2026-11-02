@@ -40,7 +40,7 @@ export function shopShelf(rows) {
   // Counts in order, so of two counts on one day the later-written stands.
   for (const s of live) {
     if (s.dir === 'count' && !s.project_id) {
-      anchors.set(s.item_id, s.date)
+      anchors.set(s.item_id, s)
       map.set(s.item_id, { qty: n(s.qty), rate: n(s.rate) })
       handled.add(s.item_id)
     }
@@ -49,7 +49,8 @@ export function shopShelf(rows) {
     // Goods bought straight for a site never touch the shop.
     if (s.project_id && s.dir !== 'transfer') continue
     const anchor = anchors.get(s.item_id)
-    if (anchor && s.date <= anchor) continue
+    // A count is a moment too: what was sold after it, that same day, still comes off.
+    if (anchor && (s.date < anchor.date || (s.date === anchor.date && (s.created_at || '') <= (anchor.created_at || '')))) continue
     const cur = map.get(s.item_id) || { qty: 0, rate: 0 }
     if (s.dir === 'in' && !s.project_id) { cur.qty += n(s.qty); cur.rate = n(s.rate) || cur.rate; handled.add(s.item_id) }
     else if (s.dir === 'sale') { cur.qty -= n(s.qty); handled.add(s.item_id) }

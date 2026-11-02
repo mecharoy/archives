@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { Icon, TopBar, Chip, Pick, Sheet, Field, NumField, MoneyPad, useToast, Toast, Empty } from '../ui/kit'
+import { Icon, TopBar, Chip, Pick, Sheet, Field, NumField, MoneyPad, useOnce, useToast, Toast, Empty } from '../ui/kit'
 import { useStore, saveEntries, saveMaster, saveSettings, noteChip, allBills } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, isoDate, dateBn, dayLabelBn, addDays } from '../lib/bn'
@@ -168,11 +168,12 @@ function BillSheet({ bill, onClose, onSaved }: {
   const set = (p: Partial<Bill>) => setB({ ...b, ...p })
   const ok = b.name_bn.trim() !== '' && (b.amount || 0) > 0 && b.due_date !== ''
 
-  const save = async () => {
+  const save = useOnce(async () => {
     await saveMaster({ ...b, name_bn: b.name_bn.trim(), to_bn: b.to_bn.trim(), updated_at: new Date().toISOString() })
     scheduleSync(300)
     onSaved(fresh ? 'মনে করিয়ে দেওয়া হবে' : 'সেভ হয়েছে')
-  }
+  })
+  const pay = useOnce(async () => { await payBill(b); onSaved('দেওয়া হয়েছে বলে লেখা হল') })
 
   return (
     <Sheet title={fresh ? 'নতুন তারিখ' : b.name_bn} onClose={onClose}>
@@ -212,7 +213,7 @@ function BillSheet({ bill, onClose, onSaved }: {
       </button>
       {!fresh && (
         <button className="btn" style={{ marginTop: '.6rem', width: '100%' }}
-          onClick={async () => { await payBill(b); onSaved('দেওয়া হয়েছে বলে লেখা হল') }}>
+          onClick={pay}>
           {t("দিয়ে দিয়েছি")}
         </button>
       )}
@@ -234,7 +235,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
   const ordered = [...ranked, ...MONEY_HEADS_PERSONAL.filter((h) => !ranked.includes(h))]
   const chips = amountChips(s.entries, head, true)
 
-  const save = async () => {
+  const save = useOnce(async () => {
     const e: MoneyEntry = {
       id: uid(), kind: 'money', batch: uid(), date: isoDate(), project_id: '',
       created_at: new Date().toISOString(), head_bn: head,
@@ -244,7 +245,7 @@ function AddPersonal({ kind, onDone }: { kind: 'expense' | 'drawing'; onDone: (m
     await saveEntries([e])
     scheduleSync(300)
     onDone(kind === 'drawing' ? t('লেখা হল') : `${head} — ${money(e.amount)}`)
-  }
+  })
 
   if (!head) {
     return (

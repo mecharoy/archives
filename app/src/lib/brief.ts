@@ -6,7 +6,7 @@
 
 import { kvSet } from './db'
 import { getState, setState, apiUrl, type Brief, type Status, activeProjects, stages, coeffs, allItems, nameOf } from './store'
-import { cashState, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries, SETTLE_HEAD } from './calc'
+import { cashState, cashKnown, duesSplit, projectTotals, projectBurn, shopStock, entriesInLastDays, liveEntries, SETTLE_HEAD } from './calc'
 import { hoursSince, isoDate, daysBetween, addDays, money, toBn, dayLabelBn } from './bn'
 import type { Entry, StockEntry } from './model'
 import { t, tf } from './i18n'
@@ -137,7 +137,7 @@ export function localBrief(): Brief {
   const cf = coeffs(s)
   const entered3 = entriesInLastDays(es, 3)
 
-  const counted = es.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
+  const counted = cashKnown(es, s.settings.opening_cash)
   const cards: NonNullable<Brief['cards']> = [
     counted
       ? { label_bn: t('হাতে টাকা'), value: money(cash.computed), sub_bn: tf('{0} দিন আগে গোনা', toBn(daysBetween(cash.anchor_date, isoDate()))), status: cash.computed < 0 ? 'crit' : 'ok' }
@@ -158,7 +158,7 @@ export function localBrief(): Brief {
   else if (dues.thisWeek > 0) alerts.push({ severity: 'warn', text_bn: tf('এ সপ্তাহে {0} দিতে হবে।', money(dues.thisWeek)) })
   for (const p of active) {
     const t = projectTotals(p, es, st)
-    if (t.cpi != null && t.cpi < 1 && t.cost > 0) alerts.push({ severity: 'warn', text_bn: tf('{0}: কাজের তুলনায় খরচ বেশি হচ্ছে।', p.name_bn) })
+    if (t.status !== 'ok') alerts.push({ severity: 'warn', text_bn: tf('{0}: কাজের তুলনায় খরচ বেশি হচ্ছে।', p.name_bn) })
   }
 
   const main = active[0]
@@ -184,7 +184,9 @@ export function monthSpend(es: Entry[]): number {
   for (const e of es) {
     if (e.date < from) continue
     if (e.kind === 'attendance') total += e.amount + e.advance
-    else if (e.kind === 'stock' && (e.dir === 'in' || e.dir === 'transfer')) total += e.amount
+    // Goods sent to a site were paid for when they were bought; sending them is
+    // not spending them again.
+    else if (e.kind === 'stock' && e.dir === 'in') total += e.amount
     else if (e.kind === 'money' && e.dir === 'paid' && !e.personal && e.head_bn !== SETTLE_HEAD) total += e.amount
   }
   return total

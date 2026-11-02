@@ -13,6 +13,12 @@ export const DRAWING_HEAD = 'ব্যবসা থেকে নেওয়া'
    they arrived. This head keeps that payment out of every cost total while
    still moving the cash. */
 export const SETTLE_HEAD = 'বাকি মেটানো'
+/* A client paying for a job. An ordinary received row on that job, so the
+   job's "received" and the cash in hand both pick it up with no special case. */
+export const CLIENT_HEAD = 'কাজের টাকা'
+/* Marks a count that came from the cash page rather than an evening's entry,
+   so it does not read as "today's entry is written". */
+export const CASH_RESET_NOTE = 'হাতের টাকা নতুন করে বসানো'
 
 export function reversedIds(entries: Entry[]): Set<ID> {
   const s = new Set<ID>()
@@ -74,12 +80,15 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
   /* The same rule as nightly/compute.mjs projectStatus, which colours the
      card on the brief — so a job is never red on one screen and green on the
      next. Spending ahead of the work, or work that has cost more than it
-     earned (CPI under 1), is the warning; well ahead / CPI under 0.9 is red. */
+     earned (CPI under 1), is the warning; well ahead / CPI under 0.9 is red.
+     Until a stage is done there is nothing to compare cost with, so CPI does
+     not count yet: the first bag of cement must not turn a new job red. */
   let status: ProjectTotals['status'] = 'ok'
   let flag_bn = t('ঠিক আছে')
   const gap = pct_spent - pct_done
-  if (budget > 0 && (gap > 15 || (cpi != null && cpi < 0.9))) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
-  else if (budget > 0 && (gap > 6 || (cpi != null && cpi < 1))) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
+  const worked = pct_done > 0 && cpi != null
+  if (budget > 0 && (gap > 15 || (worked && (cpi as number) < 0.9))) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
+  else if (budget > 0 && (gap > 6 || (worked && (cpi as number) < 1))) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
   else if (budget > 0 && gap < -10) { flag_bn = t('খরচ কম, কাজ এগিয়ে') }
 
   return { project_id: p.id, labour, material, other, cost, received, pct_done, pct_spent, earned, cpi, at_finish, profit, status, flag_bn }
@@ -139,39 +148,63 @@ export interface CashState {
   out_since: number
 }
 
+/* A tin cannot hold less than nothing. A negative "count" in the ledger can only
+   be the old one-tap confirmation of a wrong sum, so it is not a count at all. */
+const isCount = (e: Entry): e is DayEntry =>
+  e.kind === 'day' && e.cash_counted != null && e.cash_counted >= 0
+
+/** Does the book have any starting point for the cash in hand? */
+export function cashKnown(entries: Entry[], openingAmount: number): boolean {
+  return openingAmount > 0 || liveEntries(entries).some(isCount)
+}
+
+/** What one row does to the tin. Only money that physically moved counts: a
+    purchase on credit, a bank payment, or goods sent to a site leave it alone. */
+function cashFlow(e: Entry): { inc: number; out: number } {
+  if (e.kind === 'attendance') return { inc: 0, out: (e.amount || 0) + (e.advance || 0) }
+  if (e.kind === 'stock') {
+    if (!e.paid) return { inc: 0, out: 0 }
+    if (e.dir === 'in') return { inc: 0, out: e.amount || 0 }
+    if (e.dir === 'sale') return { inc: e.amount || 0, out: 0 }
+    return { inc: 0, out: 0 }
+  }
+  if (e.kind === 'money') {
+    if (e.mode !== 'নগদ') return { inc: 0, out: 0 }
+    if (e.personal) return { inc: 0, out: e.head_bn === DRAWING_HEAD ? e.amount || 0 : 0 }
+    return e.dir === 'received' ? { inc: e.amount || 0, out: 0 } : { inc: 0, out: e.amount || 0 }
+  }
+  return { inc: 0, out: 0 }
+}
+
 /** Cash is rebuilt from the last physical count, not from an opening balance
-    typed once in March. A wrong count fixes itself the next time he counts. */
-export function cashState(entries: Entry[], openingAmount: number, openingDate: string): CashState {
-  const days = liveEntries(entries).filter((e) => e.kind === 'day' && (e as DayEntry).cash_counted != null) as DayEntry[]
+    typed once in March. A wrong count fixes itself the next time he counts.
+
+    A count is a moment, not a whole date: rows written earlier that date, and
+    the rows saved in the same entry as the count, are already inside it; rows
+    written after it are not. A cancellation sits where the row it cancels sat,
+    so cancelling something the count already covered does not move the tin.
+    `asOf` gives the figure at the end of an earlier date, for entering a day
+    that was missed. */
+export function cashState(entries: Entry[], openingAmount: number, openingDate: string, asOf?: string): CashState {
+  const days = liveEntries(entries).filter((e) => isCount(e) && (!asOf || e.date <= asOf)) as DayEntry[]
   days.sort(inOrder)
   const last = days[days.length - 1]
   const anchor_date = last ? last.date : openingDate
   const anchor_amount = last ? (last.cash_counted as number) : openingAmount
 
+  const byId = new Map(entries.map((e) => [e.id, e]))
   let inc = 0
   let out = 0
   for (const e of entries) {
-    if (e.date <= anchor_date) continue
-    if (e.kind === 'attendance') { out += (e.amount || 0) + (e.advance || 0); continue }
-    if (e.kind === 'stock') {
-      const s = e as StockEntry
-      // Only buying moves cash. Sending goods from the shop to a site (and
-      // taking them back) is the same goods changing hands inside his own
-      // business — nothing leaves his pocket, so nothing is taken from the till.
-      if (s.dir === 'in' && s.paid) out += s.amount || 0
-      if (s.dir === 'sale' && s.paid) inc += s.amount || 0
-      continue
-    }
-    if (e.kind === 'money') {
-      const m = e as MoneyEntry
-      if (m.personal) {
-        if (m.head_bn === DRAWING_HEAD) out += m.amount || 0   // money leaving the business
-        continue
-      }
-      if (m.mode !== 'নগদ') continue
-      if (m.dir === 'received') inc += m.amount || 0
-      else out += m.amount || 0
-    }
+    const at = (e.reverses && byId.get(e.reverses)) || e
+    if (asOf && at.date > asOf) continue
+    const counted = last
+      ? at.batch === last.batch || at.date < last.date || (at.date === last.date && at.created_at <= last.created_at)
+      : at.date < openingDate   // the opening is that morning's money, so that day's rows still move it
+    if (counted) continue
+    const f = cashFlow(e)
+    inc += f.inc
+    out += f.out
   }
   return { anchor_date, anchor_amount, computed: anchor_amount + inc - out, in_since: inc, out_since: out }
 }
@@ -290,16 +323,17 @@ const inOrder = (a: Entry, b: Entry) =>
 export function shopStock(entries: Entry[], items: Item[]): StockLevel[] {
   const stock = (liveEntries(entries).filter((e) => e.kind === 'stock') as StockEntry[]).sort(inOrder)
   const map = new Map<ID, { qty: number; rate: number }>()
-  const anchors = new Map<ID, string>()
+  const anchors = new Map<ID, StockEntry>()
   // Counts in order, so of two counts on one day the later-written stands.
   for (const s of stock) if (s.dir === 'count' && !s.project_id) {
-    anchors.set(s.item_id, s.date)
+    anchors.set(s.item_id, s)
     map.set(s.item_id, { qty: s.qty, rate: s.rate || 0 })
   }
   for (const s of stock) {
     if (s.project_id && s.dir !== 'transfer') continue
     const anchor = anchors.get(s.item_id)
-    if (anchor && s.date <= anchor) continue
+    // A count is a moment too: what was sold after it, that same day, still comes off.
+    if (anchor && (s.date < anchor.date || (s.date === anchor.date && s.created_at <= anchor.created_at))) continue
     const cur = map.get(s.item_id) || { qty: 0, rate: 0 }
     if (s.dir === 'in' && !s.project_id) { cur.qty += s.qty; cur.rate = s.rate || cur.rate }
     else if (s.dir === 'sale') cur.qty -= s.qty
@@ -346,6 +380,14 @@ export function entriesInLastDays(entries: Entry[], n: number): number {
   const batches = new Set<string>()
   for (const e of liveEntries(entries)) if (e.date >= from) batches.add(e.batch)
   return batches.size
+}
+
+/** Dates with something written on them. Ten sales on one day is one day. */
+export function daysWrittenInLast(entries: Entry[], n: number): number {
+  const from = addDays(isoDate(), -(n - 1))
+  const dates = new Set<string>()
+  for (const e of liveEntries(entries)) if (e.date >= from) dates.add(e.date)
+  return dates.size
 }
 
 export function lastEntryDate(entries: Entry[]): string | null {

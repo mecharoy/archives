@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react'
-import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, useToast, Toast, Empty } from '../ui/kit'
+import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, useOnce, useToast, Toast, Empty } from '../ui/kit'
 import { NewItemSheet, NewPartySheet } from './DayWizard'
 import { useStore, items, parties, activeProjects, saveEntries, saveMaster, nameOf, noteChip, type State } from '../lib/store'
 import { uid } from '../lib/db'
-import { money, toBn, num, isoDate, addDays, dateBn } from '../lib/bn'
+import { money, moneyExact, toBn, num, isoDate, addDays, dateBn } from '../lib/bn'
 import type { Item, StockEntry, ID } from '../lib/model'
 import { shopStock, duesSplit } from '../lib/calc'
 import { rankItems, rankParties, lastPurchase, qtyChips } from '../lib/suggest'
@@ -69,7 +69,7 @@ export function Shop({ onBack, onGo }: { onBack: () => void; onGo?: (s: 'items' 
               <div className="review-row" key={l.item_id}>
                 <span>
                   <span className="t">{nameOf(s, l.item_id)}</span>
-                  <span className="k">{tf('{0} দরে', money(l.rate))}</span>
+                  <span className="k">{tf('{0} দরে', moneyExact(l.rate))}</span>
                 </span>
                 <span className="v num" style={{ color: l.qty < 0 ? 'var(--crit)' : undefined }}>
                   {num(l.qty, l.qty % 1 ? 2 : 0)} {t(items(s).find((i) => i.id === l.item_id)?.unit_bn || '')}
@@ -153,7 +153,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
     setStep(flow === 'count' ? 'qty' : 'qty')
   }
 
-  const commit = async () => {
+  const commit = useOnce(async () => {
     if (!item) return
     const q = Number(qty) || 0
     const r = Number(rate) || 0
@@ -171,7 +171,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
     if (flow === 'in' && r > 0) await saveMaster({ ...item, last_rate: r })
     scheduleSync(300)
     onDone(`${t(item.name_bn)} — ${t(TITLES[flow])}`)
-  }
+  })
 
   const unit = item?.unit_bn || ''
 
@@ -215,7 +215,7 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
             )}
           </div>
           <div className="actionbar">
-            <button className="btn primary" disabled={!Number(qty)}
+            <button className="btn primary" disabled={flow === 'count' ? qty === '' : !Number(qty)}
               onClick={() => setStep(flow === 'count' ? 'who' : 'rate')}>{t("এগিয়ে যান")}</button>
           </div>
         </>
@@ -229,12 +229,12 @@ function StockFlow({ s, flow, onDone }: { s: State; flow: Exclude<Flow, null>; o
               {flow === 'transfer'
                 ? t('কাজে পাঠানো মাল কেনা দামেই ধরা হয় — তাতে দোকানের লাভ আর কাজের খরচ, দুটোই ঠিক থাকে।')
                 : lastPurchase(s.entries, item.id)
-                  ? tf('গতবার {0} প্রতি {1}', money(lastPurchase(s.entries, item.id)!.rate), unit)
+                  ? tf('গতবার {0} প্রতি {1}', moneyExact(lastPurchase(s.entries, item.id)!.rate), unit)
                   : t('প্রথমবার')}
             </p>
             <MoneyPad value={rate} onChange={setRate} allowDecimal />
             <div className="card" style={{ marginTop: '.9rem' }}>
-              <div className="spread"><span>{num(Number(qty), 2)} {unit} × {money(Number(rate) || 0)}</span>
+              <div className="spread"><span>{num(Number(qty), 2)} {unit} × {moneyExact(Number(rate) || 0)}</span>
                 <strong className="num">{money((Number(qty) || 0) * (Number(rate) || 0))}</strong></div>
             </div>
           </div>

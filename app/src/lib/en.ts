@@ -10,6 +10,23 @@
    are handled in bn.ts, not here. */
 
 export const EN: Record<string, string> = {
+  /* ---- cash, quotes and job payments (build 24) ---- */
+  'কাজের টাকা': 'Job payment',
+  'কাজের টাকা পেলাম': 'Client paid for a job',
+  'খদ্দের কাজের জন্য টাকা দিলে এখানে লিখুন': 'Write it here when a client pays for a job',
+  'কোন কাজের': 'Which job',
+  'এই দিনের মজুরি আগেই লেখা হয়েছে। শুধু নতুন কেউ এলে টিক দিন।': 'Wages for this date are already written. Tick only someone new.',
+  'আগেই লেখা আছে': 'Already written',
+  'খাতার হিসাবে টাকা মাইনাসে যাচ্ছে, তাই কোনো টাকা আসার কথা লেখা বাকি আছে। একবার গুনে বলে দিন।': 'The book has gone below zero, so some money coming in has not been written. Please count once and say.',
+  '{0} — দর নেই, তাই মোটে ধরা হয়নি। আগের ধাপে দর বসান।': '{0} — no rate, so not in the total. Add the rate on the earlier step.',
+  'মজুরি ধরা হয়নি।': 'Labour is not included.',
+  'মজুরি             ধরা হয়নি': 'Labour            not included',
+  'এই হিসাবে ধরা নেই: {0}': 'Not included in this figure: {0}',
+  'রোজকার হিসাবের শেষে টাকা গুনলে এই সংখ্যাটা নিজে থেকেই ঠিক হয়ে যায়। হিসাব না মিললে এখনই গুনে এখানে বসিয়ে দিন — এখন থেকে এটাই ধরা হবে।': 'Counting cash at the end of the day keeps this right on its own. If it looks wrong, count now and enter it here: this figure is used from now on.',
+  'এখন হাতে কত আছে': 'Cash in hand now',
+  'হাতের টাকা নতুন করে বসানো': 'Cash in hand set afresh',
+  'এই দিনে শুধু হাতের টাকা বসানো হয়েছে।': 'Only the cash in hand was set on this day.',
+
   /* ---- shell, buttons, common words ---- */
   'সাইট খাতা': 'Site Khata',
   'আজকের হিসাব': "Today's entry",

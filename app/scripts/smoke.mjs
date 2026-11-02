@@ -233,6 +233,41 @@ await step('same-as-yesterday lands on review', async () => {
 })
 const home = async () => { await page.goto('http://localhost:5199/'); await page.waitForTimeout(700) }
 
+/* The money the evening screen and a second visit can get wrong. Each of these
+   was a real bug: a figure saved as if he had counted it, wages paid twice. */
+const wages = () => page.evaluate(async () => {
+  const st = await import('/src/lib/store.ts')
+  const k = await import('/src/lib/calc.ts')
+  const s = st.getState()
+  const day = new Date().toLocaleDateString('en-CA')
+  return k.liveEntries(s.entries).filter((e) => e.kind === 'attendance' && e.date === day).reduce((a, e) => a + e.amount, 0)
+})
+await step('opening today again does not pay the men twice', async () => {
+  await home()
+  const before = await wages()
+  if (!before) throw new Error('expected wages already written for today')
+  await tap('আজকের হিসাব')
+  await page.waitForTimeout(400)
+  const n = await page.locator('.actionbar .btn.ghost .num').innerText()
+  if (!n.includes('০')) throw new Error('men were ticked again: ' + n)
+  await page.locator('.wizhead .iconbtn').last().click()
+  await page.waitForTimeout(300)
+  if ((await wages()) !== before) throw new Error('wages changed')
+})
+await step('a credit purchase and a bank payment leave the cash figure alone', async () => {
+  const got = await page.evaluate(async () => {
+    const st = await import('/src/lib/store.ts')
+    const d = await import('/src/lib/draft.ts')
+    const s = st.getState()
+    const dr = d.newDraft()
+    const plain = d.expectedCash(s.entries, dr, 0, '2000-01-01')
+    dr.mats = [{ key: 'k', item_id: 'x', qty: 125, rate: 400, party_id: '', due_date: dr.date, paid: false, photo_id: '' }]
+    dr.exps = [{ key: 'j', head_bn: 'মেশিন ভাড়া', amount: 3000, mode: 'UPI', note: '', photo_id: '' }]
+    return d.expectedCash(s.entries, dr, 0, '2000-01-01') - plain
+  })
+  if (got !== 0) throw new Error('the cash figure moved by ' + got)
+})
+
 await step('shop flow: goods in', async () => {
   await home()
   await page.locator('.bookhead', { hasText: 'মজুত' }).click()

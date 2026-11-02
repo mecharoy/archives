@@ -40,6 +40,16 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
   const finish = async () => {
     setBusy(true)
     const now = new Date().toISOString()
+    /* The stages and the starting cash go first. The first job or man saved
+       switches the app to the home screen, and if the app were closed from there
+       on, a job with half its stages would give a wrong % done for good. */
+    await seedHouse(allItems(s))
+    // Without a starting figure the first day's closing cash comes out
+    // negative, which reads like an error on the very first screen he sees.
+    await saveSettings({
+      opening_cash: cash ?? 0, opening_date: isoDate(),
+      lang, owner_bn: owner.trim(), runs_shop: runsShop, runs_sites: runsSites,
+    })
     if (name.trim()) {
       await saveMaster({
         id: uid(), kind: 'project', name_bn: name.trim(), client_bn: '', ptype: HOUSE,
@@ -50,13 +60,7 @@ export function Onboarding({ onDone }: { onDone: () => void }) {
       if (!m.name.trim() || !m.rate) continue
       await saveMaster({ id: uid(), kind: 'worker', name_bn: m.name.trim(), rate: m.rate, phone: '', active: true, updated_at: now } as Worker)
     }
-    await seedHouse(allItems(s))
-    // Without a starting figure the first day's closing cash comes out
-    // negative, which reads like an error on the very first screen he sees.
-    await saveSettings({
-      onboarded: true, opening_cash: cash ?? 0, opening_date: isoDate(),
-      lang, owner_bn: owner.trim(), runs_shop: runsShop, runs_sites: runsSites,
-    })
+    await saveSettings({ onboarded: true })
     setBusy(false)
     onDone()
   }

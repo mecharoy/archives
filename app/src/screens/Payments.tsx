@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, Field, useToast, Toast, Empty } from '../ui/kit'
-import { useStore, saveEntries, nameOf, type State } from '../lib/store'
+import { Icon, TopBar, Pick, Chip, Sheet, MoneyPad, Field, useOnce, useToast, Toast, Empty } from '../ui/kit'
+import { useStore, saveEntries, nameOf, projects, type State } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, isoDate, dateBn, addDays } from '../lib/bn'
 import { PAY_MODES, type ID, type MoneyEntry } from '../lib/model'
-import { openDues, openReceivables, SETTLE_HEAD } from '../lib/calc'
+import { openDues, openReceivables, SETTLE_HEAD, CLIENT_HEAD } from '../lib/calc'
 import { scheduleSync } from '../lib/sync'
 import { t, tf } from '../lib/i18n'
 
@@ -23,6 +23,7 @@ export function Payments({ onBack }: { onBack: () => void }) {
   const s = useStore((x) => x)
   const toast = useToast()
   const [pay, setPay] = useState<{ party_id: ID; dir: 'paid' | 'received'; owed: number } | null>(null)
+  const [jobPay, setJobPay] = useState(false)
 
   const owe = useMemo(() => byParty(openDues(s.entries)), [s.entries])
   const get = useMemo(() => byParty(openReceivables(s.entries)), [s.entries])
@@ -33,6 +34,12 @@ export function Payments({ onBack }: { onBack: () => void }) {
     <>
       <TopBar title="টাকা দেওয়া-নেওয়া" sub={tf('দেবেন {0} · পাবেন {1}', money(oweTotal), money(getTotal))} onBack={onBack} />
       <div className="scroll">
+        {projects(s).length > 0 && (
+          <div className="rowlist" style={{ marginTop: '.9rem' }}>
+            <Pick title="কাজের টাকা পেলাম" sub="খদ্দের কাজের জন্য টাকা দিলে এখানে লিখুন"
+              right={<Icon name="fwd" size={18} />} onClick={() => setJobPay(true)} />
+          </div>
+        )}
         {owe.length === 0 && get.length === 0 && (
           <Empty>{t('কারও কাছে বাকি নেই, কারও কাছে পাওনাও নেই।')}</Empty>
         )}
@@ -70,6 +77,10 @@ export function Payments({ onBack }: { onBack: () => void }) {
         <SettleSheet s={s} {...pay} onClose={() => setPay(null)}
           onDone={(msg) => { setPay(null); toast.show(msg) }} />
       )}
+      {jobPay && (
+        <JobPaymentSheet s={s} onClose={() => setJobPay(false)}
+          onDone={(msg) => { setJobPay(false); toast.show(msg) }} />
+      )}
       {toast.msg && <Toast text={toast.msg} />}
     </>
   )
@@ -85,6 +96,52 @@ function byParty(rows: { party_id: ID; amount: number; due_date: string }[]) {
   return [...map.values()].sort((a, b) => (a.oldest < b.oldest ? -1 : 1))
 }
 
+/* A client paying for a job. It goes on that job, so the job's "received" shows
+   it, and a cash payment reaches the tin. Finished jobs are offered too: the
+   last instalment often comes after the work is done. */
+function JobPaymentSheet({ s, onClose, onDone }: { s: State; onClose: () => void; onDone: (msg: string) => void }) {
+  const jobs = projects(s).slice().sort((a, b) => (a.status === b.status ? 0 : a.status === 'active' ? -1 : 1))
+  const [job, setJob] = useState<ID>(jobs.length === 1 ? jobs[0].id : '')
+  const [value, setValue] = useState('')
+  const [mode, setMode] = useState(PAY_MODES[0])
+  const [date, setDate] = useState(isoDate())
+  const amount = Number(value) || 0
+
+  const save = useOnce(async () => {
+    const e: MoneyEntry = {
+      id: uid(), kind: 'money', batch: uid(), date, project_id: job,
+      created_at: new Date().toISOString(),
+      head_bn: CLIENT_HEAD, dir: 'received', amount, party_id: '', mode, note: '', personal: false, photo_id: '',
+    }
+    await saveEntries([e])
+    scheduleSync(300)
+    onDone(tf('{0} — {1} পাওয়া গেল', nameOf(s, job), money(amount)))
+  })
+
+  return (
+    <Sheet title="কাজের টাকা পেলাম" onClose={onClose}>
+      <Field label="কোন কাজের">
+        <div className="chips">{jobs.map((p) => <Chip key={p.id} on={job === p.id} onClick={() => setJob(p.id)}>{p.name_bn}</Chip>)}</div>
+      </Field>
+      <MoneyPad value={value} onChange={setValue} />
+      <Field label="কীভাবে">
+        <div className="chips">{PAY_MODES.map((m) => <Chip key={m} on={mode === m} onClick={() => setMode(m)}>{m}</Chip>)}</div>
+      </Field>
+      <Field label="কবেকার">
+        <div className="chips">
+          <Chip on={date === isoDate()} onClick={() => setDate(isoDate())}>{t('আজ')}</Chip>
+          <Chip on={date === addDays(isoDate(), -1)} onClick={() => setDate(addDays(isoDate(), -1))}>{t('গতকাল')}</Chip>
+        </div>
+      </Field>
+      <button className="btn primary" disabled={!job || amount <= 0} onClick={save} style={{ marginTop: '.4rem', width: '100%' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: '.4rem' }}>
+          <Icon name="check" size={18} />{t('সেভ করুন')}
+        </span>
+      </button>
+    </Sheet>
+  )
+}
+
 function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
   s: State; party_id: ID; dir: 'paid' | 'received'; owed: number
   onClose: () => void; onDone: (msg: string) => void
@@ -95,7 +152,7 @@ function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
   const name = party_id ? nameOf(s, party_id) : dir === 'paid' ? t('নাম লেখা নেই') : t('খুচরো খদ্দের')
   const amount = Number(value) || 0
 
-  const save = async () => {
+  const save = useOnce(async () => {
     const e: MoneyEntry = {
       id: uid(), kind: 'money', batch: uid(), date, project_id: '',
       created_at: new Date().toISOString(),
@@ -104,7 +161,7 @@ function SettleSheet({ s, party_id, dir, owed, onClose, onDone }: {
     await saveEntries([e])
     scheduleSync(300)
     onDone(dir === 'paid' ? tf('{0} — {1} দেওয়া হল', name, money(amount)) : tf('{0} — {1} পাওয়া গেল', name, money(amount)))
-  }
+  })
 
   return (
     <Sheet title={dir === 'paid' ? 'টাকা দিলাম' : 'টাকা পেলাম'} onClose={onClose}>

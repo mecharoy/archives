@@ -276,7 +276,7 @@ const B = ledger(({ masters, entries }) => {
   const later = stockRow({ date: d(20), item_id: 'i4', dir: 'count', qty: 70, rate: 55 })
   const earlier = stockRow({ date: d(20), item_id: 'i4', dir: 'count', qty: 90, rate: 55, created_at: '2026-08-01T00:00:00.000Z' })
   entries.push(later, earlier)
-  entries.push(stockRow({ date: d(20), item_id: 'i4', dir: 'sale', qty: 4, rate: 80 }))   // on the count day: already in the count
+  entries.push(stockRow({ date: d(20), item_id: 'i4', dir: 'sale', qty: 4, rate: 80, created_at: '2026-08-01T00:00:00.000Z' }))   // written before the count: already in it
   entries.push(stockRow({ date: d(10), item_id: 'i4', dir: 'in', qty: 10, rate: 60 }))
   entries.push(stockRow({ date: d(5), item_id: 'i4', dir: 'sale', qty: 5, rate: 80 }))
 })
@@ -286,6 +286,15 @@ ck('counts: the later of two counts on one day stands, and what came after is ad
 ck('counts: valued at the latest rate paid after the count', bs.value, 4500)                        // 75 × 60
 const bSrv = await serverSummary(B)
 ck('counts: the server values the shop the same way', bSrv.business.shop_stock_value, 4500)
+
+// A count is a moment. He counts 70 at noon and sells 4 that evening: the shelf holds 66.
+const B2 = ledger(({ masters, entries }) => {
+  masters.push({ id: 'i5', kind: 'item', name_bn: 'আধা ইঞ্চি পাইপ', unit_bn: 'পিস', last_rate: 50, active: true, updated_at: stamp() })
+  entries.push(stockRow({ date: d(20), item_id: 'i5', dir: 'count', qty: 70, rate: 50, created_at: '2026-08-01T06:00:00.000Z' }))
+  entries.push(stockRow({ date: d(20), item_id: 'i5', dir: 'sale', qty: 4, rate: 80, created_at: '2026-08-01T12:00:00.000Z' }))
+})
+ck('counts: a sale written after the count, the same day, still comes off', calc.shopStock(B2.entries, B2.masters)[0].qty, 66)
+ck('counts: and the server agrees', (await serverSummary(B2)).business.shop_stock_value, 3300)
 
 // The same count, with the rows in the other order, must give the same answer.
 const bRev = calc.shopStock([...B.entries].reverse(), bItems)[0]

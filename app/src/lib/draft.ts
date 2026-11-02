@@ -6,6 +6,7 @@
 import type { ID, Presence, Entry, DayEntry, AttendanceEntry, StockEntry, MoneyEntry, ProgressEntry } from './model'
 import { kvGet, kvSet, kvDel, uid } from './db'
 import { isoDate } from './bn'
+import { cashState } from './calc'
 
 export interface DraftAtt { presence: Presence; rate: number; amount: number; advance: number }
 export interface DraftMat { key: string; item_id: ID; qty: number; rate: number; party_id: ID | ''; due_date: string; paid: boolean; photo_id: ID | '' }
@@ -20,6 +21,9 @@ export interface Draft {
   date: string
   project_id: ID | ''
   att: Record<ID, DraftAtt>
+  /* Last time's men have been offered once. Kept with the draft, so a man he
+     unticked stays unticked when he comes back to this screen. */
+  att_seeded: boolean
   mats: DraftMat[]
   rets: DraftRet[]
   exps: DraftExp[]
@@ -38,7 +42,7 @@ export const DAYS_FOR: Record<Presence, number> = { full: 1, half: 0.5, ot: 1.5 
 
 export function newDraft(date = isoDate(), project_id: ID | '' = ''): Draft {
   return {
-    batch: uid(), date, project_id, att: {}, mats: [], rets: [], exps: [], pexps: [], invs: [], progress: null,
+    batch: uid(), date, project_id, att: {}, att_seeded: false, mats: [], rets: [], exps: [], pexps: [], invs: [], progress: null,
     cash_counted: null, cash_computed: null, note: '', step: 0,
     started_at: new Date().toISOString(), from_yesterday: false,
   }
@@ -47,7 +51,7 @@ export function newDraft(date = isoDate(), project_id: ID | '' = ''): Draft {
 /* Older drafts saved before these fields existed are read back missing them;
    fill the gaps so nothing downstream trips over an undefined list. */
 export function normalizeDraft(d: Draft): Draft {
-  return { ...d, rets: d.rets ?? [], pexps: d.pexps ?? [], invs: d.invs ?? [] }
+  return { ...d, att_seeded: d.att_seeded ?? false, rets: d.rets ?? [], pexps: d.pexps ?? [], invs: d.invs ?? [] }
 }
 
 const KEY = 'draft'
@@ -125,6 +129,15 @@ export function buildEntries(d: Draft): Entry[] {
 }
 
 const round = (n: number) => Math.round(n * 100) / 100
+
+/** What the book says should be in the tin at the end of this draft's date.
+    Worked out from the rows the draft will really write, so a credit purchase,
+    a bank payment or goods returned from a site move it exactly as they will
+    once saved, and any count he has typed plays no part in it. */
+export function expectedCash(entries: Entry[], d: Draft, openingAmount: number, openingDate: string): number {
+  const rows = buildEntries({ ...d, cash_counted: null })
+  return Math.round(cashState([...entries, ...rows], openingAmount, openingDate, d.date).computed)
+}
 
 /** A correction is a mirrored row, never an edit. The Sheet stays append-only
     and the history of what he thought at the time survives. */

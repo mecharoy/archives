@@ -3,7 +3,7 @@ import { Icon, TopBar } from '../ui/kit'
 import { useStore, nameOf, type Brief } from '../lib/store'
 import { money, isoDate, dayLabelBn } from '../lib/bn'
 import { localBrief, briefIsStale, monthSpend } from '../lib/brief'
-import { cashState, duesSplit } from '../lib/calc'
+import { cashState, cashKnown, duesSplit } from '../lib/calc'
 import { t, pick } from '../lib/i18n'
 import type { Screen } from '../App'
 
@@ -18,7 +18,7 @@ export function Money({ onBack, onGo }: { onBack: () => void; onGo: (s: Screen) 
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const spend = useMemo(() => monthSpend(s.entries), [s.entries])
-  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
+  const counted = cashKnown(s.entries, s.settings.opening_cash)
 
   return (
     <>

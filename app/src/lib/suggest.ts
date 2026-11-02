@@ -5,7 +5,7 @@
    template, and nothing comes from a server. */
 
 import type { Entry, StockEntry, MoneyEntry, AttendanceEntry, ID, Presence } from './model'
-import { liveEntries } from './calc'
+import { liveEntries, SETTLE_HEAD } from './calc'
 import { isoDate, daysBetween } from './bn'
 
 const HALFLIFE = 21 // days — a thing bought twice last week beats one bought forty times last year
@@ -33,7 +33,7 @@ export function rankItems(entries: Entry[], projectId: ID | ''): ID[] {
 export function rankHeads(entries: Entry[], personal: boolean): string[] {
   const money = liveEntries(entries).filter((e) => e.kind === 'money') as MoneyEntry[]
   const rows = money
-    .filter((m) => m.personal === personal && m.dir === 'paid')
+    .filter((m) => m.personal === personal && m.dir === 'paid' && m.head_bn !== SETTLE_HEAD)
     .map((m) => ({ key: m.head_bn, date: m.date }))
   return rank(rows).map((r) => r.key)
 }

@@ -263,3 +263,73 @@ Location: scripts/large-check.mjs
 Action: timing the home-screen figures at 13k to 98k rows.
 Cause: wall-clock timings on a busy PC and V8 garbage-collection steps make single doublings jumpy (a 3.7 ms step to 20 ms and back to linear).
 Fix: judge the log-log slope from the first measurable size to the last (limit 1.5; a loop inside a loop is 2) with best-of-nine timings, and keep the check out of npm test (npm run large).
+
+
+2026-11-03
+Problem: screen tests timed out clicking a worker's name with an exact text match.
+Location: C:\Users\abhij\Claude_res\sitekhata-qa-2026-11-03\t2_screens.mjs (driving src/ui/kit CheckPick)
+Action: tapping through the attendance step in a new QA script.
+Cause: the same trap already logged on 2026-08-28: the name and sub-label share one span, so an exact match finds nothing. I had read that entry and still wrote exact matches.
+Fix: match the name with exact:false for any row that carries a sub-label.
+
+2026-11-03
+Problem: two QA checks would have reported false or misleading failures.
+Location: C:\Users\abhij\Claude_res\sitekhata-qa-2026-11-03\t1_phone_vs_server.mjs
+Action: checking that storage order never changes a figure, and that the cash variance is zero on an honest day.
+Cause: the shuffle mixed rows across dates, which the app never does (it reloads sorted by date). The variance figure of 300 came from two errors partly cancelling, so it proved nothing.
+Fix: shuffle only within a date; test variance on a separate plain ledger with one known error (result -3000).
+
+2026-11-03
+Problem: a double tap looked like a serious duplicate-row bug.
+Location: C:\Users\abhij\Claude_res\sitekhata-qa-2026-11-03\t2_screens.mjs (dblclick)
+Action: testing double taps on save buttons.
+Cause: Playwright's dblclick fires almost instantly, far faster than a thumb.
+Fix: retested with 30-300 ms gaps on a CPU slowed 6x. Only the 30 ms gap duplicated, so it is reported as low severity.
+2026-11-03
+Problem: the test report said the published APK held no Gemini key. It does: the saved key is in build 23's JavaScript.
+Location: C:\Users\abhij\Claude_res\sitekhata-qa-2026-11-03\REPORT.md section F
+Action: checking the APK for secrets during QA.
+Cause: I searched for one assumed key format (AIza...) instead of comparing the APK with the actual saved key. A search that finds nothing only proves that format is absent.
+Fix: compare the file's bytes with the real saved key, printing neither. Report corrected. A release APK is public, so it must be scanned this way before every push.
+
+2026-11-03
+Problem: a Bash heredoc aborted with "unexpected EOF while looking for matching" while writing a patch script.
+Location: scratch patch script for app/src/screens/*.tsx
+Action: applying the screen fixes with one script.
+Cause: the trap logged on 2026-08-28: the Git Bash wrapper breaks on heredocs holding Bengali text and quotes. I had read that entry and still used a heredoc.
+Fix: write such scripts with the Write tool, then run them with node.
+
+2026-11-03
+Problem: the server sync test failed on its first screen, and then the job % read 17.39, 12.12 or 6.06 on different runs where 4 was expected.
+Location: app/scripts/smoke-sync.mjs, app/src/screens/Onboarding.tsx
+Action: running the sync test against a local server to prove the new summary queries work on D1.
+Cause: the test predated the onboarding language step and was not part of npm test, so it had rotted. The changing % was a real ordering fault: the first job saved switches to the home screen while the eight stages are still being written, so leaving at that moment keeps only some of them.
+Fix: updated the test's steps. Onboarding now writes the stages and starting cash before the job and men.
+
+2026-11-03
+Problem: one double tap still saved twice at a 30 ms gap, even with a guard that blocks while saving.
+Location: app/src/ui/kit.tsx useOnce
+Action: retesting the double-tap fix on a slowed CPU.
+Cause: the guard released the moment the write finished, but on a slow CPU the screen was still there to be tapped.
+Fix: hold the guard for 800 ms after the save finishes. 0 of 30 duplicated on retest.
+
+2026-11-03
+Problem: all testing and the first round of fixes ran on build 23, four commits behind the branch. The branch already had its own builds 24 and 25, which had fixed a good part of what the report listed. A first report therefore described old code as current.
+Location: the whole app; found only when the push was refused (behind remote: 4).
+Action: starting a test of "the app", then pushing the fixes.
+Cause: I tested the local checkout without running git fetch or comparing it with origin first.
+Fix: run git fetch and compare with origin before testing or changing anything. Re-measured every problem on build 25, and moved across only the fixes still needed.
+
+2026-11-03
+Problem: a local release build made from the old tree had the saved Gemini key in it.
+Location: local branch qa-fixes-on-build23, commit 629c79f, app/dist-apk/SiteKhata-1.0.apk
+Action: building the release on the old tree.
+Cause: on build 23 the build step put the saved key into the app's JavaScript. Build 25 moved the key into Settings and has no such step. The branch's own log says that key was published and cancelled.
+Fix: nothing from that commit was pushed. Build 26 was cut from build 25's code and its APK was compared with the saved key before pushing. Never push qa-fixes-on-build23.
+
+2026-11-03
+Problem: after the cash fix, the random tests failed in 19 of 120 runs: "phone cash in hand" did not match the answer key.
+Location: app/scripts/_ledger.mjs
+Action: running npm test after moving the cash fix to build 25.
+Cause: the answer key held the old rule, that a count covers its whole date. The fix makes a count a moment in the day, so rows written after it still move the cash. The phone was right and the key was out of date. I checked this against the failing ledger's rows before changing the key.
+Fix: the answer key now states the new rule on its own terms. An audit test that said a same-day sale is always inside the count was split into two: written before the count (inside) and written after it (comes off).

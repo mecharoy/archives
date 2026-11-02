@@ -14,7 +14,7 @@ function csvCell(v: unknown): string {
 }
 
 const TAB_OF: Record<string, string> = {
-  project: 'Projects', worker: 'Workers', item: 'Items', party: 'Parties', stage: 'Stages', coeff: 'Coefficients',
+  project: 'Projects', worker: 'Workers', item: 'Items', party: 'Parties', stage: 'Stages', coeff: 'Coefficients', bill: 'Bills',
   day: 'Day', attendance: 'Attendance', stock: 'Stock', money: 'Money', progress: 'Progress',
 }
 

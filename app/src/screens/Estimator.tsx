@@ -93,6 +93,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
 
   const material = lines.reduce((a, l) => a + l.amount, 0)
   const missing = lines.filter((l) => !l.known)
+  const missingNames = missing.map((m) => t(m.name)).join(', ')
 
   /* ---- labour ---- */
   const crewCost = crew.reduce((a, c) => a + (c.men || 0) * (c.rate || 0), 0) * (days || 0)
@@ -106,6 +107,20 @@ export function Estimator({ onBack }: { onBack: () => void }) {
   const overhead = ((direct + contingency) * prefs.overhead_pct) / 100
   const profit = ((direct + contingency + overhead) * prefs.profit_pct) / 100
   const total = direct + contingency + overhead + profit
+
+  /* What the total below does not contain. Shown again where the total is, and
+     written on the quote itself: a figure that quietly leaves out the steel is
+     how a contractor signs a job at a loss. */
+  const gaps = (missing.length > 0 || labour <= 0) && (
+    <div className="alert crit" style={{ marginTop: '.6rem' }}>
+      <span className="dot" />
+      <span>
+        {missing.length > 0 && tf('{0} — দর নেই, তাই মোটে ধরা হয়নি। আগের ধাপে দর বসান।', missingNames)}
+        {missing.length > 0 && labour <= 0 && ' '}
+        {labour <= 0 && t('মজুরি ধরা হয়নি।')}
+      </span>
+    </div>
+  )
 
   const addCrew = () => setCrew([...crew, { id: String(Date.now()), name: '', men: null, rate: dayRate }])
   const addExtra = () => setExtras([...extras, { id: String(Date.now()), name: '', amount: null }])
@@ -358,6 +373,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
             <div className="total"><span className="k">{t("মোট")}</span><span className="v num">{money(total)}</span></div>
             <p className="small muted" style={{ marginTop: '.5rem' }}>{tf('প্রতি বর্গফুট {0}', moneyExact(builtUp ? total / builtUp : 0))}</p>
           </div>
+          {gaps}
         </div>
         <div className="actionbar">
           <button className="btn ghost" onClick={() => setStep('extras')}>{t("ফিরে")}</button>
@@ -369,7 +385,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
 
   const quote = quoteText({
     ptype, perFloor, floors: floors || 1, builtUp, foundation, days, client,
-    material, labour, extrasCost, contingency, overhead, profit, total, prefs,
+    material, labour, extrasCost, contingency, overhead, profit, total, prefs, missingNames,
   })
   return (
     <>
@@ -377,6 +393,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
       <div className="scroll">
         <Field label="খদ্দেরের নাম"><input className="input" value={client} onChange={(e) => setClient(e.target.value)} placeholder="যেমন — শ্রী অমিত ঘোষ" /></Field>
         <div className="card" style={{ whiteSpace: 'pre-wrap', fontSize: '.95rem', lineHeight: 1.65 }}>{quote}</div>
+        {gaps}
         <p className="small muted" style={{ marginTop: '.7rem' }}>
           {t("এটা কপি করে WhatsApp-এ পাঠাতে পারেন। ছাপা কাগজ লাগলে কম্পিউটার থেকে Google Sheet-এর হিসাব ব্যবহার করুন।")}
         </p>
@@ -400,7 +417,7 @@ export function Estimator({ onBack }: { onBack: () => void }) {
 function quoteText(q: {
   ptype: string; perFloor: number; floors: number; builtUp: number; foundation: string; days: number | null
   client: string; material: number; labour: number; extrasCost: number
-  contingency: number; overhead: number; profit: number; total: number; prefs: Prefs
+  contingency: number; overhead: number; profit: number; total: number; prefs: Prefs; missingNames: string
 }): string {
   const L: string[] = []
   L.push(tf('দরপত্র · {0}', dateBn(isoDate(), false)))
@@ -410,7 +427,7 @@ function quoteText(q: {
   if (q.days) L.push(tf('সময়: প্রায় {0} দিন', toBn(q.days)))
   L.push('')
   L.push(tf('মাল ও সরঞ্জাম     {0}', money(q.material)))
-  L.push(tf('মজুরি             {0}', money(q.labour)))
+  L.push(q.labour > 0 ? tf('মজুরি             {0}', money(q.labour)) : t('মজুরি             ধরা হয়নি'))
   if (q.extrasCost > 0) L.push(tf('অন্য খরচ          {0}', money(q.extrasCost)))
   L.push(tf('অনিশ্চয়তা {0}%     {1}', toBn(q.prefs.contingency_pct), money(q.contingency)))
   L.push(tf('ওভারহেড {0}%      {1}', toBn(q.prefs.overhead_pct), money(q.overhead)))
@@ -418,6 +435,7 @@ function quoteText(q: {
   L.push('—')
   L.push(tf('মোট               {0}', money(q.total)))
   L.push(tf('প্রতি বর্গফুট       {0}', moneyExact(q.builtUp ? q.total / q.builtUp : 0)))
+  if (q.missingNames) L.push(tf('এই হিসাবে ধরা নেই: {0}', q.missingNames))
   L.push('')
   L.push(t('শর্ত: মাল ও মজুরির দর বদলালে হিসাব বদলাতে পারে। কাজ শুরুর আগে ৩০% অগ্রিম।'))
   return L.join('\n')

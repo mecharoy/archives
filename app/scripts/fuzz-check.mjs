@@ -285,7 +285,8 @@ for (let i = 0; i < Math.max(600, N * 6); i++) {
   hit('groupIndian matches the en-IN formatter for whole rupees', bn.groupIndian(whole) === new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(whole), { whole, got: bn.groupIndian(whole), want: new Intl.NumberFormat('en-IN').format(whole) })
   const paise2 = rn.money(0, 9999999)
   hit('groupIndian with paise reads back as the same number', Math.abs((bn.parseNum(bn.groupIndian(paise2)) ?? NaN) - paise2) < 1e-9, { paise2, got: bn.groupIndian(paise2) })
-  hit('typed Bengali digits are the same number', bn.parseNum(asBn(String(whole))) === whole, { whole })
+  // Nothing he types can be below zero, so a minus sign is refused rather than read.
+  hit('typed Bengali digits are the same number', bn.parseNum(asBn(String(whole))) === (whole < 0 ? null : whole), { whole })
   hit('toAscii undoes the Bengali digits', bn.toAscii(asBn(String(Math.abs(whole)))) === String(Math.abs(whole)), { whole })
   const junk = Array.from({ length: rn.int(0, 12) }, () => rn.pick(['1', '২', '.', ',', '-', ' ', '₹', 'a', '٣', '१', 'e', '+', '/', '০'])).join('')
   let threw = false, v

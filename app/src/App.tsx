@@ -14,7 +14,7 @@ import { Enquiries } from './screens/Enquiries'
 import { Onboarding } from './screens/Onboarding'
 import { Tour, type Stop } from './ui/Tour'
 import { goBack } from './lib/back'
-import { useStore, activeProjects, allWorkers, saveSettings } from './lib/store'
+import { useStore, activeProjects, allWorkers, allBills, saveSettings } from './lib/store'
 import { startSyncLoop } from './lib/sync'
 import { refreshUpdate } from './lib/update'
 import { reschedule } from './lib/remind'
@@ -126,10 +126,12 @@ export function App() {
      evening must not nag him tomorrow morning. Cheap: it cancels ours and
      schedules what the current dues say. */
   const entryCount = state.entries.length
+  // A bill added, moved or paid changes the queue without any ledger row.
+  const billsKey = allBills(state).map((b) => [b.id, b.due_date, b.amount, b.paid_on].join('|')).join(',')
   useEffect(() => {
     if (!ready || settings.remind === 'off') return
     void reschedule()
-  }, [ready, entryCount, settings.remind])
+  }, [ready, entryCount, billsKey, settings.remind])
 
   /* theme and text size follow the settings, and the Android status bar
      follows the theme so the top of the screen never looks borrowed. */

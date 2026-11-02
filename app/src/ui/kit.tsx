@@ -221,6 +221,19 @@ export function Field({ label, children }: { label: string; children: ReactNode 
   return <div className="field"><label>{t(label)}</label>{children}</div>
 }
 
+/** A save that cannot run twice at once: a second tap while the first is still
+    writing does nothing, so one bill never becomes two rows. */
+export function useOnce<A extends unknown[]>(fn: (...args: A) => Promise<void> | void) {
+  const busy = useRef(false)
+  return async (...args: A) => {
+    if (busy.current) return
+    busy.current = true
+    // Held a moment past the save: on a slow phone the screen can still be there
+    // to tap after the write has finished.
+    try { await fn(...args) } finally { setTimeout(() => { busy.current = false }, 800) }
+  }
+}
+
 export function useToast() {
   const [msg, setMsg] = useState('')
   const t = useRef<ReturnType<typeof setTimeout> | null>(null)

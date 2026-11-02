@@ -5,7 +5,7 @@ import { money, toBn, isoDate, agoBn, dayLabelBn, addDays } from '../lib/bn'
 import { localBrief, briefIsStale, fetchBrief, monthSpend } from '../lib/brief'
 import { maybeMakeBrief } from '../lib/aiBrief'
 import { statusWord } from '../lib/i18n'
-import { cashState, projectTotals, entriesInLastDays, lastEntryDate, shopStock, duesSplit, receivablesSplit } from '../lib/calc'
+import { cashState, cashKnown, CASH_RESET_NOTE, projectTotals, daysWrittenInLast, lastEntryDate, shopStock, duesSplit, receivablesSplit } from '../lib/calc'
 import { lastAttendance, lastDayFor, rankProjects } from '../lib/suggest'
 import { newDraft, DAYS_FOR, type Draft } from '../lib/draft'
 import { allItems } from '../lib/store'
@@ -63,7 +63,7 @@ export function Home({ onDay, onSameAsYesterday, onGo }: {
   const usingLocal = !s.brief || stale
 
   const sameDraft = useMemo(() => buildSameAsYesterday(s), [s])
-  const doneToday = useMemo(() => s.entries.some((e) => e.date === isoDate() && e.kind === 'day'), [s.entries])
+  const doneToday = useMemo(() => s.entries.some((e) => e.date === isoDate() && e.kind === 'day' && e.note !== CASH_RESET_NOTE), [s.entries])
   const last = lastEntryDate(s.entries)
   const gap = last && last < addDays(isoDate(), -1)
 
@@ -280,7 +280,7 @@ function MoneySummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const dues = useMemo(() => duesSplit(s.entries), [s.entries])
   const spend = useMemo(() => monthSpend(s.entries), [s.entries])
-  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
+  const counted = cashKnown(s.entries, s.settings.opening_cash)
   return (
     <BookCard tone="money" icon="wallet" title="হিসাব" onOpen={() => onGo('money')}>
       <div className="miniline">
@@ -298,7 +298,7 @@ function MoneySummary({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
 function SyncLine({ s }: { s: State }) {
   const pending = s.outbox.length
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-  const days = entriesInLastDays(s.entries, 7)
+  const days = daysWrittenInLast(s.entries, 7)
   return (
     <>
       <div className="divider" />
@@ -327,7 +327,7 @@ function StandingTotals({ s, onGo }: { s: State; onGo: (x: Screen) => void }) {
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const get = useMemo(() => receivablesSplit(s.entries), [s.entries])
   const owe = useMemo(() => duesSplit(s.entries), [s.entries])
-  const counted = s.entries.some((e) => e.kind === 'day' && e.cash_counted != null) || s.settings.opening_cash > 0
+  const counted = cashKnown(s.entries, s.settings.opening_cash)
   return (
     <div className="footbar" data-tour="standing">
       <div className="foot">
@@ -368,9 +368,8 @@ export function buildSameAsYesterday(s: State): Draft | null {
     d.att[wid] = { presence, rate: w.rate, amount: w.rate * DAYS_FOR[presence], advance: 0 }
   }
   if (!Object.keys(d.att).length) return null
-  const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
-  const wages = Object.values(d.att).reduce((a, x) => a + x.amount, 0)
-  d.cash_counted = Math.round(cash.computed - wages)
+  // The men are carried over; a count is not. Only he can say what is in the tin.
+  d.att_seeded = true
   d.step = 999
   return d
 }

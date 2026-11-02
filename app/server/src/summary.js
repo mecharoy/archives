@@ -115,7 +115,7 @@ export async function buildSummary(db, hid) {
     all(db, 'SELECT id, project_id, stage_seq, state, reverses FROM progress WHERE household_id = ?1', hid),
     // A count that was later cancelled is not "the last count".
     one(db, `SELECT cash_counted, cash_computed, date FROM day
-             WHERE household_id = ?1 AND cash_counted IS NOT NULL AND ${LIVE('day')}
+             WHERE household_id = ?1 AND cash_counted IS NOT NULL AND cash_counted >= 0 AND ${LIVE('day')}
              ORDER BY date DESC, created_at DESC, id DESC LIMIT 1`, hid),
     // Open bills, and the payments that close them. The netting is done in
     // JavaScript with exactly the rule the phone uses — oldest bill first —
@@ -128,7 +128,7 @@ export async function buildSummary(db, hid) {
              GROUP BY party_id, dir`, hid, SETTLE_HEAD),
 
     periodTotals(db, hid, `date >= ${WEEK}`),
-    periodTotals(db, hid, `date >= ${PREV_FROM} AND date < ${PREV_TO}`),
+    periodTotals(db, hid, `date >= ${PREV_FROM} AND date <= ${PREV_TO}`),
 
     // "Written" means a batch of entries that still stands — from any book, the
     // same as the phone counts it — so a man who only runs the shop is not
@@ -138,7 +138,7 @@ export async function buildSummary(db, hid) {
                  WHERE date >= '${istDate(2)}') AS last3,
                (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1 AND ${LIVE('day')} AND date >= ${WEEK}) AS days_week,
                (SELECT COUNT(DISTINCT date) FROM day WHERE household_id = ?1 AND ${LIVE('day')}
-                 AND date >= ${PREV_FROM} AND date < ${PREV_TO}) AS days_prev,
+                 AND date >= ${PREV_FROM} AND date <= ${PREV_TO}) AS days_prev,
                (SELECT MAX(date) FROM ${LIVE_ROWS}) AS last_date,
                (SELECT COUNT(*) FROM projects WHERE household_id = ?1 AND status = 'active') AS active,
                (SELECT COUNT(*) FROM workers WHERE household_id = ?1 AND active = 1) AS men`, hid),
@@ -168,10 +168,9 @@ export async function buildSummary(db, hid) {
     all(db, `SELECT COALESCE(p.name_bn, '(নাম নেই)') AS name_bn, s.party_id,
                     COALESCE(SUM(CASE WHEN s.date >= ${WEEK} THEN s.amount ELSE 0 END), 0) AS week,
                     COALESCE(SUM(s.amount), 0) AS last_28_days,
-                    COALESCE(SUM(CASE WHEN s.paid = 0 THEN s.amount ELSE 0 END), 0) AS unpaid,
                     COUNT(*) AS times
              FROM stock s LEFT JOIN parties p ON p.household_id = s.household_id AND p.id = s.party_id
-             WHERE s.household_id = ?1 AND s.dir IN ('in','transfer') AND s.date >= ${M28}
+             WHERE s.household_id = ?1 AND s.dir = 'in' AND s.date >= ${M28}
              GROUP BY s.party_id ORDER BY week DESC, last_28_days DESC LIMIT 10`, hid),
 
     // Who worked, how many days, what they were paid, what they took as advance.
@@ -191,7 +190,7 @@ export async function buildSummary(db, hid) {
                     COALESCE(SUM(s.amount), 0) AS last_28_days,
                     MAX(s.rate) AS top_rate, MIN(s.rate) AS low_rate
              FROM stock s LEFT JOIN items i ON i.household_id = s.household_id AND i.id = s.item_id
-             WHERE s.household_id = ?1 AND s.dir IN ('in','transfer') AND s.date >= ${M28}
+             WHERE s.household_id = ?1 AND s.dir = 'in' AND s.date >= ${M28}
              GROUP BY s.item_id ORDER BY week DESC, last_28_days DESC LIMIT 12`, hid),
 
     /* ---- the household book ---- */
@@ -214,7 +213,7 @@ export async function buildSummary(db, hid) {
                  AND personal = 1 AND dir = 'paid' AND head_bn <> '${DRAWING_HEAD}' AND date >= ${M28}) AS spent_28,
                (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
                  AND personal = 1 AND dir = 'paid' AND head_bn <> '${DRAWING_HEAD}'
-                 AND date >= ${PREV_FROM} AND date < ${PREV_TO}) AS spent_prev,
+                 AND date >= ${PREV_FROM} AND date <= ${PREV_TO}) AS spent_prev,
                (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
                  AND personal = 1 AND head_bn = '${DRAWING_HEAD}' AND date >= ${WEEK}) AS drawn_week,
                (SELECT COALESCE(SUM(amount),0) FROM money WHERE household_id = ?1
@@ -320,6 +319,13 @@ export async function buildSummary(db, hid) {
   const counted = lastCount.cash_counted == null ? null : n(lastCount.cash_counted)
   const computed = lastCount.cash_computed == null ? null : n(lastCount.cash_computed)
 
+  // What one shop is still owed: its open bills less what has been paid to it,
+  // by the same oldest-bill-first rule as the total, so the column adds up to it.
+  const owedTo = (party) => {
+    const same = (r) => (r.party_id || '') === (party || '')
+    return net(openRows.filter((r) => (r.dir === 'in' || r.dir === 'transfer') && same(r)),
+      settlements.filter(same), 'paid', TODAY, IN_WEEK).total
+  }
   const dues = net(openRows.filter((r) => r.dir === 'in' || r.dir === 'transfer'), settlements, 'paid', TODAY, IN_WEEK)
   const owed = net(openRows.filter((r) => r.dir === 'sale'), settlements, 'received', TODAY, IN_WEEK)
   const stockValue = shopStockValue(stockRows, itemRows)
@@ -376,7 +382,7 @@ export async function buildSummary(db, hid) {
       heads: heads.map((r) => ({ head_bn: r.head_bn, week: round(r.week), last_28_days: round(r.last_28_days), times: n(r.times) })),
       suppliers: suppliers.map((r) => ({
         name_bn: r.name_bn, week: round(r.week), last_28_days: round(r.last_28_days),
-        unpaid: round(r.unpaid), times: n(r.times),
+        unpaid: round(owedTo(r.party_id)), times: n(r.times),
       })),
       workers: workmen.map((r) => ({
         name_bn: r.name_bn, days_week: round(r.days_week), paid_week: round(r.paid_week),
@@ -446,7 +452,7 @@ async function periodTotals(db, hid, where) {
   return one(db, `SELECT
       (SELECT COALESCE(SUM(amount),0) FROM attendance WHERE household_id = ?1 AND ${where}) AS wages,
       (SELECT COALESCE(SUM(amount),0) FROM stock
-        WHERE household_id = ?1 AND ${where} AND dir IN ('in','transfer')) AS material,
+        WHERE household_id = ?1 AND ${where} AND dir = 'in') AS material,
       (SELECT COALESCE(SUM(amount),0) FROM money
         WHERE household_id = ?1 AND ${where} AND dir = 'paid' AND personal = 0
           AND head_bn <> '${SETTLE_HEAD}') AS other,

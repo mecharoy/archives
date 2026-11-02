@@ -1,15 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useToast, Toast, Empty } from '../ui/kit'
+import { Icon, TopBar, Pick, Chip, Sheet, Field, NumField, PhoneField, useOnce, useToast, Toast, Empty } from '../ui/kit'
 import { PinSheet } from './Personal'
 import { NewItemSheet } from './DayWizard'
 import {
-  useStore, saveMaster, saveSettings, allWorkers, allItems, parties, stages, coeffs,
+  useStore, saveMaster, saveEntries, saveSettings, allWorkers, allItems, parties, stages, coeffs,
   projects as allProjects, nameOf, type State,
 } from '../lib/store'
 import { uid } from '../lib/db'
 import { money, toBn, num, isoDate, dateBn, agoBn } from '../lib/bn'
 import type { Project, Worker, Item, Party, Stage, Coeff, Bill } from '../lib/model'
-import { flush, testEndpoint } from '../lib/sync'
+import { flush, scheduleSync, testEndpoint } from '../lib/sync'
 import { fetchBrief } from '../lib/brief'
 import { makePhoneBrief, setAiKey, testAiKey, explainAiError, aiStatus, type AiStatus } from '../lib/aiBrief'
 import { buildCsv, buildJson, saveFile, backupName } from '../lib/backup'
@@ -19,7 +19,7 @@ import { chipMissRate } from '../lib/suggest'
 import { readContacts, pickOneContact, type PhoneContact } from '../lib/contacts'
 import { plan, reschedule, type RemindWhen } from '../lib/remind'
 import { factoryReset } from '../lib/reset'
-import { cashState } from '../lib/calc'
+import { cashState, cashKnown, CASH_RESET_NOTE } from '../lib/calc'
 import { t, tf, pick } from '../lib/i18n'
 import { useBackHandler } from '../lib/back'
 import {
@@ -806,9 +806,23 @@ export function StagesPage({ s, onBack }: { s: State; onBack: () => void }) {
 }
 
 export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
-  const [amount, setAmount] = useState<number | null>(s.settings.opening_cash)
+  const known = cashKnown(s.entries, s.settings.opening_cash)
+  const [amount, setAmount] = useState<number | null>(known ? null : s.settings.opening_cash)
   const cash = cashState(s.entries, s.settings.opening_cash, s.settings.opening_date)
   const toast = useToast()
+  /* Once he has counted even once, the last count decides the figure and the
+     opening is ignored. So the new figure goes in as a count of its own: that is
+     what makes it take effect, and as a row it also reaches the brief and
+     survives a restore. */
+  const save = useOnce(async () => {
+    const value = amount ?? 0
+    const id = uid()
+    await saveEntries([{ id, kind: 'day', batch: id, date: isoDate(), project_id: '', created_at: new Date().toISOString(), cash_counted: value, cash_computed: null, note: CASH_RESET_NOTE }])
+    await saveSettings({ opening_cash: value, opening_date: isoDate() })
+    scheduleSync(300)
+    setAmount(null)
+    toast.show('সেভ হয়েছে')
+  })
   return (
     <>
       <TopBar title="হাতের টাকা" onBack={onBack} />
@@ -820,13 +834,10 @@ export function CashPage({ s, onBack }: { s: State; onBack: () => void }) {
           </p>
         </div>
         <p className="hint" style={{ marginTop: '1rem' }}>
-          {t("রোজকার হিসাবের শেষে টাকা গুনলে এই সংখ্যাটা নিজে থেকেই ঠিক হয়ে যায়। প্রথম দিনের জন্য শুধু একবার শুরুর টাকাটা বসিয়ে দিন।")}
+          {t("রোজকার হিসাবের শেষে টাকা গুনলে এই সংখ্যাটা নিজে থেকেই ঠিক হয়ে যায়। হিসাব না মিললে এখনই গুনে এখানে বসিয়ে দিন — এখন থেকে এটাই ধরা হবে।")}
         </p>
-        <Field label="শুরুর টাকা"><NumField value={amount} onChange={setAmount} /></Field>
-        <button className="btn primary" style={{ width: '100%' }} onClick={async () => {
-          await saveSettings({ opening_cash: amount ?? 0, opening_date: isoDate() })
-          toast.show('সেভ হয়েছে')
-        }}>{t("সেভ করুন")}</button>
+        <Field label={known ? 'এখন হাতে কত আছে' : 'শুরুর টাকা'}><NumField value={amount} onChange={setAmount} /></Field>
+        <button className="btn primary" style={{ width: '100%' }} disabled={amount == null} onClick={save}>{t("সেভ করুন")}</button>
       </div>
       {toast.msg && <Toast text={toast.msg} />}
     </>

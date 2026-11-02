@@ -243,29 +243,37 @@ export function reference(L) {
     let rate = lastCount ? lastCount.rate || 0 : 0
     for (const s of mine) {
       if (s.project_id && s.dir !== 'transfer') continue
-      if (lastCount && s.date <= lastCount.date) continue
+      // A count is a moment: a row written later the same day is not inside it.
+      if (lastCount && (s.date < lastCount.date || (s.date === lastCount.date && s.created_at <= lastCount.created_at))) continue
       if (s.dir === 'in' && !s.project_id) { qty += s.qty; rate = s.rate || rate }
       else if (s.dir === 'sale' || s.dir === 'transfer') qty -= s.qty
     }
     if (Math.abs(qty) > 1e-9) { stockValue += qty * (rate || it.last_rate || 0); stockQty.set(it.id, qty) }
   }
 
-  /* Cash: the last count that stands, then everything dated after it. Reversals are summed in (they
-     are negative), so a cancelled payment cancels itself out. */
+  /* Cash: the last count that stands, then everything written after that moment. Rows saved with the
+     count are inside it. A reversal sits where the row it cancels sat. Reversals are summed in (they
+     are negative), so a cancelled payment cancels itself out. Without a count, the opening is that
+     morning's money, so that day's rows still move it. */
   const counts = live.filter((e) => e.kind === 'day' && e.cash_counted != null).sort(written)
   const anchor = counts[counts.length - 1]
-  const anchorDate = anchor ? anchor.date : L.opening.date
   const anchorPaise = anchor ? P(anchor.cash_counted) : P(L.opening.amount)
+  const rowById = new Map(E.map((e) => [e.id, e]))
   let inc = 0, out = 0
   for (const e of E) {
-    if (e.date <= anchorDate) continue
+    const at = (e.reverses && rowById.get(e.reverses)) || e
+    const inside = anchor
+      ? at.batch === anchor.batch || at.date < anchor.date || (at.date === anchor.date && at.created_at <= anchor.created_at)
+      : at.date < L.opening.date
+    if (inside) continue
     if (e.kind === 'attendance') out += P(e.amount) + P(e.advance)
     else if (e.kind === 'stock') {
       if (e.dir === 'in' && e.paid) out += P(e.amount)
       if (e.dir === 'sale' && e.paid) inc += P(e.amount)
     } else if (e.kind === 'money') {
+      if (e.mode !== CASH) continue
       if (e.personal) { if (e.head_bn === DRAWING) out += P(e.amount) }
-      else if (e.mode === CASH) { if (e.dir === 'received') inc += P(e.amount); else out += P(e.amount) }
+      else { if (e.dir === 'received') inc += P(e.amount); else out += P(e.amount) }
     }
   }
 
@@ -306,7 +314,7 @@ export function reference(L) {
     owed: owed(['sale'], 'received'),
     stockValue, stockQty,
     cash: {
-      anchor_date: anchorDate, anchor_amount: anchorPaise / 100, computed: (anchorPaise + inc - out) / 100,
+      anchor_date: anchor ? anchor.date : L.opening.date, anchor_amount: anchorPaise / 100, computed: (anchorPaise + inc - out) / 100,
       counted: anchor ? anchorPaise / 100 : null, counted_on: anchor ? anchor.date : null,
     },
     projects,

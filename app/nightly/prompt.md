@@ -56,7 +56,8 @@ is furthest along or the thing he most recently did.
    payment went out unrecorded.
 3. Any project with `cpi` below 1 — the work done so far has cost more than it
    earned. This is the one that costs him money quietly, so it outranks
-   anything about dates.
+   anything about dates. A new job with no stage finished yet is not behind:
+   ignore `cpi` until at least one stage is done.
 4. `dues_overdue` above 0 — he is past a date a supplier gave him. Name the
    relationship at risk, not the amount.
 5. `receivable_overdue` above 0 — a customer is late paying him. Say who owes

@@ -69,6 +69,10 @@ ck('an overdue date he set reaches the cards', billCard.status, 'crit')
 ck('showing the overdue amount, not the total', billCard.value, '₹4,000')
 
 ck('cpi under 1 makes the job critical', base.projects[0].status, 'crit')
+const job = (done, spent) => skeleton({ ...SUMMARY, projects: [{ ...SUMMARY.projects[0], pct_done: done, pct_spent: spent, cpi: spent > 0 ? done / spent : null }] }).projects[0].status
+ck('a brand-new job is not red', job(0, 0.5), 'ok')
+ck('a job one point over is a warning', job(40, 41), 'warn')
+ck('a job 20 points over is critical', job(30, 50), 'crit')
 ck('percentages are whole numbers', base.projects[0].pct_spent, 47)
 
 const sc = base.series.scurve
