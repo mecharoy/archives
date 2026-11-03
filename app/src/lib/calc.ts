@@ -99,8 +99,10 @@ export function projectTotals(p: Project, entries: Entry[], stages: Stage[]): Pr
      stages can never show progress, so every rupee would read as "ahead". */
   const measured = stagesFor(p, stages).length > 0
   const gap = measured ? pct_spent - pct_done : 0
-  if (budget > 0 && (gap > 15 || (cpi != null && cpi < 0.9))) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
-  else if (budget > 0 && (gap > 6 || (cpi != null && cpi < 1))) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
+  // Until a stage is done there is nothing to set the cost against, so the first bag of cement is not red.
+  const worked = pct_done > 0 && cpi != null
+  if (budget > 0 && (gap > 15 || (worked && (cpi as number) < 0.9))) { status = 'crit'; flag_bn = t('খরচ কাজের অনেক আগে') }
+  else if (budget > 0 && (gap > 6 || (worked && (cpi as number) < 1))) { status = 'warn'; flag_bn = t('খরচ কাজের থেকে এগিয়ে') }
   else if (budget > 0 && gap < -10) { flag_bn = t('খরচ কম, কাজ এগিয়ে') }
 
   return { project_id: p.id, labour, material, other, cost, received, pct_done, pct_spent, earned, cpi, at_finish, profit, status, flag_bn }
@@ -206,11 +208,14 @@ export interface CashState {
 
 /** Cash is rebuilt from the last physical count, not from an opening balance
     typed once in March. A wrong count fixes itself the next time he counts. */
-export function cashState(entries: Entry[], openingAmount: number, openingDate: string): CashState {
+export function cashState(entries: Entry[], openingAmount: number, openingDate: string, asOf?: string): CashState {
   /* A cancelled row and the row that cancelled it are both left out: the money never moved, and a row
      and its mirror added in floating point leave 0.0000000000004 behind. */
   const live = liveEntries(entries)
-  const days = live.filter((e) => e.kind === 'day' && (e as DayEntry).cash_counted != null) as DayEntry[]
+  /* A tin cannot hold less than nothing: a negative "count" can only be an old one-tap confirmation of a
+     wrong sum, so it is not a count. `asOf` gives the figure at the end of an earlier date, for a missed day. */
+  const days = live.filter((e) => e.kind === 'day' && (e as DayEntry).cash_counted != null && (e as DayEntry).cash_counted! >= 0
+    && (!asOf || e.date <= asOf)) as DayEntry[]
   days.sort(inOrder)
   const last = days[days.length - 1]
   const anchor_date = last ? last.date : openingDate
@@ -228,6 +233,7 @@ export function cashState(entries: Entry[], openingAmount: number, openingDate: 
   let out = 0
   for (const e of live) {
     if (inside(e)) continue
+    if (asOf && e.date > asOf) continue
     if (e.kind === 'attendance') { out += (e.amount || 0) + (e.advance || 0); continue }
     if (e.kind === 'stock') {
       const s = e as StockEntry
@@ -240,11 +246,12 @@ export function cashState(entries: Entry[], openingAmount: number, openingDate: 
     }
     if (e.kind === 'money') {
       const m = e as MoneyEntry
+      // Money taken out by bank or UPI never was in the tin.
+      if (m.mode !== 'নগদ') continue
       if (m.personal) {
         if (m.head_bn === DRAWING_HEAD) out += m.amount || 0   // money leaving the business
         continue
       }
-      if (m.mode !== 'নগদ') continue
       if (m.dir === 'received') inc += m.amount || 0
       else out += m.amount || 0
     }

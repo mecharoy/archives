@@ -1194,6 +1194,7 @@ export const EN: Record<string, string> = {
   'এটা কাজের খরচে ধরা হবে না।': 'This is not counted in any job.',
   'এখন হাতে কত টাকা?': 'How much cash in hand now?',
   'প্রথমবার একবার গুনে বলুন।': 'First time: count it once and say.',
+  'খাতার হিসাবে টাকা শূন্যের নিচে। একবার গুনে বলুন।': 'By the book the cash is below zero. Count it once and say.',
   'খাতা বলছে থাকার কথা': 'The book says there should be',
   'খাতার চেয়ে {0} কম। কোনো খরচ বাদ গেছে?': '{0} less than the book. Was an expense left out?',
   'খাতার চেয়ে {0} বেশি। কেউ টাকা দিয়েছেন?': '{0} more than the book. Did someone pay you?',

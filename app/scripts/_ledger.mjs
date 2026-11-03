@@ -271,7 +271,7 @@ export function reference(L) {
 
   /* Cash: the last count that stands, then everything dated after it. Reversals are summed in (they
      are negative), so a cancelled payment cancels itself out. */
-  const counts = live.filter((e) => e.kind === 'day' && e.cash_counted != null).sort(written)
+  const counts = live.filter((e) => e.kind === 'day' && e.cash_counted != null && e.cash_counted >= 0).sort(written)
   const anchor = counts[counts.length - 1]
   const anchorDate = anchor ? anchor.date : L.opening.date
   // A count at the end of a day already includes that day; the opening balance is the start of its day.
@@ -285,6 +285,8 @@ export function reference(L) {
       if (e.dir === 'in' && e.paid) out += P(e.amount)
       if (e.dir === 'sale' && e.paid) inc += P(e.amount)
     } else if (e.kind === 'money') {
+      // Only cash moves the tin: money taken out by bank or UPI never was in it.
+      if (e.mode !== CASH) continue
       if (e.personal) { if (e.head_bn === DRAWING) out += P(e.amount) }
       else if (e.mode === CASH) { if (e.dir === 'received') inc += P(e.amount); else out += P(e.amount) }
     }

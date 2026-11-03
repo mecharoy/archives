@@ -151,7 +151,8 @@ export async function clearDraft(date?: string) {
     his last physical count. */
 export function cashAfterDay(entries: Entry[], d: Draft, openingAmount: number, openingDate: string): number {
   const rows = buildEntries({ ...d, cash_counted: null, cash_computed: null })
-  return Math.round(cashState([...entries, ...rows], openingAmount, openingDate).computed)
+  // As of the day being entered: a missed day must not have today's spending taken off it as well.
+  return Math.round(cashState([...entries, ...rows], openingAmount, openingDate, d.date).computed)
 }
 
 const siteEmpty = (s: DraftSite) => !Object.keys(s.att).length && !s.mats.length && !s.rets.length && !s.exps.length && s.pct == null && !s.stage

@@ -39,7 +39,8 @@ export function toAscii(s: string): string {
 export function parseNum(raw: string): number | null {
   const s = toAscii(String(raw)).replace(/[,\s₹]/g, '').trim()
   if (!s) return null
-  if (!/^-?\d*\.?\d*$/.test(s)) return null
+  // No minus sign: nothing he types into a box — an amount, a rate, an area — can be below zero.
+  if (!/^\d*\.?\d*$/.test(s)) return null
   const n = Number(s)
   return Number.isFinite(n) ? n : null
 }

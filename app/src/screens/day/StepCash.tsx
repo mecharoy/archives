@@ -42,13 +42,15 @@ export function StepCash({ s, draft, patch, next }: DayProps) {
     )
   }
 
-  const first = neverCounted && draft.cash_counted == null
+  // A book below zero is a sum gone wrong, not money: offer no figure to agree with, only a count.
+  const below = !neverCounted && expected < 0
+  const first = (neverCounted || below) && draft.cash_counted == null
   return (
     <>
       <div className="scroll">
         <h2 className="question">{t('এখন হাতে কত টাকা?')}</h2>
         {first ? (
-          <p className="hint">{t('প্রথমবার একবার গুনে বলুন।')}</p>
+          <p className="hint">{below ? t('খাতার হিসাবে টাকা শূন্যের নিচে। একবার গুনে বলুন।') : t('প্রথমবার একবার গুনে বলুন।')}</p>
         ) : (
           <>
             <p className="hint">{draft.cash_counted != null ? t('আপনি গুনে বললেন') : t('খাতা বলছে থাকার কথা')}</p>

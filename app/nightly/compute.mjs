@@ -178,8 +178,10 @@ export function projectStatus(p) {
   // Red: spending well ahead of the work, or work that has cost over a tenth
   // more than it earned. Amber: spending ahead, or any cost over earnings.
   // Kept identical to calc.ts projectTotals, which colours the phone's own copy.
-  if (gap > 15 || (has(p.cpi) && p.cpi < 0.9)) return 'crit'
-  if (gap > 6 || (has(p.cpi) && p.cpi < 1)) return 'warn'
+  // Until a stage is done there is nothing to set the cost against, so cpi waits.
+  const worked = n(p.pct_done) > 0 && has(p.cpi)
+  if (gap > 15 || (worked && p.cpi < 0.9)) return 'crit'
+  if (gap > 6 || (worked && p.cpi < 1)) return 'warn'
   return 'ok'
 }
 
