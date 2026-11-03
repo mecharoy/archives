@@ -1,9 +1,9 @@
 {
-  "code": 28,
-  "name": "1.0.28",
-  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=28",
-  "size": 7530107,
-  "notes_bn": "দোকান গোনার সময় নিজের মাল নিজে যোগ করা যায়; নিজের খাতায় ব্যবসার বাইরের টাকাও লেখা যায়।",
-  "notes_en": "The full shop count can add an item of your own; your own book takes money from outside the business.",
-  "released_at": "2026-10-21T18:02:10.142Z"
+  "code": 29,
+  "name": "1.0.29",
+  "url": "https://raw.githubusercontent.com/mecharoy/archives/claude/app-development-apk-vlbobd/app/dist-apk/SiteKhata-1.0.apk?build=29",
+  "size": 7530323,
+  "notes_bn": "হাতের টাকার হিসাব আরও ঠিক; নতুন কাজ প্রথমেই লাল হয় না; গুগলের চাবির জায়গা ফাঁকা থাকে",
+  "notes_en": "Cash in hand more accurate; a new job is not red from the start; the Google key box starts empty",
+  "released_at": "2026-11-03T07:49:16.931Z"
 }
