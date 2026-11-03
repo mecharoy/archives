@@ -61,8 +61,8 @@ ck "stage weights give 40%" "$(echo "$S" | jq -r '.projects[0].pct_done')" "40"
 ck "cash variance computed" "$(echo "$S" | jq -r '.business.cash_variance')" "-1450"
 ck "unpaid purchase is a due" "$(echo "$S" | jq -r '.business.dues_total')" "4100"
 ck "overdue detected" "$(echo "$S" | jq -r '.business.dues_overdue')" "4100"
-ck "wages this month" "$(echo "$S" | jq -r '.business.wages_this_month')" "600"
-ck "spend this month" "$(echo "$S" | jq -r '.business.spend_this_month')" "5500"
+ck "wages this week" "$(echo "$S" | jq -r '.business.wages_this_week')" "600"
+ck "spend this week" "$(echo "$S" | jq -r '.business.spend_this_week')" "5500"
 ck "entries in last 3 days" "$(echo "$S" | jq -r '.business.entries_last_3_days')" "1"
 ck "burn: 10 of 400 bags" "$(echo "$S" | jq -r '.projects[0].burn[0].pct')" "2.5"
 
@@ -90,7 +90,7 @@ curl -s -X PUT "$B/brief?household=$HID" -H "Authorization: Bearer $A" -H 'Conte
 ck "the phone can read the brief" "$(curl -s -H "Authorization: Bearer $DEV" $B/brief.json | jq -r .headline_bn)" "সব ঠিক চলছে।"
 
 ck "export needs the admin token" "$(curl -s -o /dev/null -w '%{http_code}' "$B/export.csv?household=$HID")" "401"
-ck "export carries every tab" "$(curl -s -H "Authorization: Bearer $A" "$B/export.csv?household=$HID" | grep -c '^# ')" "11"
+ck "export carries every tab" "$(curl -s -H "Authorization: Bearer $A" "$B/export.csv?household=$HID" | grep -c '^# ')" "12"
 
 # isolation between households
 HH2=$(curl -s -X POST $B/admin/households -H "Authorization: Bearer $A" -H 'Content-Type: application/json' -d '{"name":"Other"}')

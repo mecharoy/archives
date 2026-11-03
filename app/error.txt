@@ -445,3 +445,24 @@ Location: scratchpad look-settings.mjs and scripts/ui-sweep.mjs
 Action: driving the dev server after loading the check modules with scripts/_app.mjs.
 Cause: _app.mjs runs a vite build, which leaves NODE_ENV at production, so the dev server started next ran without its development hooks.
 Fix: set process.env.NODE_ENV back to development after loadApp (done in ui-sweep.mjs).
+
+2026-11-03
+Problem: build 26 was released on top of build 25, but GitHub already had builds 27 and 28 (the redesign) on the branch dad-handover. Found only when asked for 1.0.29.
+Location: the archives repo, branches claude/app-development-apk-vlbobd and dad-handover
+Action: releasing build 26 after fetching only the branch I was on.
+Cause: I fetched and compared one branch, not the whole repo. Build 28's updater still reads latest.json from claude/app-development-apk-vlbobd, so the newest build lived on a branch I never looked at.
+Fix: before a release, run git fetch origin and list every branch's versionName (git show <branch>:app/android/app/build.gradle). Build 29 = build 28 + build 26's still-needed fixes, and it is pushed to both branches.
+
+2026-11-03
+Problem: the local Worker crashed again and again ("The Workers runtime crashed unexpectedly") when started from a git worktree in the scratchpad.
+Location: scratchpad/wt28/app/server (node_modules linked to the main checkout)
+Action: running server/test.sh against build 28 plus fixes.
+Cause: not found. The same code ran cleanly from the main checkout.
+Fix: run the server tests from the main checkout. Also stop leftover workerd and wrangler processes first: one still held port 8799 and made the next run wait forever.
+
+2026-11-03
+Problem: build 28's server test checked wages_this_month, spend_this_month and 11 export tabs, and its sync test could not find the setup screens.
+Location: app/server/test.sh, app/scripts/smoke-sync.mjs
+Action: running the server and sync tests for build 29.
+Cause: both tests predate changes on this branch (week-based figures, the Bills tab, the redesigned setup) and are not part of npm test, so nothing caught them.
+Fix: test.sh now checks the week figures and 12 tabs. smoke-sync.mjs still walks the old setup and was not rewritten; the setup is covered by handover-check.
